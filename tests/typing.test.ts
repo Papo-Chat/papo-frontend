@@ -4,7 +4,7 @@
 // are pruned when `expiresAt <= now`. The store exposes setTyping / isTyping /
 // typingUsers / pruneTyping.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
 	state,
 	setTyping,
@@ -15,7 +15,7 @@ import {
 
 // Fixed clock so TTL tests are deterministic.
 let now = 0;
-const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+vi.spyOn(Date, 'now').mockImplementation(() => now);
 
 beforeEach(() => {
 	now = 0;

@@ -6,7 +6,7 @@ import { api } from '../api';
 import { nextCursor } from '../utils/keyset';
 import { blobToUrl } from '../utils/media';
 import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
-import type { UserSummary, UserProfile, UserList, KeysetCursor, PresenceStatus } from '../types';
+import type { UserSummary, UserProfile, KeysetCursor, PresenceStatus } from '../types';
 
 const TYPING_TTL = 5000; // ms
 
@@ -209,7 +209,7 @@ export function setPresence(
 export function pruneTyping(now = Date.now()): void {
 	// Remove all expired typing entries.
 	const toDelete: string[] = [];
-	for (const [channelId, map] of state.typing) {
+	for (const [, map] of state.typing) {
 		const ids = map.keys();
 		for (const userId of ids) {
 			const expiresAt = map.get(userId) ?? 0;
@@ -220,7 +220,7 @@ export function pruneTyping(now = Date.now()): void {
 	}
 	for (const userId of toDelete) {
 		// find the channel containing it
-		for (const [channelId, map] of state.typing) {
+		for (const [, map] of state.typing) {
 			if (map.has(userId)) {
 				map.delete(userId);
 				break;
@@ -315,7 +315,7 @@ export function handleAvatarUpdate(userId: string): void {
 	}
 }
 
-export function handleRoleAdd(userId: string, roleId: string): void {
+export function handleRoleAdd(userId: string): void {
 	// Payload is only {user_id, role_id} (no name/color) → invalidate the
 	// cached profile (if any) so it refetches with the new roles.
 	if (state.profiles.has(userId)) {
@@ -324,7 +324,7 @@ export function handleRoleAdd(userId: string, roleId: string): void {
 	void ensureProfile(userId);
 }
 
-export function handleRoleRemove(userId: string, roleId: string): void {
+export function handleRoleRemove(userId: string): void {
 	if (state.profiles.has(userId)) {
 		state.profiles.delete(userId);
 	}

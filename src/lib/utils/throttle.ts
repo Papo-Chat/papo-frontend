@@ -1,7 +1,5 @@
 // Throttle and debounce utilities.
 
-type Throttleable = (...args: unknown[]) => void;
-
 // `throttle` limits the execution of `fn` to at most once per `ms` (leading
 // edge). Used for typing indicators so we don't spam the server.
 export function throttle<Args extends unknown[]>(
@@ -17,8 +15,6 @@ export function throttle<Args extends unknown[]>(
 		}
 	};
 }
-
-type Debounceable = (...args: unknown[]) => void;
 
 // `debounce` delays the execution of `fn` until `ms` has passed since the
 // last invocation (trailing edge). Used for debouncing refetches (e.g.

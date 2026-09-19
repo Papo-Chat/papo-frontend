@@ -11,7 +11,7 @@
 // `requestGeneration` discards a page that resolves after the channel was
 // evicted/refreshed.
 
-import { SvelteMap } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
 import { nextCursor } from '../utils/keyset';
 import type { ChannelMessagesState, MessagesState } from './messages.types';
@@ -22,13 +22,9 @@ import type {
 	WsAttachmentModerationUpdate,
 	WsLinkPreviewUpdate,
 	WsMessage,
-	WsMessageDelete,
-	WsMessageEdit,
-	WsMessagePin,
 	WsNewPreview,
 	WsOutbound,
-	WsReactUpdate,
-	WsRemovePreview
+	WsReactUpdate
 } from '../types';
 
 // ── window policy (P1.12) ───────────────────────────────
@@ -38,13 +34,13 @@ const MAX_WINDOW = 300;
 // ── caches (module-level, non-reactive) ─────────────────
 // Resolved previews (with image_data) keyed by preview_id. The message only
 // keeps the preview metadata; image_data lives here for rendering.
-const previewCache = new Map<string, LinkPreviewWithImage>();
+const previewCache = new SvelteMap<string, LinkPreviewWithImage>();
 // new_preview events whose message is not yet in the cache. Keyed by
 // message_id (new_preview carries no channel_id). Applied when the message
 // arrives in a channel, subject to the tombstone check.
-const pendingPreviews = new Map<string, Map<string, LinkPreviewWithImage>>();
+const pendingPreviews = new SvelteMap<string, SvelteMap<string, LinkPreviewWithImage>>();
 
-const previewTombstones = new Set<string>();
+const previewTombstones = new SvelteSet<string>();
 
 let requestSerial = 0;
 let storeEpoch = 0;
@@ -57,7 +53,7 @@ function setPendingPreview(messageId: string, preview: LinkPreviewWithImage): vo
 	let previews = pendingPreviews.get(messageId);
 
 	if (!previews) {
-		previews = new Map();
+		previews = new SvelteMap();
 		pendingPreviews.set(messageId, previews);
 	}
 
@@ -222,7 +218,7 @@ export function mergeFetchedMessage(
 	// Exists locally: never blind-overwrite. Preserve WS deltas.
 	const previewKey = (pid: string) => `${existing.id}:${pid}`;
 	const keptPreviews = existing.previews.filter((p) => !ch.previewTombstones.has(previewKey(p.id)));
-	const keptPreviewIds = new Set(keptPreviews.map((p) => p.id));
+	const keptPreviewIds = new SvelteSet(keptPreviews.map((p) => p.id));
 	const mergedPreviews: LinkPreview[] = [
 		...keptPreviews,
 		...incomingSafe.previews.filter((p) => !keptPreviewIds.has(p.id))
@@ -354,7 +350,7 @@ export function removeMessage(state: MessagesState, channelId: string, messageId
 		byId: newById,
 		ids: sortedIds(newById),
 		pinned: ch.pinned.filter((p) => p.id !== messageId),
-		deletedMessageIds: new Set([...ch.deletedMessageIds, messageId])
+		deletedMessageIds: new SvelteSet([...ch.deletedMessageIds, messageId])
 	});
 }
 
@@ -391,7 +387,7 @@ export function patchPinned(state: MessagesState, messageId: string, isPinned: b
 	}
 }
 
-const previewRequests = new Map<string, Promise<LinkPreviewWithImage>>();
+const previewRequests = new SvelteMap<string, Promise<LinkPreviewWithImage>>();
 
 export function ensurePreview(previewId: string): Promise<LinkPreviewWithImage> {
 	const cached = previewCache.get(previewId);
@@ -408,9 +404,7 @@ export function ensurePreview(previewId: string): Promise<LinkPreviewWithImage> 
 
 	const epoch = storeEpoch;
 
-	let request: Promise<LinkPreviewWithImage>;
-
-	request = api.linkPreviews
+	const request = api.linkPreviews
 		.get(previewId)
 		.then((preview) => {
 			if (epoch !== storeEpoch) {
@@ -528,7 +522,7 @@ export function removePreview(state: MessagesState, messageId: string, previewId
 				}
 				return {
 					...old,
-					previewTombstones: new Set([...old.previewTombstones, `${messageId}:${previewId}`])
+					previewTombstones: new SvelteSet([...old.previewTombstones, `${messageId}:${previewId}`])
 				};
 			});
 			continue;
@@ -547,7 +541,7 @@ export function removePreview(state: MessagesState, messageId: string, previewId
 				...old,
 				byId: newByd,
 				ids: sortedIds(newByd),
-				previewTombstones: new Set([...old.previewTombstones, `${messageId}:${previewId}`])
+				previewTombstones: new SvelteSet([...old.previewTombstones, `${messageId}:${previewId}`])
 			};
 		});
 		break;
@@ -568,7 +562,7 @@ export function linkPreviewUpdate(state: MessagesState, event: WsLinkPreviewUpda
 	const ch = state.channels.get(channel_id);
 
 	if (ch?.previewTombstones.has(key)) {
-		const tombstones = new Set(ch.previewTombstones);
+		const tombstones = new SvelteSet(ch.previewTombstones);
 
 		tombstones.delete(key);
 
@@ -815,7 +809,7 @@ type FreshGuard = {
 	touched: Set<string>;
 };
 
-const freshGuards = new Map<string, FreshGuard>();
+const freshGuards = new SvelteMap<string, FreshGuard>();
 
 function touchDuringFresh(channelId: string, messageId: string): void {
 	freshGuards.get(channelId)?.touched.add(messageId);

@@ -161,8 +161,10 @@ async function resizeToBlob(file: File, dim: number): Promise<Blob> {
 			}
 			ctx.drawImage(bitmap, 0, 0, w, h);
 			return await new Promise<Blob>((resolve, reject) => {
-				(canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('falha ao exportar imagem')))),
-					file.type);
+				canvas.toBlob(
+					(b) => (b ? resolve(b) : reject(new Error('falha ao exportar imagem'))),
+					file.type
+				);
 			});
 		} finally {
 			bitmap.close();

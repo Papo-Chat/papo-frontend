@@ -76,18 +76,7 @@ export class ApiError extends Error {
 	instance: string | null;
 	requestId: string | null;
 
-	constructor(
-		data:
-			| {
-					type?: string;
-					title?: string;
-					status?: number;
-					detail?: string;
-					instance?: string | null;
-			  }
-			| string,
-		requestId: string | null
-	) {
+	constructor(data: unknown, requestId: string | null) {
 		const d =
 			typeof data === 'string' ? { detail: data } : ((data ?? {}) as Record<string, unknown>);
 		const msg = String(d.detail ?? d.title ?? String(d));
@@ -216,7 +205,7 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 		if (res.status === 401 && authFailure !== 'ignore' && unauthorizedHook) {
 			unauthorizedHook();
 		}
-		throw new ApiError(data as any, requestId);
+		throw new ApiError(data, requestId);
 	}
 
 	if (raw) {
@@ -247,7 +236,7 @@ export async function fetchBlob(path: string, signal?: AbortSignal): Promise<Blo
 		throw new ApiError({ detail }, requestId);
 	}
 	if (res.status >= 400) {
-		let data: unknown = {};
+		let data: unknown;
 		try {
 			data = await res.json();
 		} catch {
@@ -256,7 +245,7 @@ export async function fetchBlob(path: string, signal?: AbortSignal): Promise<Blo
 		if (res.status === 401 && unauthorizedHook) {
 			unauthorizedHook();
 		}
-		throw new ApiError(data as any, requestId);
+		throw new ApiError(data, requestId);
 	}
 	return res.blob();
 }

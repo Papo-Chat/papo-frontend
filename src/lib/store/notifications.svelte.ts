@@ -1,12 +1,13 @@
 // Notifications store: the notification list (keyset, 100/page) plus
 // mark-read and the live unread counter.
 
+import { SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
 import { debounce } from '../utils/throttle';
 import { meId as sessionMeId } from '../store/session.svelte';
 import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
 import { nextCursor } from '../utils/keyset';
-import type { NotificationSummary, KeysetCursor, WsNewNotification } from '../types';
+import type { NotificationSummary, KeysetCursor } from '../types';
 
 export const state = $state({
 	items: [] as NotificationSummary[],
@@ -73,7 +74,7 @@ export function loadMore(): void {
 				return;
 			}
 			// Append, deduping by notification id.
-			const seen = new Set(state.items.map((n) => n.id));
+			const seen = new SvelteSet(state.items.map((n) => n.id));
 			const fresh = res.notifications.filter((n) => !seen.has(n.id));
 			state.items = [...state.items, ...fresh];
 			state.hasMore = res.has_more;
@@ -98,7 +99,7 @@ export function markRead(ids: string[]): void {
 
 // new_notification (F3): the id may be ephemeral — never insert the event
 // payload as a row. Just bump the live counter and refetch.
-export function handleNewNotification(_event: WsNewNotification): void {
+export function handleNewNotification(): void {
 	state.unreadCount += 1;
 	refetch.run();
 }

@@ -1,19 +1,10 @@
 import type {
-	AuditLogList,
 	ChannelPermission,
 	ChannelPermissionEntry,
 	ConnectionInfo,
-	LinkPreviewWithImage,
-	MessageList,
 	MessageReactionGroup,
-	NotificationList,
-	PinnedMessageList,
 	RolePermissions,
-	SearchResponse,
-	Server,
-	UserConfig,
-	UserList,
-	UserProfile
+	UserConfig
 } from './models';
 
 // ── auth ───────────────────────────────────────────────

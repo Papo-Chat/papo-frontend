@@ -12,6 +12,7 @@
 // - Never auto-rejoin after a reconnect; the new WS is a different owner of
 //   the call. Re-entering is a separate action.
 
+import { SvelteMap } from 'svelte/reactivity';
 import { api } from '../api';
 import { send as wsSend } from '../ws';
 import type {
@@ -545,17 +546,17 @@ export function mute(muted: boolean): void {
 	}
 }
 
-export function camera(_on: boolean): void {
+export function camera(): void {
 	// TODO: implementar track + renegociação.
 }
 
-export function screenShare(_on: boolean): void {
+export function screenShare(): void {
 	// TODO: implementar track + renegociação.
 }
 
 // ── ontrack: associate remote audio by transceiver.mid ────
 
-const remoteAudios = new Map<string, HTMLAudioElement>();
+const remoteAudios = new SvelteMap<string, HTMLAudioElement>();
 
 function cleanupRemoteAudio(): void {
 	for (const audio of remoteAudios.values()) {

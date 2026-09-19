@@ -55,7 +55,7 @@ export interface ReactionGroupKey {
 }
 
 export function groupKey(emoji_id: string | null, unicode: string | null): string {
-	return `${String(emoji_id) ?? ''}|${String(unicode) ?? ''}`;
+	return `${String(emoji_id)}|${String(unicode)}`;
 }
 
 export function mergeGroups(

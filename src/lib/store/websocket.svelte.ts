@@ -197,7 +197,7 @@ export function dispatchEvent(event: WsOutbound): void {
 			messagesStore.handleNewPreview(event);
 			break;
 		case 'new_notification':
-			notificationsStore.handleNewNotification(event);
+			notificationsStore.handleNewNotification();
 			break;
 		case 'channel_create':
 			channelsStore.handleChannelCreate();
@@ -228,10 +228,10 @@ export function dispatchEvent(event: WsOutbound): void {
 			usersStore.handleUserJoin(event.user_id);
 			break;
 		case 'role_add':
-			usersStore.handleRoleAdd(event.user_id, event.role_id);
+			usersStore.handleRoleAdd(event.user_id);
 			break;
 		case 'role_remove':
-			usersStore.handleRoleRemove(event.user_id, event.role_id);
+			usersStore.handleRoleRemove(event.user_id);
 			break;
 		case 'voice_joined':
 			voiceStore.onVoiceJoined(event);
