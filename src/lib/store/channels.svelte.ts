@@ -62,9 +62,14 @@ export function load(): void {
 		});
 }
 
+// Awaits the create so the reseed (channel list) happens after the channel
+// exists, avoiding a reseed-before-create race on slow connections.
 export function create(req: { name: string; type: ChannelType; topic: string | null }): void {
-	api.channels.create(req);
-	reseedChannels.run();
+	api.channels
+		.create(req)
+		.then(() => {
+			reseedChannels.run();
+		});
 }
 
 export function update(id: string, req: { name: string; topic: string | null }): void {
@@ -88,16 +93,22 @@ export function changePosition(
 		});
 }
 
+// Centralized local drop of a channel (REST delete + WS channel_delete both
+// call this, so cleanup is identical).
+export function dropChannelLocal(id: string): void {
+	state.byId.delete(id);
+	state.ordered = state.ordered.filter((cid) => cid !== id);
+	state.unread.delete(id);
+	// Evict dependent caches.
+	messagesEvict(id);
+	voiceClearRoom(id);
+}
+
 export function remove(id: string): void {
 	api.channels
 		.remove(id)
 		.then(() => {
-			state.byId.delete(id);
-			state.ordered = state.ordered.filter((cid) => cid !== id);
-			state.unread.delete(id);
-			// Evict dependent caches.
-			messagesEvict(id);
-			voiceClearRoom(id);
+			dropChannelLocal(id);
 		});
 }
 
@@ -174,27 +185,44 @@ export function handleChannelCreate(): void {
 	reseedChannels.run();
 }
 
+// Patch only the fields that are present in the event (a channel_update may
+// omit `topic`); never overwrite a field with an undefined default.
 export function handleChannelUpdate(c: {
 	channel_id: string;
-	name: string;
-	position: number;
-	topic: string | null;
+	name?: string;
+	position?: number;
+	topic?: string | null;
 }): void {
 	const existing = state.byId.get(c.channel_id);
-	if (existing) {
-		const next: Channel = { ...existing };
-		next.name = c.name;
-		next.position = c.position;
-		next.topic = c.topic;
-		state.byId.set(c.channel_id, next);
-		rebuildOrdered();
+	if (!existing) {
+		return;
 	}
+	const next: Channel = { ...existing };
+	if (c.name != null) {
+		next.name = c.name;
+	}
+	if (c.position != null) {
+		next.position = c.position;
+	}
+	if (c.topic !== undefined) {
+		next.topic = c.topic;
+	}
+	state.byId.set(c.channel_id, next);
+	rebuildOrdered();
 }
 
 export function handleChannelDelete(channelId: string): void {
-	state.byId.delete(channelId);
-	state.ordered = state.ordered.filter((id) => id !== channelId);
-	state.unread.delete(channelId);
+	dropChannelLocal(channelId);
+}
+
+// Full reset (logout / 401 / account switch).
+export function reset(): void {
+	state.byId.clear();
+	state.ordered = [];
+	state.openChannelId = null;
+	state.unread.clear();
+	state.loaded = false;
+	state.loading = false;
 }
 
 // A new message arrived (dispatched by the websocket store). Updates the

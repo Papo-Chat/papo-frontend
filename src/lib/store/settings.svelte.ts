@@ -49,3 +49,10 @@ export function mentionsEnabled(): boolean {
 export function notificationsEnabled(): boolean {
 	return state.config?.notifications.enabled ?? false;
 }
+
+// Full reset (logout / 401 / account switch).
+export function reset(): void {
+	state.config = null;
+	state.version = 0;
+	state.loaded = false;
+}

@@ -1,9 +1,35 @@
 // Media helpers: base-URL-aware URL builders, one-time base64→objectURL
 // conversion (LRU-cached, F15), and binary resource fetching.
 
+import { PUBLIC_API_URL } from '../env';
+
+// Image format (PNG/JPEG/JPG/WEBP/GIF) ↔ MIME.
+const FORMAT_TO_MIME: Record<string, string> = {
+	PNG: 'image/png',
+	JPEG: 'image/jpeg',
+	JPG: 'image/jpeg',
+	WEBP: 'image/webp',
+	GIF: 'image/gif',
+};
+
+const MIME_TO_FORMAT: Record<string, string> = {
+	'image/png': 'PNG',
+	'image/jpeg': 'JPEG',
+	'image/webp': 'WEBP',
+	'image/gif': 'GIF',
+};
+
+export function formatToMime(format: string): string {
+	return FORMAT_TO_MIME[format] ?? format;
+}
+
+export function mimeToFormat(mime: string): string {
+	return MIME_TO_FORMAT[mime] ?? mime;
+}
+
 // Base URL from PUBLIC_API_URL (empty → same-origin).
 function apiBase(): string {
-	const base = (import.meta.env.PUBLIC_API_URL ?? '').replace(/\/$/, '');
+	const base = (PUBLIC_API_URL ?? '').replace(/\/$/, '');
 	return base;
 }
 
@@ -59,7 +85,10 @@ const cache = new Map<bigint, CacheEntry>();
 
 // Convert a base64 blob to a one-time objectURL, cached (LRU). Returns ''
 // when there is no base64 or when running outside a browser environment.
-export function blobToUrl(base64: string, mime: string): string {
+// `format` is the image format (PNG/JPEG/JPG/WEBP/GIF); it is converted to a
+// MIME for the Blob. The key includes the format so two payloads with the
+// same base64 but different format metadata are not shared.
+export function blobToUrl(base64: string, format: string): string {
 	if (!base64) {
 		return '';
 	}
@@ -70,7 +99,8 @@ export function blobToUrl(base64: string, mime: string): string {
 	) {
 		return '';
 	}
-	const key = fnv1a64(base64);
+	const mime = formatToMime(format);
+	const key = fnv1a64(`${format}:${base64}`);
 	const hit = cache.get(key);
 	if (hit) {
 		// LRU touch.

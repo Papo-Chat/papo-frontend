@@ -7,7 +7,11 @@
 // - 204 → undefined.
 // - 401 hook → registered onUnauthorized callback (wired by the session store
 //   → invalidate()). Refresh is proactive (F21), never on 401.
+// - `authFailure: 'ignore'` skips the 401 hook (public auth endpoints).
+// - FormData (multipart) keeps its own Content-Type; no JSON override.
+// - AbortError is rethrown as-is (not wrapped in ApiError).
 
+import { PUBLIC_API_URL } from './env';
 import type {
 	Channel,
 	ChannelPermissionEntry,
@@ -118,7 +122,7 @@ export function clearOnUnauthorized(): void {
 }
 
 function apiBase(): string {
-	return (import.meta.env.PUBLIC_API_URL ?? '').replace(/\/$/, '');
+	return (PUBLIC_API_URL ?? '').replace(/\/$/, '');
 }
 
 function buildUrl(path: string, query: string | null): string {
@@ -156,10 +160,20 @@ type RequestOpts = {
 	query?: string | Record<string, string | number | null | undefined>;
 	signal?: AbortSignal;
 	raw?: boolean;
+	// Skip the 401 → onUnauthorized hook. Used by public auth endpoints
+	// (login / login_server / register) where a 401 means "bad password",
+	// not an expired session.
+	authFailure?: 'ignore';
 };
 
+// Preserve AbortError as-is (navigation/cancel), instead of wrapping it in
+// an ApiError.
+function isAbortError(e: unknown): boolean {
+	return e instanceof Error && e.name === 'AbortError';
+}
+
 async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
-	const { method = 'GET', body, query, signal, raw = false } = opts;
+	const { method = 'GET', body, query, signal, raw = false, authFailure } = opts;
 	const requestId = crypto.randomUUID();
 	const q = serializeQuery(query);
 
@@ -167,7 +181,10 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 		'X-Request-ID': requestId,
 		Accept: 'application/problem+json, application/json',
 	};
-	if (body != null && method !== 'GET') {
+	// FormData (multipart) keeps its own Content-Type (with boundary); we
+	// must not override it with application/json.
+	const isForm = body != null && body instanceof FormData;
+	if (body != null && method !== 'GET' && !isForm) {
 		headers['Content-Type'] = 'application/json';
 	}
 
@@ -176,11 +193,19 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 		res = await fetch(buildUrl(path, q), {
 			method,
 			headers,
-			body: body != null && method !== 'GET' ? JSON.stringify(body) : undefined,
+			body:
+				body != null && method !== 'GET'
+					? isForm
+						? body
+						: JSON.stringify(body)
+					: undefined,
 			credentials: 'include',
 			signal,
 		});
 	} catch (e) {
+		if (isAbortError(e)) {
+			throw e;
+		}
 		const detail =
 			e instanceof Error ? e.message : String(e);
 		throw new ApiError({ detail }, requestId);
@@ -200,7 +225,11 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 		} catch {
 			data = {};
 		}
-		if (res.status === 401 && unauthorizedHook) {
+		if (
+			res.status === 401 &&
+			authFailure !== 'ignore' &&
+			unauthorizedHook
+		) {
 			unauthorizedHook();
 		}
 		throw new ApiError(data as any, requestId);
@@ -230,6 +259,9 @@ export async function fetchBlob(
 			signal,
 		});
 	} catch (e) {
+		if (isAbortError(e)) {
+			throw e;
+		}
 		const detail = e instanceof Error ? e.message : String(e);
 		throw new ApiError({ detail }, requestId);
 	}
@@ -261,13 +293,25 @@ export const health = {
 
 export const auth = {
 	register(req: RegisterRequest): Promise<RegisterResponse> {
-		return request<RegisterResponse>('/auth/register', { method: 'POST', body: req });
+		return request<RegisterResponse>('/auth/register', {
+			method: 'POST',
+			body: req,
+			authFailure: 'ignore',
+		});
 	},
 	login(req: LoginRequest): Promise<LoginResponse> {
-		return request<LoginResponse>('/auth/login', { method: 'POST', body: req });
+		return request<LoginResponse>('/auth/login', {
+			method: 'POST',
+			body: req,
+			authFailure: 'ignore',
+		});
 	},
 	loginServer(req: LoginServerRequest): Promise<void> {
-		return request<void>('/auth/login_server', { method: 'POST', body: req });
+		return request<void>('/auth/login_server', {
+			method: 'POST',
+			body: req,
+			authFailure: 'ignore',
+		});
 	},
 	whoami(): Promise<WhoamiResponse> {
 		return request<WhoamiResponse>('/auth/whoami');
@@ -508,9 +552,9 @@ export const messages = {
 		for (const f of payload.files ?? []) {
 			form.append('attachments', f);
 		}
-		return fetchJson<MessageWithAttachment>('/messages', {
+		return request<MessageWithAttachment>('/messages', {
 			method: 'POST',
-			form,
+			body: form,
 		});
 	},
 	edit(messageId: string, req: { content: string }): Promise<MessageWithAttachment> {
@@ -590,44 +634,7 @@ export const messages = {
 	},
 };
 
-// Multipart variant of request (FormData body, no JSON content-type).
-async function fetchJson<T>(
-	path: string,
-	opts: { method?: string; form?: FormData; signal?: AbortSignal }
-): Promise<T> {
-	const { method = 'GET', form, signal } = opts;
-	const requestId = crypto.randomUUID();
-	const url = buildUrl(path, null);
-	let res: Response;
-	try {
-		res = await fetch(url, {
-			method,
-			headers: { 'X-Request-ID': requestId },
-			credentials: 'include',
-			signal,
-			body: form,
-		});
-	} catch (e) {
-		const detail = e instanceof Error ? e.message : String(e);
-		throw new ApiError({ detail }, requestId);
-	}
-	if (res.status === 204) {
-		return undefined as any;
-	}
-	if (res.status >= 400) {
-		let data: unknown = {};
-		try {
-			data = await res.json();
-		} catch {
-			data = {};
-		}
-		if (res.status === 401 && unauthorizedHook) {
-			unauthorizedHook();
-		}
-		throw new ApiError(data as any, requestId);
-	}
-	return res.json();
-}
+// (fetchJson removed: request() now handles FormData directly.)
 
 // ── linkPreviews ───────────────────────────────────────
 

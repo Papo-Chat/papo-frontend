@@ -16,6 +16,8 @@ import {
 	evict,
 	load,
 	loadMoreOlder,
+	react,
+	unreact,
 	state as globalState,
 } from '../src/lib/store/messages.svelte';
 import type {
@@ -81,8 +83,13 @@ function newState(
 		ids: [],
 		loaded: false,
 		loading: false,
+		windowMode: 'latest',
 		hasMoreOlder: false,
+		hasMoreNewer: false,
 		cursorOlder: null,
+		requestGeneration: 0,
+		deletedMessageIds: new Set<string>(),
+		previewTombstones: new Set<string>(),
 		pinned: [],
 		pinnedLoaded: false,
 		pinnedLoading: false,
@@ -581,6 +588,163 @@ describe('keyset merge of REST pages (load / loadMoreOlder)', () => {
 		expect(ch.hasMoreOlder).toBe(false);
 		// cursor = oldest of the new page = m0.
 		expect(ch.cursorOlder).toEqual({ since: '2024-01-01T00:00:01Z', last_id: 'm0' });
+	});
+});
+
+
+// ── REST↔WS merge edge cases (P0.4, P0.5) ──────────────
+
+describe('mergeFetchedMessage: REST does not clobber newer WS deltas', () => {
+	it('a delayed REST page does not revert a newer WS react_update count', () => {
+		const state = newState([
+			msg('m1', { reactions: [{ emoji_id: 'e1', unicode: null, count: 2 }] }),
+		]);
+		applyEvent(state, {
+			type: 'react_update',
+			message_id: 'm1',
+			emoji_id: 'e1',
+			unicode: null,
+			count: 9,
+		} satisfies WsReactUpdate);
+		// Delayed REST returns the stale message (count 2).
+		upsertMessage(
+			state,
+			'ch1',
+			{ ...msg('m1'), reactions: [{ emoji_id: 'e1', unicode: null, count: 2 }] }
+		);
+		expect(state.channels.get('ch1')!.byId.get('m1')!.reactions).toEqual([
+			{ emoji_id: 'e1', unicode: null, count: 9 },
+		]);
+	});
+
+	it('a delayed REST page does not resurrect a WS-deleted message', () => {
+		const state = newState([msg('m1')]);
+		applyEvent(state, {
+			type: 'message_delete',
+			id: 'm1',
+			channel_id: 'ch1',
+		} satisfies WsMessageDelete);
+		upsertMessage(state, 'ch1', msg('m1'));
+		expect(state.channels.get('ch1')!.byId.has('m1')).toBe(false);
+	});
+});
+
+describe('preview tombstones (P0.5)', () => {
+	it('remove_preview blocks a later preview GET from resurrecting the preview', () => {
+		const state = newState([msg('m1', { previews: [preview('p1')] })]);
+		applyEvent(state, {
+			type: 'remove_preview',
+			message_id: 'm1',
+			preview_id: 'p1',
+		} satisfies WsRemovePreview);
+		mergePreview(state, 'm1', { ...preview('p1'), image_data: 'b64' });
+		expect(state.channels.get('ch1')!.byId.get('m1')!.previews).toHaveLength(0);
+	});
+
+	it('link_preview_update after remove_preview re-adds the preview (WS order wins)', () => {
+		const state = newState([msg('m1', { previews: [preview('p1')] })]);
+		applyEvent(state, {
+			type: 'remove_preview',
+			message_id: 'm1',
+			preview_id: 'p1',
+		} satisfies WsRemovePreview);
+		linkPreviewUpdate(state, {
+			type: 'link_preview_update',
+			channel_id: 'ch1',
+			message_id: 'm1',
+			preview: { ...preview('p1'), title: 're-added', image_data: 'b64' },
+		} satisfies WsLinkPreviewUpdate);
+		const previews = state.channels.get('ch1')!.byId.get('m1')!.previews;
+		expect(previews).toHaveLength(1);
+		expect(previews[0].id).toBe('p1');
+		expect(previews[0].title).toBe('re-added');
+	});
+});
+
+// ── user_reactions (P0.6) ───────────────────────────────
+
+describe('react / unreact (user_reactions)', () => {
+	beforeEach(() => {
+		vi.spyOn(apiMessages, 'react');
+		vi.spyOn(apiMessages, 'unreact');
+		// react/unreact operate on the module-level state.
+		const ch: ChannelMessagesState = {
+			byId: new SvelteMap<string, MessageWithAttachment>(),
+			ids: [],
+			loaded: false,
+			loading: false,
+			windowMode: 'latest',
+			hasMoreOlder: false,
+			hasMoreNewer: false,
+			cursorOlder: null,
+			requestGeneration: 0,
+			deletedMessageIds: new Set<string>(),
+			previewTombstones: new Set<string>(),
+			pinned: [],
+			pinnedLoaded: false,
+			pinnedLoading: false,
+		};
+		ch.byId.set('m1', msg('m1', { user_reactions: [] }));
+		ch.ids = ['m1'];
+		globalState.channels.set('ch1', ch);
+	});
+
+	afterEach(() => {
+		globalState.channels.clear();
+		vi.restoreAllMocks();
+	});
+
+	it('react() adds the user reaction; unreact() removes it', async () => {
+		vi.mocked(apiMessages.react).mockResolvedValue({
+			id: 'ur1',
+			user_id: 'u1',
+			emoji_id: 'e1',
+			unicode: null,
+			created_at: '2024-01-01T00:00:00Z',
+		});
+		await react('ch1', 'm1', { emoji_id: 'e1', unicode: null });
+		expect(globalState.channels.get('ch1')!.byId.get('m1')!.user_reactions).toEqual([
+			{ id: 'ur1', emoji_id: 'e1', unicode: null },
+		]);
+		vi.mocked(apiMessages.unreact).mockResolvedValue(undefined);
+		await unreact('ch1', 'm1', { emoji_id: 'e1', unicode: null });
+		expect(globalState.channels.get('ch1')!.byId.get('m1')!.user_reactions).toEqual([]);
+	});
+});
+
+// ── 300-message window (P1.12) ──────────────────────────
+
+describe('300-message window', () => {
+	it('trims a fresh load to the 300 newest messages (P1.12)', async () => {
+		evict('ch_k');
+		vi.spyOn(apiMessages, 'list');
+		const messages: MessageWithAttachment[] = [];
+		for (let i = 0; i < 350; i++) {
+			messages.push({
+				...msg(`m${i}`, {
+					created_at: new Date(Date.UTC(2024, 0, 1) + i * 60_000).toISOString(),
+				}),
+			});
+		}
+		vi.mocked(apiMessages.list).mockResolvedValue({
+			channel_id: 'ch_k',
+			messages,
+			has_more: false,
+		});
+		load('ch_k');
+		await vi.waitFor(() => {
+			const ch = globalState.channels.get('ch_k');
+			return !!ch && ch.byId.size === 300;
+		});
+		const ch = globalState.channels.get('ch_k')!;
+		expect(ch.byId.size).toBe(300);
+		// Oldest 50 dropped; the 300 newest remain.
+		expect(ch.byId.has('m0')).toBe(false);
+		expect(ch.byId.has('m49')).toBe(false);
+		expect(ch.byId.has('m50')).toBe(true);
+		expect(ch.byId.has('m349')).toBe(true);
+		evict('ch_k');
+		vi.restoreAllMocks();
 	});
 });
 

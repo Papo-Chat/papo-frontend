@@ -14,8 +14,12 @@ export function getInstance(): WebSocket | null {
 	return instance;
 }
 
-export function send(msg: WsInbound): void {
-	if (instance?.readyState === WebSocket.OPEN) {
-		instance.send(JSON.stringify(msg));
+// Returns false when the socket is not OPEN so callers (voice signalling)
+// can abort the operation instead of silently dropping it.
+export function send(msg: WsInbound): boolean {
+	if (instance?.readyState !== WebSocket.OPEN) {
+		return false;
 	}
+	instance.send(JSON.stringify(msg));
+	return true;
 }

@@ -127,6 +127,9 @@ type WinWithBitmap = {
 // Reads a File, resizes it (longest side → RESIZE_DIM[kind]) via canvas, and
 // returns { base64, mime }. Validates mime/size first (pure).
 //
+// GIFs are never resized: canvas would flatten the animation to a single
+// frame. Within the size limit they are sent as-is.
+//
 // Browser-only: throws in non-browser environments.
 export async function fileToBase64(
 	file: File,
@@ -139,8 +142,8 @@ export async function fileToBase64(
 	if (!v.ok) {
 		throw new Error(v.errors.join('; '));
 	}
-	const dim = RESIZE_DIM[kind];
-	const blob = await resizeToBlob(file, dim);
+	const isGif = file.type === 'image/gif';
+	const blob = isGif ? file : await resizeToBlob(file, RESIZE_DIM[kind]);
 	return { base64: await blobToBase64(blob), mime: blob.type || file.type };
 }
 
@@ -188,7 +191,13 @@ async function resizeToBlob(file: File, dim: number): Promise<Blob> {
 function blobToBase64(blob: Blob): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const reader = new FileReader();
-		reader.onload = () => resolve((reader.result as string) ?? '');
+		reader.onload = () => {
+			// readAsDataURL returns `data:image/webp;base64,UklGR...`; the
+			// backend expects only the base64 payload. Strip the prefix.
+			const dataUrl = String(reader.result ?? '');
+			const comma = dataUrl.indexOf(',');
+			resolve(comma === -1 ? dataUrl : dataUrl.slice(comma + 1));
+		};
 		reader.onerror = () => reject(new Error('falha ao ler o arquivo'));
 		reader.readAsDataURL(blob);
 	});

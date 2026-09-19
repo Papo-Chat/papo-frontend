@@ -20,6 +20,8 @@ export const state = $state({
 	unreadCount: 0,
 	loading: false,
 	loaded: false,
+	// Guards against concurrent load/loadMore (P1.11).
+	loadGeneration: 0,
 });
 
 // Debounced refetch after a new_notification (F3).
@@ -32,10 +34,15 @@ export function load(): void {
 	if (!userId) {
 		return;
 	}
+	const gen = (state.loadGeneration += 1);
 	state.loading = true;
 	api.users
 		.notifications(userId)
 		.then((res) => {
+			// Discard if a newer load/loadMore started in the meantime (P1.11).
+			if (state.loadGeneration !== gen) {
+				return;
+			}
 			state.items = res.notifications;
 			state.hasMore = res.has_more;
 			state.cursor = nextCursor(res.notifications) ?? null;
@@ -46,22 +53,32 @@ export function load(): void {
 			state.loaded = true;
 		})
 		.finally(() => {
-			state.loading = false;
+			if (state.loadGeneration === gen) {
+				state.loading = false;
+			}
 		});
 }
 
 export function loadMore(): void {
 	const userId = sessionMeId();
-	if (!userId || !state.cursor) {
+	// Guard: no in-flight page + a cursor to continue from (P1.11).
+	if (!userId || state.loading || !state.cursor) {
 		return;
 	}
+	const gen = (state.loadGeneration += 1);
 	api.users
 		.notifications(userId, {
 			since: state.cursor.since,
 			last_id: state.cursor.last_id,
 		})
 		.then((res) => {
-			state.items = [...state.items, ...res.notifications];
+			if (state.loadGeneration !== gen) {
+				return;
+			}
+			// Append, deduping by notification id.
+			const seen = new Set(state.items.map((n) => n.id));
+			const fresh = res.notifications.filter((n) => !seen.has(n.id));
+			state.items = [...state.items, ...fresh];
 			state.hasMore = res.has_more;
 			state.cursor = nextCursor(res.notifications) ?? null;
 		});
@@ -87,4 +104,15 @@ export function markRead(ids: string[]): void {
 export function handleNewNotification(_event: WsNewNotification): void {
 	state.unreadCount += 1;
 	refetch.run();
+}
+
+// Full reset (logout / 401 / account switch).
+export function reset(): void {
+	state.items = [];
+	state.hasMore = false;
+	state.cursor = null;
+	state.unreadCount = 0;
+	state.loading = false;
+	state.loaded = false;
+	state.loadGeneration = 0;
 }

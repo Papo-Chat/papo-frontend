@@ -73,3 +73,10 @@ export function unassign(userId: string, roleId: string): void {
 // roles store, per §6.5).
 export { myRolePermissions, channelAccess, can };
 export type { RolePermissions, RoleContext, ChannelAccess };
+
+// Full reset (logout / 401 / account switch).
+export function reset(): void {
+	state.byId.clear();
+	state.list = [];
+	state.loaded = false;
+}

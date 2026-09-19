@@ -10,16 +10,25 @@ import type {
 	UserProfile,
 	UserList,
 	KeysetCursor,
+	PresenceStatus,
 } from '../types';
 
 const TYPING_TTL = 5000; // ms
+
+// Full live presence (not just online/offline). `presence_sync` is the
+// authoritative snapshot on (re)connect; `presence_update` patches one user.
+interface LivePresence {
+	status: PresenceStatus;
+	status_message: string | null;
+	nickname: string | null;
+}
 
 export const state = $state({
 	byId: new SvelteMap<string, UserSummary>(),
 	// Lazy profiles (incl. banner_media). Only fetched when needed.
 	profiles: new SvelteMap<string, UserProfile>(),
-	// Ephemeral presence: online/offline.
-	presence: new SvelteMap<string, 'online' | 'offline'>(),
+	// Ephemeral presence: full live state per user.
+	presence: new SvelteMap<string, LivePresence>(),
 	// channelId → userId → expiresAt (ms epoch).
 	typing: new SvelteMap<string, SvelteMap<string, number>>(),
 	list: {
@@ -27,20 +36,29 @@ export const state = $state({
 		hasMore: false,
 		cursor: null as KeysetCursor | null,
 		loading: false,
+		// Guards against concurrent load/loadMore (P1.11).
+		loadGeneration: 0,
 	},
 });
 
 // ── list (keyset, 100/page) ─────────────────────────────
 
 async function listLoad(q?: { since?: string; last_id?: string }): Promise<void> {
+	const gen = (state.list.loadGeneration += 1);
 	state.list.loading = true;
 	try {
 		const res = await api.users.list(q);
+		// Discard if a newer load/loadMore started in the meantime (P1.11).
+		if (state.list.loadGeneration !== gen) {
+			return;
+		}
 		if (q) {
-			// loadMore: append
-			state.list.items = [...state.list.items, ...res.users];
+			// loadMore: append, deduping by user id.
+			const seen = new Set(state.list.items.map((u) => u.id));
+			const fresh = res.users.filter((u) => !seen.has(u.id));
+			state.list.items = [...state.list.items, ...fresh];
 		} else {
-			// load: replace
+			// load: replace.
 			state.list.items = res.users;
 		}
 		state.list.hasMore = res.has_more;
@@ -49,7 +67,9 @@ async function listLoad(q?: { since?: string; last_id?: string }): Promise<void>
 			state.byId.set(u.id, u);
 		}
 	} finally {
-		state.list.loading = false;
+		if (state.list.loadGeneration === gen) {
+			state.list.loading = false;
+		}
 	}
 }
 
@@ -58,7 +78,8 @@ export function loadList(): Promise<void> {
 }
 
 export function loadMore(): void {
-	if (!state.list.cursor) {
+	// Guard: no in-flight page + a cursor to continue from (P1.11).
+	if (state.list.loading || !state.list.cursor) {
 		return;
 	}
 	listLoad({
@@ -112,21 +133,20 @@ export async function ensureProfile(id: string): Promise<UserProfile> {
 	}
 	const profile = await api.users.profile(id);
 	state.profiles.set(id, profile);
-	// Also update the summary (profiles have richer fields).
-	if (state.byId.has(id)) {
-		const summary = state.byId.get(id) ?? {
-			id: profile.id,
-			username: profile.username,
-			nickname: profile.nickname,
-			status: profile.status,
-			status_message: profile.status_message,
-			typing: profile.typing,
-			status_updated_at: profile.status_updated_at,
-			created_at: profile.created_at,
-			roles: profile.roles,
-		};
-		state.byId.set(id, summary);
-	}
+	// Seed the summary even when the user is unknown — a new author / a
+	// profile fetched directly must still appear in the summaries map.
+	const summary: UserSummary = {
+		id: profile.id,
+		username: profile.username,
+		nickname: profile.nickname,
+		status: profile.status,
+		status_message: profile.status_message,
+		typing: profile.typing,
+		status_updated_at: profile.status_updated_at,
+		created_at: profile.created_at,
+		roles: profile.roles,
+	};
+	state.byId.set(id, summary);
 	return profile;
 }
 
@@ -146,28 +166,38 @@ export async function ensureProfiles(ids: string[]): Promise<UserProfile[]> {
 
 // ── presence ────────────────────────────────────────────
 
-export function presenceStatus(id: string): 'online' | 'offline' | null {
-	return state.presence.get(id) ?? null;
+export function presenceStatus(id: string): PresenceStatus | null {
+	return state.presence.get(id)?.status ?? null;
 }
 
+// Effective status for display. An *unknown* presence (user not in the sync
+// snapshot) is **not** treated as online — fall back to the persisted
+// summary status, else 'offline'.
 export function effectiveStatus(
 	id: string
 ): 'online' | 'offline' | 'away' | 'busy' {
-	const pres = state.presence.get(id) ?? null;
-	const summary = state.byId.get(id);
-	const status = summary?.status ?? null;
-	if (pres === 'offline') {
-		return status ?? 'offline';
+	const pres = state.presence.get(id);
+	if (pres) {
+		return pres.status;
 	}
-	// online (or unknown → treat as online)
-	return status ?? 'online';
+	const summary = state.byId.get(id);
+	return summary?.status ?? 'offline';
 }
 
-export function setPresence(members: { user_id: string; status: string }[]): void {
-	// Reset ephemeral presence: listed = online, rest = offline.
+// Replaces the ephemeral presence snapshot with the given members. The
+// snapshot is authoritative: users not listed are no longer online.
+export function setPresence(
+	members: { user_id: string; status: string; status_message: string | null; nickname?: string | null }[]
+): void {
+	const next: SvelteMap<string, LivePresence> = new SvelteMap();
 	for (const m of members) {
-		state.presence.set(m.user_id, m.status === 'offline' ? 'offline' : 'online');
+		next.set(m.user_id, {
+			status: (m.status === 'offline' ? 'offline' : m.status) as PresenceStatus,
+			status_message: m.status_message ?? null,
+			nickname: m.nickname ?? null,
+		});
 	}
+	state.presence = next;
 }
 
 // ── typing (TTL) ────────────────────────────────────────
@@ -231,32 +261,46 @@ export function handleUserJoin(userId: string): void {
 	ensureProfile(userId);
 }
 
-export function handlePresenceSync(members: {
-	user_id: string;
-	status: string;
-	status_message: string | null;
-}[]): void {
+// presence_sync is the authoritative snapshot on (re)connect: replace the
+// whole presence map (users absent from the snapshot are no longer online).
+export function handlePresenceSync(
+	members: {
+		user_id: string;
+		status: PresenceStatus;
+		status_message: string | null;
+	}[]
+): void {
 	setPresence(members);
 }
 
-export function handlePresenceUpdate({
-	user_id,
-	status,
-	status_message,
-}: {
-	user_id: string;
-	status: string;
-	status_message?: string | null;
-}): void {
+// presence_update: patch one user's live presence and summary (nickname /
+// status_message are surfaced in the summary).
+export function handlePresenceUpdate(
+	ev: {
+		user_id: string;
+		status: PresenceStatus;
+		status_message: string | null;
+		typing?: string | null;
+		nickname?: string | null;
+	}
+): void {
+	const { user_id, status, status_message, nickname } = ev;
 	const summary = state.byId.get(user_id);
 	if (summary) {
 		const next: UserSummary = { ...summary };
 		if (status_message != null) {
 			next.status_message = status_message;
 		}
+		if (nickname != null) {
+			next.nickname = nickname;
+		}
 		state.byId.set(user_id, next);
 	}
-	state.presence.set(user_id, status === 'offline' ? 'offline' : 'online');
+	state.presence.set(user_id, {
+		status,
+		status_message: status_message ?? null,
+		nickname: nickname ?? null,
+	});
 }
 
 export function handleAvatarUpdate(userId: string): void {
@@ -269,12 +313,19 @@ export function handleAvatarUpdate(userId: string): void {
 }
 
 export function handleRoleAdd(userId: string, roleId: string): void {
-	// Payload is only {user_id, role_id} (no name/color) → refetch profile.
-	ensureProfile(userId);
+	// Payload is only {user_id, role_id} (no name/color) → invalidate the
+	// cached profile (if any) so it refetches with the new roles.
+	if (state.profiles.has(userId)) {
+		state.profiles.delete(userId);
+	}
+	void ensureProfile(userId);
 }
 
 export function handleRoleRemove(userId: string, roleId: string): void {
-	ensureProfile(userId);
+	if (state.profiles.has(userId)) {
+		state.profiles.delete(userId);
+	}
+	void ensureProfile(userId);
 }
 
 // Avatar objectURL helper (base64 → objectURL, cached).
@@ -283,4 +334,20 @@ export function avatarUrl(user: UserProfile): string {
 		return '';
 	}
 	return blobToUrl(user.avatar_blob, user.avatar_format);
+}
+
+// Full reset (logout / 401 / account switch) — clears every user-specific
+// cache so the previous account leaves zero residue.
+export function reset(): void {
+	state.byId.clear();
+	state.profiles.clear();
+	state.presence.clear();
+	state.typing.clear();
+	state.list = {
+		items: [],
+		hasMore: false,
+		cursor: null,
+		loading: false,
+		loadGeneration: 0,
+	};
 }

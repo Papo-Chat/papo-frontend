@@ -1,13 +1,32 @@
 // Session store — single source of truth for the current user (F10).
 // - whoami seeds this store and the users/roles/settings stores.
 // - Proactive refresh (F21): a timer refreshes before the 12h cookie TTL.
-//   Refresh is never triggered by 401; the 401 hook calls invalidate().
-// - invalidate() clears everything and revokes the session (logout).
+//   Refresh is never triggered by 401; the 401 hook calls clearLocalSession().
+// - logout() is the explicit "leave" action: revokes the server session,
+//   then tears down all local state.
+// - clearLocalSession() is the 401-only path: local teardown only, no server
+//   call. It also disconnects the WS (no reconnect) and drops voice.
 
 import { api, setOnUnauthorized } from '../api';
-import { seedMe, loadList as loadUsersList } from '../store/users.svelte';
-import { load as loadRoles } from '../store/roles.svelte';
-import { seed as seedSettings } from '../store/settings.svelte';
+import {
+	seedMe,
+	loadList as loadUsersList,
+	reset as usersReset,
+} from '../store/users.svelte';
+import {
+	load as loadRoles,
+	reset as rolesReset,
+} from '../store/roles.svelte';
+import {
+	seed as seedSettings,
+	reset as settingsReset,
+} from '../store/settings.svelte';
+import * as channelsStore from '../store/channels.svelte';
+import * as messagesStore from '../store/messages.svelte';
+import * as notificationsStore from '../store/notifications.svelte';
+import * as emojisStore from '../store/emojis.svelte';
+import * as websocketStore from '../store/websocket.svelte';
+import * as voiceStore from '../store/voice.svelte';
 import type { RoleSummary } from '../types';
 
 // 11h — refreshes before the 12h cookie expiry.
@@ -47,7 +66,7 @@ function startTimer(): void {
 			await api.auth.refresh();
 		} catch {
 			// Refresh failed; subsequent 401s go through the onUnauthorized
-			// hook → invalidate().
+			// hook → clearLocalSession().
 		}
 	}, REFRESH_INTERVAL);
 }
@@ -55,7 +74,10 @@ function startTimer(): void {
 export async function load(): Promise<void> {
 	stopTimer();
 	state.loading = true;
-	setOnUnauthorized(() => invalidate());
+	// The 401 hook calls clearLocalSession (local teardown only) — never the
+	// server logout. A 401 means the session is already gone; public auth
+	// requests (login/register) bypass the hook via authFailure: 'ignore'.
+	setOnUnauthorized(() => clearLocalSession());
 	try {
 		const me = await api.auth.whoami();
 		state.userId = me.id;
@@ -75,8 +97,13 @@ export async function load(): Promise<void> {
 	}
 }
 
-export function invalidate(): void {
+// 401-only path: local teardown only, no server logout call.
+export function clearLocalSession(): void {
 	stopTimer();
+	// Stop the refresh timer, disconnect the WS (no reconnect), drop voice.
+	websocketStore.disconnect();
+	voiceStore.onSocketClose();
+	// Clear the session itself.
 	state.userId = null;
 	state.username = null;
 	state.avatarBlob = null;
@@ -84,10 +111,23 @@ export function invalidate(): void {
 	state.status = null;
 	state.roles = [];
 	state.loaded = false;
-	// Revoke the session on the server (clears the cookie).
-	api.auth
-		.logout()
-		.catch(() => {});
+	// Full reset of every user-specific store (logout / 401 / account switch).
+	settingsReset();
+	notificationsStore.reset();
+	channelsStore.reset();
+	messagesStore.reset();
+	usersReset();
+	rolesReset();
+	emojisStore.reset();
+}
+
+// Explicit "leave": revoke the server session, then tear down locally.
+export async function logout(): Promise<void> {
+	try {
+		await api.auth.logout();
+	} finally {
+		clearLocalSession();
+	}
 }
 
 export function meId(): string | null {
