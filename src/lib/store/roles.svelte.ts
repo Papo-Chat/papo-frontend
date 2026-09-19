@@ -2,23 +2,28 @@
 
 import { SvelteMap } from 'svelte/reactivity';
 import { api } from '../api';
+import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
 import type { Role, RolePermissions } from '../types';
 import {
 	myRolePermissions,
 	channelAccess,
 	can,
 	type RoleContext,
-	type ChannelAccess,
+	type ChannelAccess
 } from '../utils/permissions';
 
 export const state = $state({
 	byId: new SvelteMap<string, Role>(),
 	list: [] as Role[],
-	loaded: false,
+	loaded: false
 });
 
 export async function load(): Promise<void> {
+	const epoch = currentSessionEpoch();
 	const roles = await api.roles.list();
+	if (!isCurrentSessionEpoch(epoch)) {
+		throw new Error('stale session');
+	}
 	const map = new SvelteMap<string, Role>();
 	for (const r of roles) {
 		map.set(r.id, r);
@@ -28,37 +33,47 @@ export async function load(): Promise<void> {
 	state.loaded = true;
 }
 
-export function create(req: { name: string; color: string | null; permissions: RolePermissions }): void {
-	api.roles
-		.create(req)
-		.then((role) => {
-			state.byId.set(role.id, role);
-			const list = [...state.list, role];
-			state.list = list;
-		});
+export function create(req: {
+	name: string;
+	color: string | null;
+	permissions: RolePermissions;
+}): void {
+	const epoch = currentSessionEpoch();
+	api.roles.create(req).then((role) => {
+		if (!isCurrentSessionEpoch(epoch)) {
+			throw new Error('stale session');
+		}
+		state.byId.set(role.id, role);
+		const list = [...state.list, role];
+		state.list = list;
+	});
 }
 
 export function update(
 	id: string,
 	req: { name: string; color: string | null; permissions: RolePermissions }
 ): void {
-	api.roles
-		.update(id, req)
-		.then((role) => {
-			state.byId.set(role.id, role);
-			const list = state.list.map((r) => (r.id === role.id ? role : r));
-			state.list = list;
-		});
+	const epoch = currentSessionEpoch();
+	api.roles.update(id, req).then((role) => {
+		if (!isCurrentSessionEpoch(epoch)) {
+			throw new Error('stale session');
+		}
+		state.byId.set(role.id, role);
+		const list = state.list.map((r) => (r.id === role.id ? role : r));
+		state.list = list;
+	});
 }
 
 export function remove(id: string): void {
-	api.roles
-		.remove(id)
-		.then(() => {
-			state.byId.delete(id);
-			const list = state.list.filter((r) => r.id !== id);
-			state.list = list;
-		});
+	const epoch = currentSessionEpoch();
+	api.roles.remove(id).then(() => {
+		if (!isCurrentSessionEpoch(epoch)) {
+			throw new Error('stale session');
+		}
+		state.byId.delete(id);
+		const list = state.list.filter((r) => r.id !== id);
+		state.list = list;
+	});
 }
 
 export function assign(userId: string, roleId: string): void {

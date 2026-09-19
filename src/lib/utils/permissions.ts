@@ -17,10 +17,7 @@ export interface RoleContext {
 
 // Union of the user's role permissions. The server owner implicitly has every
 // permission true.
-export function myRolePermissions(
-	roles: Role[],
-	isOwner: boolean
-): RolePermissions {
+export function myRolePermissions(roles: Role[], isOwner: boolean): RolePermissions {
 	if (isOwner) {
 		return {
 			manage_server: true,
@@ -29,30 +26,30 @@ export function myRolePermissions(
 			ban_members: true,
 			pin_message: true,
 			everyone_message: true,
-			send_attachment: true,
+			send_attachment: true
 		};
 	}
-	return roles.reduce<RolePermissions>((acc, role) => {
-		acc.manage_server = acc.manage_server || role.permissions.manage_server;
-		acc.manage_channels =
-			acc.manage_channels || role.permissions.manage_channels;
-		acc.manage_roles = acc.manage_roles || role.permissions.manage_roles;
-		acc.ban_members = acc.ban_members || role.permissions.ban_members;
-		acc.pin_message = acc.pin_message || role.permissions.pin_message;
-		acc.everyone_message =
-			acc.everyone_message || role.permissions.everyone_message;
-		acc.send_attachment =
-			acc.send_attachment || role.permissions.send_attachment;
-		return acc;
-	}, {
-		manage_server: false,
-		manage_channels: false,
-		manage_roles: false,
-		ban_members: false,
-		pin_message: false,
-		everyone_message: false,
-		send_attachment: false,
-	});
+	return roles.reduce<RolePermissions>(
+		(acc, role) => {
+			acc.manage_server = acc.manage_server || role.permissions.manage_server;
+			acc.manage_channels = acc.manage_channels || role.permissions.manage_channels;
+			acc.manage_roles = acc.manage_roles || role.permissions.manage_roles;
+			acc.ban_members = acc.ban_members || role.permissions.ban_members;
+			acc.pin_message = acc.pin_message || role.permissions.pin_message;
+			acc.everyone_message = acc.everyone_message || role.permissions.everyone_message;
+			acc.send_attachment = acc.send_attachment || role.permissions.send_attachment;
+			return acc;
+		},
+		{
+			manage_server: false,
+			manage_channels: false,
+			manage_roles: false,
+			ban_members: false,
+			pin_message: false,
+			everyone_message: false,
+			send_attachment: false
+		}
+	);
 }
 
 export interface ChannelAccess {
@@ -66,10 +63,7 @@ export interface ChannelAccess {
 // "open" channel (empty permissions array) grants everything; otherwise the
 // access is the union of every channel permission entry whose role the user
 // holds.
-export function channelAccess(
-	channel: Channel,
-	ctx: RoleContext
-): ChannelAccess {
+export function channelAccess(channel: Channel, ctx: RoleContext): ChannelAccess {
 	if (ctx.isOwner) {
 		return { read: true, send: true, del: true, voice: true };
 	}
@@ -82,7 +76,7 @@ export function channelAccess(
 		read: false,
 		send: false,
 		del: false,
-		voice: false,
+		voice: false
 	};
 	for (const entry of channel.permissions) {
 		if (!userRoleIds.has(entry.role_id)) {
@@ -98,9 +92,6 @@ export function channelAccess(
 
 // Convenience: does the current user (via their role context) hold a given
 // role-level permission?
-export function can(
-	perm: keyof RolePermissions,
-	ctx: RoleContext
-): boolean {
+export function can(perm: keyof RolePermissions, ctx: RoleContext): boolean {
 	return myRolePermissions(ctx.roles, ctx.isOwner)[perm];
 }

@@ -42,6 +42,7 @@ export interface ChannelMessagesState {
 	pinned: MessageWithAttachment[];
 	pinnedLoaded: boolean;
 	pinnedLoading: boolean;
+	pinnedGeneration: number;
 }
 
 export interface MessagesState {

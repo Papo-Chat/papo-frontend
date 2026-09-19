@@ -2,8 +2,7 @@
 // channel. All signalling (offer/answer/ICE candidates) goes over the
 // WebSocket; the peer is the single data/media channel (F20).
 //
-// Audio-only (P0.1). Camera/screen share are left coherent with the protocol
-// (they send the correct WS messages) but not wired up.
+// Audio-only (P0.1). Camera/screen share are no-op
 //
 // Rules that avoid big bugs:
 // - All WebRTC signalling is serialized in a `queue` Promise.
@@ -24,15 +23,13 @@ import type {
 	WsVoiceJoined,
 	WsVoiceLeave,
 	WsVoiceOffer,
-	WsVoiceStateUpdate,
+	WsVoiceStateUpdate
 } from '../types';
 import type { WsInbound } from '../types';
 
 export const state = $state({
 	iceServers: [] as ICEServer[],
 	peer: null as RTCPeerConnection | null,
-	// Remote ICE candidates accumulated while awaiting the answer.
-	remoteCandidates: [] as RTCIceCandidateInit[],
 	// Current members in the room (from voice_joined).
 	members: [] as VoiceState[],
 	// Active speakers (from active_speaker_update).
@@ -40,175 +37,277 @@ export const state = $state({
 	// The single currently-active speaker (F20).
 	activeSpeaker: null as string | null,
 	// Whether we are currently connected to a voice room.
-	connected: false,
+	connected: false
 });
 
 let peer: RTCPeerConnection | null = null;
 let currentChannelId: string | null = null;
 let mediaStream: MediaStream | null = null;
-let iceServerLoaded = false;
-let audioEl: HTMLAudioElement | null = null;
+
+let voiceGeneration = 0;
+let joinResolve: (() => void) | null = null;
+let joinTimer: ReturnType<typeof setTimeout> | null = null;
+let serverJoinSent = false;
+
+function clearJoinWait(): void {
+	if (joinTimer) {
+		clearTimeout(joinTimer);
+		joinTimer = null;
+	}
+
+	joinResolve = null;
+}
+
+function waitVoiceJoined(timeoutMs = 10_000): Promise<void> {
+	return new Promise<void>((resolve, reject) => {
+		clearJoinWait();
+
+		joinResolve = () => {
+			clearJoinWait();
+			resolve();
+		};
+
+		joinTimer = setTimeout(() => {
+			clearJoinWait();
+			reject(new Error('voice_joined timeout'));
+		}, timeoutMs);
+	});
+}
+
+function cancelJoinWait(): void {
+	const resolve = joinResolve;
+
+	clearJoinWait();
+
+	// Faz o await continuar; o generation check vai perceber
+	// que esta tentativa ficou stale e abortá-la.
+	resolve?.();
+}
+
+function isCurrentJoin(generation: number, channelId: string): boolean {
+	return generation === voiceGeneration && currentChannelId === channelId;
+}
 
 // Serialized WebRTC signalling queue (P0.1).
-let queue: Promise<void> | null = null;
+let signalQueue: Promise<void> = Promise.resolve();
+
 function enqueue<T>(fn: () => Promise<T>): Promise<T> {
-	const p = new Promise<T>((resolve, reject) => {
-		const work = () => {
-			queue = null;
-			fn().then(resolve, reject);
-		};
-		if (queue) {
-			queue.then(work);
-		} else {
-			queue = Promise.resolve().then(work);
-		}
-	});
-	return p;
+	const run = signalQueue.then(fn, fn);
+
+	signalQueue = run.then(
+		() => undefined,
+		() => undefined
+	);
+
+	return run;
 }
 
 // Remote ICE queued while `!peer.remoteDescription` (P0.1).
-let queuedCandidates: RTCIceCandidateInit[] = [];
+const queuedCandidates = new WeakMap<RTCPeerConnection, RTCIceCandidateInit[]>();
 
-// Transceiver mids we've already associated a remote audio track for (P0.1).
-const handledMids = new Set<string>();
+function queueCandidate(conn: RTCPeerConnection, candidate: RTCIceCandidateInit): void {
+	const pending = queuedCandidates.get(conn) ?? [];
+	pending.push(candidate);
+	queuedCandidates.set(conn, pending);
+}
+
+async function flushQueuedCandidates(conn: RTCPeerConnection): Promise<void> {
+	const pending = queuedCandidates.get(conn) ?? [];
+
+	queuedCandidates.delete(conn);
+
+	for (const candidate of pending) {
+		try {
+			await conn.addIceCandidate(candidate);
+		} catch {
+			// stale/inválido
+		}
+	}
+}
 
 // ── lifecycle ─────────────────────────────────────────────
-
-export function loadIceServers(): void {
-	if (iceServerLoaded) {
-		return;
-	}
-	api.voice
-		.iceServers()
-		.then((res) => {
-			state.iceServers = res.ice_servers;
-			iceServerLoaded = true;
-		});
-}
-
-// Resolve on the voice_joined unicast (sent by the server to the joining
-// connection after a voice_join).
-let joinResolve: ((v: void) => void) | null = null;
-
-function waitVoiceJoined(): Promise<void> {
-	return new Promise<void>((resolve) => {
-		joinResolve = resolve;
-	});
-}
 
 export function join(channelId: string): void {
 	if (typeof navigator === 'undefined' || !navigator.mediaDevices) {
 		return;
 	}
-	// Leave any existing room first (single peer). `leave` closes the peer
-	// only when it belongs to the room being left, so pass the room we are
-	// currently in — passing the new channelId would not match it and the
-	// old peer would be orphaned.
+
+	// Encerra qualquer call/join anterior.
 	leave(currentChannelId);
+
+	// Este número identifica ESTA tentativa específica de join.
+	const generation = ++voiceGeneration;
+
 	currentChannelId = channelId;
 
-	let stream: MediaStream | null = null;
+	void (async () => {
+		let stream: MediaStream | null = null;
 
-	// Audio only.
-	navigator.mediaDevices
-		.getUserMedia({ audio: true })
-		.then((s) => {
-			stream = s;
-			// Track it so leave()/onSocketClose() can stop the mic tracks.
-			mediaStream = s;
-			// 1. WS voice_join (before creating the peer / offering).
-			if (!wsSend({ type: 'voice_join', channel_id: channelId } as WsInbound)) {
-				throw new Error('ws not open');
-			}
-			// 2. Wait for voice_joined (unicast to this connection).
-			return waitVoiceJoined();
-		})
-		.then(() => {
-			if (stream === null) {
+		try {
+			// Mic + ICE pertencem à mesma tentativa de join.
+			stream = await navigator.mediaDevices.getUserMedia({
+				audio: true,
+				video: false
+			});
+
+			if (!isCurrentJoin(generation, channelId)) {
+				stream.getTracks().forEach((track) => track.stop());
 				return;
 			}
-			// 3. Create the peer after voice_joined.
-			peer = new RTCPeerConnection({ iceServers: state.iceServers });
-			state.peer = peer;
-			// Associate remote audio by transceiver.mid (P0.1).
-			peer.ontrack = (e) => onRemoteTrack(peer!, e);
-			// 4. Add the mic track.
-			const audioTrack = stream.getTracks().find((t) => t.kind === 'audio');
-			if (audioTrack) {
-				peer!.addTrack(audioTrack, stream);
-			}
-			// 5. Prepare the audio sink.
-			setAudioSink(stream);
-			// 6. Create offer / set local description / send voice_offer.
-			sendOffer();
-		})
-		.catch(() => {
-			// Permission denied / unsupported / ws closed → leave.
-			leave(channelId);
-		});
-}
 
-function setAudioSink(stream: MediaStream): void {
-	if (typeof document !== 'undefined') {
-		audioEl = new HTMLAudioElement();
-		audioEl.srcObject = stream;
-		audioEl.autoplay = true;
-		// Attach once; the browser will route the remote audio through it.
-	}
+			mediaStream = stream;
+
+			const ice = await api.voice.iceServers();
+
+			if (!isCurrentJoin(generation, channelId)) {
+				stream.getTracks().forEach((track) => track.stop());
+
+				if (mediaStream === stream) {
+					mediaStream = null;
+				}
+
+				return;
+			}
+
+			state.iceServers = ice.ice_servers;
+
+			// Crie a espera ANTES de mandar voice_join.
+			const joined = waitVoiceJoined();
+
+			if (
+				!wsSend({
+					type: 'voice_join',
+					channel_id: channelId
+				} as WsInbound)
+			) {
+				throw new Error('ws not open');
+			}
+
+			serverJoinSent = true;
+
+			await joined;
+
+			// Pode ter ocorrido leave/join em outro canal enquanto
+			// esperávamos voice_joined.
+			if (!isCurrentJoin(generation, channelId)) {
+				stream.getTracks().forEach((track) => track.stop());
+
+				if (mediaStream === stream) {
+					mediaStream = null;
+				}
+
+				return;
+			}
+
+			const conn = new RTCPeerConnection({
+				iceServers: state.iceServers
+			});
+
+			// Pequena proteção antes de publicar o peer no estado.
+			if (!isCurrentJoin(generation, channelId)) {
+				conn.close();
+				stream.getTracks().forEach((track) => track.stop());
+				return;
+			}
+
+			peer = conn;
+			state.peer = conn;
+
+			conn.ontrack = (event) => {
+				// Ignora eventos de um PeerConnection que já ficou velho.
+				if (peer !== conn || !isCurrentJoin(generation, channelId)) {
+					return;
+				}
+
+				onRemoteTrack(conn, event);
+			};
+
+			const audioTrack = stream.getAudioTracks().at(0);
+
+			if (audioTrack) {
+				// voice_joined começa muted=true no backend.
+				audioTrack.enabled = false;
+				conn.addTrack(audioTrack, stream);
+			}
+
+			sendOffer();
+		} catch {
+			stream?.getTracks().forEach((track) => track.stop());
+
+			if (mediaStream === stream) {
+				mediaStream = null;
+			}
+
+			if (isCurrentJoin(generation, channelId)) {
+				leave(channelId);
+			}
+		}
+	})();
 }
 
 function sendOffer(): void {
-	if (!peer) {
-		return;
-	}
+	if (!peer || !currentChannelId) return;
+
 	const conn = peer;
 	const cid = currentChannelId;
-	enqueue(
-		() =>
-			conn
-				.createOffer()
-				.then((offer) => conn.setLocalDescription(offer))
-				.then(() => {
-					if (!conn.localDescription || cid == null) {
-						return;
-					}
-					if (!wsSend({ type: 'voice_offer', channel_id: cid, sdp: conn.localDescription.sdp } as WsInbound)) {
-						return;
-					}
-				})
-		)
-		.catch(() => {});
+
+	void enqueue(async () => {
+		const offer = await conn.createOffer();
+		await conn.setLocalDescription(offer);
+
+		await waitForIceGatheringComplete(conn);
+
+		if (peer !== conn || currentChannelId !== cid || !conn.localDescription) {
+			return;
+		}
+
+		wsSend({
+			type: 'voice_offer',
+			channel_id: cid,
+			sdp: conn.localDescription.sdp
+		} as WsInbound);
+	}).catch(() => {});
 }
 
 export function leave(channelId: string | null): void {
-	// Notify the server we are leaving the room we are in (if we are).
-	// No-op on a failed join: `peer` is null until voice_joined, so a
-	// spurious voice_leave is never sent for a room we never entered.
-	if (currentChannelId != null && peer != null) {
-		wsSend({ type: 'voice_leave', channel_id: currentChannelId } as WsInbound);
+	if (channelId !== null && currentChannelId !== null && channelId !== currentChannelId) {
+		return;
 	}
-	if (peer && (currentChannelId == null || currentChannelId === channelId)) {
-		peer.close();
+
+	voiceGeneration += 1;
+	cancelJoinWait();
+
+	const cid = currentChannelId;
+
+	if (cid && serverJoinSent) {
+		wsSend({
+			type: 'voice_leave',
+			channel_id: cid
+		} as WsInbound);
 	}
+
+	serverJoinSent = false;
+
+	peer?.close();
+
 	if (mediaStream) {
-		mediaStream.getTracks().forEach((t) => t.stop());
+		mediaStream.getTracks().forEach((track) => track.stop());
+
 		mediaStream = null;
 	}
-	if (audioEl) {
-		audioEl.srcObject = null;
-		audioEl = null;
-	}
+
+	signalQueue = Promise.resolve();
+
 	peer = null;
 	state.peer = null;
-	state.remoteCandidates = [];
 	state.members = [];
 	state.activeSpeakers = [];
 	state.activeSpeaker = null;
 	state.connected = false;
+
 	currentChannelId = null;
-	queuedCandidates = [];
-	handledMids.clear();
-	queue = null;
+
+	cleanupRemoteAudio();
 }
 
 // Evict the room when the channel is deleted.
@@ -225,27 +324,31 @@ export function isJoined(channelId: string): boolean {
 // Called by the websocket store when the WS closes (P0.1). The call belongs
 // to the old connection; tear down the peer and local state. No auto-rejoin.
 export function onSocketClose(): void {
-	if (peer) {
-		peer.close();
-	}
+	voiceGeneration += 1;
+	cancelJoinWait();
+
+	serverJoinSent = false;
+
+	peer?.close();
+
 	if (mediaStream) {
-		mediaStream.getTracks().forEach((t) => t.stop());
+		mediaStream.getTracks().forEach((track) => track.stop());
+
 		mediaStream = null;
 	}
-	if (audioEl) {
-		audioEl.srcObject = null;
-		audioEl = null;
-	}
+
+	signalQueue = Promise.resolve();
+
 	peer = null;
 	state.peer = null;
-	state.remoteCandidates = [];
 	state.members = [];
 	state.activeSpeakers = [];
 	state.activeSpeaker = null;
 	state.connected = false;
-	queuedCandidates = [];
-	handledMids.clear();
-	queue = null;
+
+	currentChannelId = null;
+
+	cleanupRemoteAudio();
 }
 
 // ── signalling handlers (called by the websocket store) ───
@@ -254,17 +357,14 @@ export function onVoiceJoined(ev: WsVoiceJoined): void {
 	if (currentChannelId !== ev.channel_id) {
 		return;
 	}
+
 	state.members = ev.members;
 	state.activeSpeakers = ev.active_speakers;
-	if (ev.active_speakers.length === 1) {
-		state.activeSpeaker = ev.active_speakers[0];
-	}
+	state.activeSpeaker = ev.active_speakers.length === 1 ? ev.active_speakers[0] : null;
+
 	state.connected = true;
-	// Resolve the join wait.
-	if (joinResolve) {
-		joinResolve();
-		joinResolve = null;
-	}
+
+	joinResolve?.();
 }
 
 // Answer to our voice_offer (unicast).
@@ -272,58 +372,125 @@ export function onVoiceAnswer(ev: WsVoiceAnswer): void {
 	if (currentChannelId !== ev.channel_id || !peer) {
 		return;
 	}
+
 	const conn = peer;
-	enqueue(
-		() =>
-			conn
-				.setRemoteDescription({ type: 'answer', sdp: ev.sdp })
-				.then(() => {
-					// Flush pending remote candidates.
-					for (const c of state.remoteCandidates) {
-						conn.addIceCandidate(c).catch(() => {});
-					}
-					state.remoteCandidates = [];
-				})
-		)
-		.catch(() => {});
+	const cid = ev.channel_id;
+
+	void enqueue(async () => {
+		if (peer !== conn || currentChannelId !== cid || conn.signalingState !== 'have-local-offer') {
+			return;
+		}
+
+		await conn.setRemoteDescription({
+			type: 'answer',
+			sdp: ev.sdp
+		});
+
+		if (peer !== conn || currentChannelId !== cid) {
+			return;
+		}
+
+		await flushQueuedCandidates(conn);
+	}).catch(() => {});
+}
+
+function waitForIceGatheringComplete(conn: RTCPeerConnection, timeoutMs = 4500): Promise<void> {
+	if (conn.iceGatheringState === 'complete') {
+		return Promise.resolve();
+	}
+
+	return new Promise((resolve) => {
+		let finished = false;
+
+		const finish = () => {
+			if (finished) return;
+			finished = true;
+
+			conn.removeEventListener('icegatheringstatechange', onIceGatheringChange);
+
+			clearTimeout(timer);
+			resolve();
+		};
+
+		const onIceGatheringChange = () => {
+			if (conn.iceGatheringState === 'complete') {
+				finish();
+			}
+		};
+
+		const timer = setTimeout(finish, timeoutMs);
+
+		conn.addEventListener('icegatheringstatechange', onIceGatheringChange);
+	});
 }
 
 // Server-initiated renegotiation (P0.1: was previously unhandled).
 export function onVoiceOffer(ev: WsVoiceOffer): void {
-	if (currentChannelId !== ev.channel_id || !peer) {
-		return;
-	}
+	if (currentChannelId !== ev.channel_id || !peer) return;
+
 	const conn = peer;
-	enqueue(
-		() =>
-			conn
-				.setRemoteDescription({ type: 'offer', sdp: ev.sdp })
-				.then(() => conn.createAnswer())
-				.then((answer) => conn.setLocalDescription(answer))
-				.then(() => {
-					const cid = currentChannelId;
-					if (cid && conn.localDescription) {
-						wsSend({ type: 'voice_answer', channel_id: cid, sdp: conn.localDescription.sdp } as WsInbound);
-					}
-				})
-		)
-		.catch(() => {});
+	const cid = ev.channel_id;
+
+	void enqueue(async () => {
+		if (peer !== conn || currentChannelId !== cid) return;
+
+		if (conn.signalingState !== 'stable') {
+			try {
+				await conn.setLocalDescription({ type: 'rollback' });
+			} catch {
+				return;
+			}
+		}
+
+		await conn.setRemoteDescription({
+			type: 'offer',
+			sdp: ev.sdp
+		});
+
+		await flushQueuedCandidates(conn);
+
+		const answer = await conn.createAnswer();
+		await conn.setLocalDescription(answer);
+
+		await waitForIceGatheringComplete(conn);
+
+		if (peer !== conn || currentChannelId !== cid || !conn.localDescription) {
+			return;
+		}
+
+		wsSend({
+			type: 'voice_answer',
+			channel_id: cid,
+			sdp: conn.localDescription.sdp
+		} as WsInbound);
+	}).catch(() => {});
 }
 
 export function onVoiceIceCandidate(ev: WsVoiceIceCandidate): void {
 	if (currentChannelId !== ev.channel_id || !peer) {
 		return;
 	}
+
+	const conn = peer;
+	const cid = ev.channel_id;
+
 	const candidate: RTCIceCandidateInit = {
 		candidate: ev.candidate,
 		sdpMid: ev.sdp_mid ?? undefined,
-		sdpMLineIndex: ev.sdp_mline_index ?? undefined,
+		sdpMLineIndex: ev.sdp_mline_index ?? undefined
 	};
-	if (peer.remoteDescription) {
-		peer.addIceCandidate(candidate).catch(() => {});
-	} else {
-		queuedCandidates.push(candidate);
+
+	if (!conn.remoteDescription) {
+		queueCandidate(conn, candidate);
+		return;
 	}
+	void enqueue(async () => {
+		if (peer !== conn || currentChannelId !== cid) {
+			return;
+		}
+
+		await conn.addIceCandidate(candidate);
+	}).catch(() => {});
 }
 
 export function onVoiceStateUpdate(ev: WsVoiceStateUpdate): void {
@@ -337,7 +504,7 @@ export function onVoiceStateUpdate(ev: WsVoiceStateUpdate): void {
 			...next[idx],
 			muted: ev.muted,
 			camera_on: ev.camera_on,
-			screen_sharing: ev.screen_sharing,
+			screen_sharing: ev.screen_sharing
 		};
 		state.members = next;
 	}
@@ -378,50 +545,79 @@ export function mute(muted: boolean): void {
 	}
 }
 
-export function camera(on: boolean): void {
-	if (!peer) {
-		return;
-	}
-	const cid = currentChannelId;
-	if (cid && !wsSend({ type: 'voice_camera', channel_id: cid, on } as WsInbound)) {
-		return;
-	}
-	// Not wired up yet (audio-only).
+export function camera(_on: boolean): void {
+	// TODO: implementar track + renegociação.
 }
 
-export function screenShare(on: boolean): void {
-	if (!peer) {
-		return;
-	}
-	const cid = currentChannelId;
-	if (on) {
-		if (cid && !wsSend({ type: 'screen_share_start', channel_id: cid } as WsInbound)) {
-			return;
-		}
-	} else {
-		if (cid && !wsSend({ type: 'screen_share_stop', channel_id: cid } as WsInbound)) {
-			return;
-		}
-	}
-	// Not wired up yet (audio-only).
+export function screenShare(_on: boolean): void {
+	// TODO: implementar track + renegociação.
 }
 
 // ── ontrack: associate remote audio by transceiver.mid ────
 
-function onRemoteTrack(
-	peerConn: RTCPeerConnection,
-	event: RTCTrackEvent
-): void {
-	if (event.track.kind !== 'audio') {
-		return;
+const remoteAudios = new Map<string, HTMLAudioElement>();
+
+function cleanupRemoteAudio(): void {
+	for (const audio of remoteAudios.values()) {
+		audio.pause();
+		audio.srcObject = null;
+		audio.remove();
 	}
-	const mid = event.transceiver.mid;
-	if (mid === null || handledMids.has(mid)) {
-		return;
+
+	remoteAudios.clear();
+}
+
+function onRemoteTrack(_peerConn: RTCPeerConnection, event: RTCTrackEvent): void {
+	if (event.track.kind !== 'audio') return;
+
+	const mid = event.transceiver.mid ?? `track:${event.track.id}`;
+
+	let audio = remoteAudios.get(mid);
+
+	if (!audio) {
+		audio = document.createElement('audio');
+		audio.autoplay = true;
+		audio.hidden = true;
+
+		document.body.appendChild(audio);
+		remoteAudios.set(mid, audio);
 	}
-	handledMids.add(mid);
-	// Route the remote audio through the shared sink.
-	if (audioEl) {
-		audioEl.srcObject = new MediaStream([event.track]);
+
+	const track = event.track;
+
+	audio.srcObject = new MediaStream([track]);
+	void audio.play().catch(() => {
+		// autoplay bloqueado; a UI pode chamar resumeRemoteAudio()
+	});
+
+	track.addEventListener(
+		'ended',
+		() => {
+			const current = remoteAudios.get(mid);
+			if (!current) return;
+
+			const currentTrack = (current.srcObject as MediaStream | null)?.getAudioTracks().at(0);
+
+			// O MID já foi reutilizado para outra track.
+			if (currentTrack !== track) {
+				return;
+			}
+
+			current.pause();
+			current.srcObject = null;
+			current.remove();
+			remoteAudios.delete(mid);
+		},
+		{ once: true }
+	);
+}
+
+export async function resumeRemoteAudio(): Promise<void> {
+	for (const audio of remoteAudios.values()) {
+		try {
+			await audio.play();
+		} catch {
+			// UI pode indicar autoplay bloqueado
+		}
 	}
 }

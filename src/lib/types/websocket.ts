@@ -1,8 +1,4 @@
-import type {
-	LinkPreviewWithImage,
-	MessageAttachment,
-	VoiceState,
-} from './models';
+import type { LinkPreviewWithImage, MessageAttachment, VoiceState } from './models';
 
 // ── shared ─────────────────────────────────────────────
 

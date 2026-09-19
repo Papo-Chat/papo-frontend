@@ -14,10 +14,7 @@
 import { SvelteMap } from 'svelte/reactivity';
 import { api } from '../api';
 import { nextCursor } from '../utils/keyset';
-import type {
-	ChannelMessagesState,
-	MessagesState,
-} from './messages.types';
+import type { ChannelMessagesState, MessagesState } from './messages.types';
 import type {
 	LinkPreview,
 	LinkPreviewWithImage,
@@ -31,7 +28,7 @@ import type {
 	WsNewPreview,
 	WsOutbound,
 	WsReactUpdate,
-	WsRemovePreview,
+	WsRemovePreview
 } from '../types';
 
 // ── window policy (P1.12) ───────────────────────────────
@@ -45,12 +42,82 @@ const previewCache = new Map<string, LinkPreviewWithImage>();
 // new_preview events whose message is not yet in the cache. Keyed by
 // message_id (new_preview carries no channel_id). Applied when the message
 // arrives in a channel, subject to the tombstone check.
-const pendingPreviews = new Map<string, LinkPreviewWithImage>();
+const pendingPreviews = new Map<string, Map<string, LinkPreviewWithImage>>();
+
+const previewTombstones = new Set<string>();
+
+let requestSerial = 0;
+let storeEpoch = 0;
+
+function previewKey(messageId: string, previewId: string): string {
+	return `${messageId}:${previewId}`;
+}
+
+function setPendingPreview(messageId: string, preview: LinkPreviewWithImage): void {
+	let previews = pendingPreviews.get(messageId);
+
+	if (!previews) {
+		previews = new Map();
+		pendingPreviews.set(messageId, previews);
+	}
+
+	previews.set(preview.id, preview);
+}
+
+function deletePendingPreview(messageId: string, previewId: string): void {
+	const previews = pendingPreviews.get(messageId);
+	if (!previews) return;
+
+	previews.delete(previewId);
+
+	if (previews.size === 0) {
+		pendingPreviews.delete(messageId);
+	}
+}
 
 // ── state ─────────────────────────────────────────────────
 
+function trimLatestWindow(
+	ch: ChannelMessagesState,
+	byId: SvelteMap<string, MessageWithAttachment>
+): {
+	byId: SvelteMap<string, MessageWithAttachment>;
+	hasMoreOlder: boolean;
+	cursorOlder: ChannelMessagesState['cursorOlder'];
+} {
+	if (byId.size <= MAX_WINDOW) {
+		return {
+			byId,
+			hasMoreOlder: ch.hasMoreOlder,
+			cursorOlder: ch.cursorOlder
+		};
+	}
+
+	const ids = sortedIds(byId);
+	const excess = ids.length - MAX_WINDOW;
+
+	for (const id of ids.slice(0, excess)) {
+		byId.delete(id);
+	}
+
+	const keptIds = sortedIds(byId);
+	const oldestId = keptIds[0];
+	const oldest = oldestId ? byId.get(oldestId) : undefined;
+
+	return {
+		byId,
+		hasMoreOlder: true,
+		cursorOlder: oldest
+			? {
+					since: oldest.created_at,
+					last_id: oldest.id
+				}
+			: null
+	};
+}
+
 export const state = $state<MessagesState>({
-	channels: new SvelteMap<string, ChannelMessagesState>(),
+	channels: new SvelteMap<string, ChannelMessagesState>()
 });
 
 function newChannelState(): ChannelMessagesState {
@@ -69,15 +136,13 @@ function newChannelState(): ChannelMessagesState {
 		pinned: [],
 		pinnedLoaded: false,
 		pinnedLoading: false,
+		pinnedGeneration: 0
 	};
 }
 
 // ── ordering helpers (pure) ───────────────────────────────
 
-export function compareMessages(
-	a: MessageWithAttachment,
-	b: MessageWithAttachment
-): number {
+export function compareMessages(a: MessageWithAttachment, b: MessageWithAttachment): number {
 	if (a.created_at !== b.created_at) {
 		return a.created_at < b.created_at ? -1 : 1;
 	}
@@ -87,9 +152,7 @@ export function compareMessages(
 	return 0;
 }
 
-export function sortedIds(
-	byId: SvelteMap<string, MessageWithAttachment>
-): string[] {
+export function sortedIds(byId: SvelteMap<string, MessageWithAttachment>): string[] {
 	const msgs: MessageWithAttachment[] = [];
 	for (const m of byId.values()) {
 		msgs.push(m);
@@ -112,7 +175,7 @@ export function wsMessageToMsg(m: WsMessage): MessageWithAttachment {
 		attachments: m.attachments ?? [],
 		previews: [],
 		reactions: [],
-		user_reactions: [],
+		user_reactions: []
 	};
 }
 
@@ -130,6 +193,12 @@ function replaceChannel(
 	state.channels.set(channelId, build(old));
 }
 
+function isPreviewRemoved(ch: ChannelMessagesState, messageId: string, previewId: string): boolean {
+	const key = previewKey(messageId, previewId);
+
+	return previewTombstones.has(key) || ch.previewTombstones.has(key);
+}
+
 // Merge a REST `incoming` message into an existing local `existing` message,
 // preserving WS deltas (reactions, user_reactions, previews, edits) that a
 // stale REST snapshot must not clobber. Returns null when the message is
@@ -142,22 +211,24 @@ export function mergeFetchedMessage(
 	if (ch.deletedMessageIds.has(incoming.id)) {
 		return null;
 	}
+	const incomingSafe: MessageWithAttachment = {
+		...incoming,
+		previews: incoming.previews.filter((p) => !isPreviewRemoved(ch, incoming.id, p.id))
+	};
 	if (!existing) {
 		// Not in the local cache: insert the REST message as-is.
-		return incoming;
+		return incomingSafe;
 	}
 	// Exists locally: never blind-overwrite. Preserve WS deltas.
 	const previewKey = (pid: string) => `${existing.id}:${pid}`;
-	const keptPreviews = existing.previews.filter(
-		(p) => !ch.previewTombstones.has(previewKey(p.id))
-	);
+	const keptPreviews = existing.previews.filter((p) => !ch.previewTombstones.has(previewKey(p.id)));
 	const keptPreviewIds = new Set(keptPreviews.map((p) => p.id));
 	const mergedPreviews: LinkPreview[] = [
 		...keptPreviews,
-		...incoming.previews.filter((p) => !keptPreviewIds.has(p.id)),
+		...incomingSafe.previews.filter((p) => !keptPreviewIds.has(p.id))
 	];
 	// Attachments: preserve a local (WS-moderation) status over a stale REST.
-	const mergedAttachments = incoming.attachments.map((a) => {
+	const mergedAttachments = incomingSafe.attachments.map((a) => {
 		const local = existing.attachments.find((la) => la.id === a.id);
 		if (local && local.moderation_status !== a.moderation_status) {
 			return { ...a, moderation_status: local.moderation_status };
@@ -165,14 +236,19 @@ export function mergeFetchedMessage(
 		return a;
 	});
 	const merged: MessageWithAttachment = {
-		...incoming,
+		...incomingSafe,
 		reactions: existing.reactions,
 		user_reactions: existing.user_reactions,
 		previews: mergedPreviews,
-		attachments: mergedAttachments,
+		attachments: mergedAttachments
 	};
 	// Preserve a local edit over a stale REST snapshot.
-	if (existing.edited_at && !incoming.edited_at) {
+	const existingEditIsNewer =
+		existing.edited_at !== null &&
+		(incomingSafe.edited_at === null ||
+			Date.parse(existing.edited_at) > Date.parse(incomingSafe.edited_at));
+
+	if (existingEditIsNewer) {
 		merged.content = existing.content;
 		merged.edited_at = existing.edited_at;
 	}
@@ -196,10 +272,22 @@ export function upsertMessage(
 				newByd.set(id, m);
 			}
 			newByd.set(msg.id, merged);
+
+			const trimmed =
+				ch.windowMode === 'latest'
+					? trimLatestWindow(ch, newByd)
+					: {
+							byId: newByd,
+							hasMoreOlder: ch.hasMoreOlder,
+							cursorOlder: ch.cursorOlder
+						};
+
 			state.channels.set(channelId, {
 				...ch,
-				byId: newByd,
-				ids: sortedIds(newByd),
+				byId: trimmed.byId,
+				ids: sortedIds(trimmed.byId),
+				hasMoreOlder: trimmed.hasMoreOlder,
+				cursorOlder: trimmed.cursorOlder
 			});
 			inserted = true;
 		}
@@ -238,83 +326,127 @@ function patchMessage(
 		return {
 			...old,
 			byId: newByd,
-			ids: sortedIds(newByd),
+			ids: sortedIds(newByd)
 		};
 	});
 }
 
 // Remove a message from byId, ids and the pinned list, and tombstone it so
 // a delayed REST snapshot cannot resurrect it.
-export function removeMessage(
-	state: MessagesState,
-	channelId: string,
-	messageId: string
-): void {
-	replaceChannel(state, channelId, (old) => {
-		const newByd = new SvelteMap<string, MessageWithAttachment>();
-		let removed = false;
-		for (const [id, m] of old.byId) {
-			if (id === messageId) {
-				removed = true;
-			} else {
-				newByd.set(id, m);
-			}
+export function removeMessage(state: MessagesState, channelId: string, messageId: string): void {
+	let ch = state.channels.get(channelId);
+
+	if (!ch) {
+		ch = newChannelState();
+		state.channels.set(channelId, ch);
+	}
+
+	const newById = new SvelteMap<string, MessageWithAttachment>();
+
+	for (const [id, message] of ch.byId) {
+		if (id !== messageId) {
+			newById.set(id, message);
 		}
-		if (!removed) {
-			return old;
-		}
-		return {
-			...old,
-			byId: newByd,
-			ids: sortedIds(newByd),
-			pinned: old.pinned.filter((p) => p.id !== messageId),
-			deletedMessageIds: new Set([...old.deletedMessageIds, messageId]),
-		};
+	}
+
+	state.channels.set(channelId, {
+		...ch,
+		byId: newById,
+		ids: sortedIds(newById),
+		pinned: ch.pinned.filter((p) => p.id !== messageId),
+		deletedMessageIds: new Set([...ch.deletedMessageIds, messageId])
 	});
 }
 
 // Pin/unpin a message in the pinned list (source of truth for pinned status).
-export function patchPinned(
-	state: MessagesState,
-	messageId: string,
-	isPinned: boolean
-): void {
+export function patchPinned(state: MessagesState, messageId: string, isPinned: boolean): void {
 	for (const [channelId, ch] of state.channels) {
-		if (!ch.byId.has(messageId)) {
+		const msg = ch.byId.get(messageId);
+		const alreadyPinned = ch.pinned.some((p) => p.id === messageId);
+
+		if (!msg && !alreadyPinned) {
 			continue;
 		}
+
 		replaceChannel(state, channelId, (old) => {
-			const msg = old.byId.get(messageId);
-			if (!msg) {
-				return old;
-			}
+			const currentMsg = old.byId.get(messageId);
+
 			let pinned = [...old.pinned];
+
 			if (isPinned) {
-				if (!pinned.some((p) => p.id === messageId)) {
-					pinned = [...pinned, msg];
+				if (currentMsg && !pinned.some((p) => p.id === messageId)) {
+					pinned = [...pinned, currentMsg];
 				}
 			} else {
 				pinned = pinned.filter((p) => p.id !== messageId);
 			}
-			return { ...old, pinned };
+
+			return {
+				...old,
+				pinned
+			};
 		});
+
 		return;
 	}
+}
+
+const previewRequests = new Map<string, Promise<LinkPreviewWithImage>>();
+
+export function ensurePreview(previewId: string): Promise<LinkPreviewWithImage> {
+	const cached = previewCache.get(previewId);
+
+	if (cached) {
+		return Promise.resolve(cached);
+	}
+
+	const existing = previewRequests.get(previewId);
+
+	if (existing) {
+		return existing;
+	}
+
+	const epoch = storeEpoch;
+
+	let request: Promise<LinkPreviewWithImage>;
+
+	request = api.linkPreviews
+		.get(previewId)
+		.then((preview) => {
+			if (epoch !== storeEpoch) {
+				throw new Error('stale preview request');
+			}
+
+			previewCache.set(preview.id, preview);
+
+			return preview;
+		})
+		.finally(() => {
+			// Uma request velha não pode apagar uma nova
+			// request do mesmo preview id.
+			if (previewRequests.get(previewId) === request) {
+				previewRequests.delete(previewId);
+			}
+		});
+
+	previewRequests.set(previewId, request);
+
+	return request;
 }
 
 // React update: upsert the reaction group by (emoji_id, unicode). count 0
 // removes the group. user_reactions are untouched.
 export function reactUpdate(state: MessagesState, event: WsReactUpdate): void {
+	touchDuringAnyFresh(event.message_id);
 	for (const [channelId, ch] of state.channels) {
 		const msg = ch.byId.get(event.message_id);
+
 		if (!msg) {
 			continue;
 		}
 		const key = (v: string | null) => v ?? '';
 		const idx = msg.reactions.findIndex(
-			(r) =>
-				key(r.emoji_id) === key(event.emoji_id) &&
-				key(r.unicode) === key(event.unicode)
+			(r) => key(r.emoji_id) === key(event.emoji_id) && key(r.unicode) === key(event.unicode)
 		);
 		let reactions: { emoji_id: string | null; unicode: string | null; count: number }[];
 		if (event.count === 0) {
@@ -324,7 +456,7 @@ export function reactUpdate(state: MessagesState, event: WsReactUpdate): void {
 			// Insert a new group (upsert).
 			reactions = [
 				...msg.reactions,
-				{ emoji_id: event.emoji_id, unicode: event.unicode, count: event.count },
+				{ emoji_id: event.emoji_id, unicode: event.unicode, count: event.count }
 			];
 		} else {
 			reactions = msg.reactions.map((r, i) => {
@@ -362,7 +494,7 @@ export function reactUpdate(state: MessagesState, event: WsReactUpdate): void {
 			return {
 				...old,
 				byId: newByd,
-				ids: sortedIds(newByd),
+				ids: sortedIds(newByd)
 			};
 		});
 		break;
@@ -371,16 +503,20 @@ export function reactUpdate(state: MessagesState, event: WsReactUpdate): void {
 
 // Remove a preview from a message's previews and tombstone it, so a delayed
 // REST snapshot / in-flight GET cannot resurrect it.
-export function removePreview(
-	state: MessagesState,
-	messageId: string,
-	previewId: string
-): void {
+export function removePreview(state: MessagesState, messageId: string, previewId: string): void {
+	const key = previewKey(messageId, previewId);
+
+	previewTombstones.add(key);
+	previewCache.delete(previewId);
+	deletePendingPreview(messageId, previewId);
 	for (const [channelId, ch] of state.channels) {
 		const msg = ch.byId.get(messageId);
+
 		if (!msg) {
 			continue;
 		}
+
+		touchDuringFresh(channelId, messageId);
 		const nextPreviews = msg.previews.filter((p) => p.id !== previewId);
 		if (nextPreviews.length === msg.previews.length) {
 			// Not present in the message, but tombstone anyway (a delayed
@@ -392,7 +528,7 @@ export function removePreview(
 				}
 				return {
 					...old,
-					previewTombstones: new Set([...old.previewTombstones, `${messageId}:${previewId}`]),
+					previewTombstones: new Set([...old.previewTombstones, `${messageId}:${previewId}`])
 				};
 			});
 			continue;
@@ -411,7 +547,7 @@ export function removePreview(
 				...old,
 				byId: newByd,
 				ids: sortedIds(newByd),
-				previewTombstones: new Set([...old.previewTombstones, `${messageId}:${previewId}`]),
+				previewTombstones: new Set([...old.previewTombstones, `${messageId}:${previewId}`])
 			};
 		});
 		break;
@@ -421,42 +557,36 @@ export function removePreview(
 // Link preview update: upsert (replace by id, or insert if absent) and drop
 // any tombstone for this preview (this WS event is, by reception order, a
 // later creation/update that must win over an earlier remove).
-export function linkPreviewUpdate(
-	state: MessagesState,
-	event: WsLinkPreviewUpdate
-): void {
+export function linkPreviewUpdate(state: MessagesState, event: WsLinkPreviewUpdate): void {
 	const { channel_id, message_id, preview } = event;
+	const key = previewKey(message_id, preview.id);
+
+	// este update é posterior ao remove, então ganha pela ordem WS
+	previewTombstones.delete(key);
+	previewCache.set(preview.id, preview);
+
 	const ch = state.channels.get(channel_id);
-	if (!ch || !ch.byId.has(message_id)) {
+
+	if (ch?.previewTombstones.has(key)) {
+		const tombstones = new Set(ch.previewTombstones);
+
+		tombstones.delete(key);
+
+		state.channels.set(channel_id, {
+			...ch,
+			previewTombstones: tombstones
+		});
+	}
+
+	const current = state.channels.get(channel_id);
+	const msg = current?.byId.get(message_id);
+
+	if (!current || !msg) {
+		setPendingPreview(message_id, preview);
 		return;
 	}
-	const exists = ch.byId.get(message_id)!.previews.some((p) => p.id === preview.id);
-	const nextPreviews = exists
-		? ch.byId.get(message_id)!.previews.map((p) =>
-			p.id === preview.id ? preview : p
-		)
-		: [...ch.byId.get(message_id)!.previews, preview];
-	// Keep the full (with image_data) preview for rendering.
-	previewCache.set(preview.id, preview);
-	replaceChannel(state, channel_id, (old) => {
-		const m = old.byId.get(message_id);
-		if (!m) {
-			return old;
-		}
-		const newByd = new SvelteMap<string, MessageWithAttachment>();
-		for (const [id, mm] of old.byId) {
-			newByd.set(id, mm);
-		}
-		newByd.set(message_id, { ...m, previews: nextPreviews });
-		return {
-			...old,
-			byId: newByd,
-			ids: sortedIds(newByd),
-			previewTombstones: new Set(
-				[...old.previewTombstones].filter((t) => t !== `${message_id}:${preview.id}`)
-			),
-		};
-	});
+
+	mergePreview(state, message_id, preview);
 }
 
 // Merge a resolved preview into the message it belongs to (P0.5). The message
@@ -471,19 +601,19 @@ export function mergePreview(
 ): boolean {
 	for (const [channelId, ch] of state.channels) {
 		const msg = ch.byId.get(messageId);
+
 		if (!msg) {
 			continue;
+		}
+
+		touchDuringFresh(channelId, messageId);
+		if (previewTombstones.has(previewKey(messageId, preview.id))) {
+			return false;
 		}
 		if (ch.previewTombstones.has(`${messageId}:${preview.id}`)) {
 			// Tombstoned: never resurrect.
 			return false;
 		}
-		if (msg.previews.some((pp) => pp.id === preview.id)) {
-			// Already present (idempotent).
-			return true;
-		}
-		// Keep the full (with image_data) preview for rendering.
-		previewCache.set(preview.id, preview);
 		const p: LinkPreview = {
 			id: preview.id,
 			url: preview.url,
@@ -494,25 +624,39 @@ export function mergePreview(
 			embed_url: preview.embed_url,
 			image_mime_type: preview.image_mime_type,
 			image_size_bytes: preview.image_size_bytes,
-			fetched_at: preview.fetched_at,
+			fetched_at: preview.fetched_at
 		};
-		const nextPreviews: LinkPreview[] = [...msg.previews, p];
+
+		const exists = msg.previews.some((existing) => existing.id === preview.id);
+
+		const nextPreviews = exists
+			? msg.previews.map((existing) => (existing.id === preview.id ? p : existing))
+			: [...msg.previews, p];
+
+		previewCache.set(preview.id, preview);
+
 		replaceChannel(state, channelId, (old) => {
 			const m = old.byId.get(messageId);
-			if (!m) {
-				return old;
-			}
-			const newByd = new SvelteMap<string, MessageWithAttachment>();
+			if (!m) return old;
+
+			const newById = new SvelteMap<string, MessageWithAttachment>();
+
 			for (const [id, mm] of old.byId) {
-				newByd.set(id, mm);
+				newById.set(id, mm);
 			}
-			newByd.set(messageId, { ...m, previews: nextPreviews });
+
+			newById.set(messageId, {
+				...m,
+				previews: nextPreviews
+			});
+
 			return {
 				...old,
-				byId: newByd,
-				ids: sortedIds(newByd),
+				byId: newById,
+				ids: sortedIds(newById)
 			};
 		});
+
 		return true;
 	}
 	return false;
@@ -520,15 +664,22 @@ export function mergePreview(
 
 // Apply any pending preview for a message (called after the message arrives,
 // so a preview resolved before the message can still be attached).
-function applyPendingPreview(
-	state: MessagesState,
-	messageId: string
-): void {
-	const preview = pendingPreviews.get(messageId);
-	if (!preview) {
-		return;
+function applyPendingPreview(state: MessagesState, messageId: string): void {
+	const previews = pendingPreviews.get(messageId);
+	if (!previews) return;
+
+	for (const [previewId, preview] of previews) {
+		if (previewTombstones.has(previewKey(messageId, previewId))) {
+			previews.delete(previewId);
+			continue;
+		}
+
+		if (mergePreview(state, messageId, preview)) {
+			previews.delete(previewId);
+		}
 	}
-	if (mergePreview(state, messageId, preview)) {
+
+	if (previews.size === 0) {
 		pendingPreviews.delete(messageId);
 	}
 }
@@ -538,24 +689,31 @@ function applyPendingPreview(
 // otherwise it stays pending until the message arrives.
 export function handleNewPreview(event: WsNewPreview): void {
 	const { message_id, preview_id } = event;
-	// Dedupe: already pending (keyed by message_id) or already in the preview
-	// cache (keyed by preview_id) → nothing to do.
-	if (pendingPreviews.has(message_id) || previewCache.has(preview_id)) {
+	const key = previewKey(message_id, preview_id);
+
+	if (previewTombstones.has(key)) {
 		return;
 	}
-	api.linkPreviews
-		.get(preview_id)
+
+	const epoch = storeEpoch;
+
+	void ensurePreview(preview_id)
 		.then((preview) => {
-			const applied = mergePreview(state, message_id, preview);
-			// Message not yet in the cache → keep it pending.
-			if (!applied) {
-				pendingPreviews.set(message_id, preview);
+			if (epoch !== storeEpoch || previewTombstones.has(key)) {
+				return;
+			}
+
+			if (!mergePreview(state, message_id, preview)) {
+				setPendingPreview(message_id, preview);
 			}
 		})
-		.catch(() => {
-			// Preview fetch failed (e.g. 404) — drop any pending entry.
-			pendingPreviews.delete(message_id);
-		});
+		.catch(() => {});
+}
+
+function touchDuringAnyFresh(messageId: string): void {
+	for (const guard of freshGuards.values()) {
+		guard.touched.add(messageId);
+	}
 }
 
 // Attachment moderation update: patch the attachment's moderation_status.
@@ -564,11 +722,13 @@ export function attachmentModerationUpdate(
 	event: WsAttachmentModerationUpdate
 ): void {
 	const { channel_id, message_id, attachment_id, status } = event;
+	touchDuringFresh(channel_id, message_id);
 	const ch = state.channels.get(channel_id);
 	if (!ch) {
 		return;
 	}
 	const msg = ch.byId.get(message_id);
+
 	if (!msg) {
 		return;
 	}
@@ -588,7 +748,7 @@ export function attachmentModerationUpdate(
 		return {
 			...old,
 			byId: newByd,
-			ids: sortedIds(newByd),
+			ids: sortedIds(newByd)
 		};
 	});
 }
@@ -598,13 +758,14 @@ export function attachmentModerationUpdate(
 export function applyEvent(state: MessagesState, event: WsOutbound): void {
 	switch (event.type) {
 		case 'message': {
+			touchDuringFresh(event.channel_id, event.id);
 			// In a historical window, new WS messages are outside the window:
 			// don't insert (would force scroll / bloat); just count them.
 			const ch = state.channels.get(event.channel_id);
 			if (ch && ch.windowMode === 'historical' && !ch.byId.has(event.id)) {
 				state.channels.set(event.channel_id, {
 					...ch,
-					hasMoreNewer: true,
+					hasMoreNewer: true
 				});
 			} else {
 				upsertMessage(state, event.channel_id, wsMessageToMsg(event));
@@ -612,12 +773,14 @@ export function applyEvent(state: MessagesState, event: WsOutbound): void {
 			break;
 		}
 		case 'message_edit':
+			touchDuringFresh(event.channel_id, event.id);
 			patchMessage(state, event.channel_id, event.id, {
 				content: event.content,
-				edited_at: event.edited_at,
+				edited_at: event.edited_at
 			});
 			break;
 		case 'message_delete':
+			touchDuringFresh(event.channel_id, event.id);
 			removeMessage(state, event.channel_id, event.id);
 			break;
 		case 'message_pin':
@@ -647,6 +810,17 @@ export function evict(channelId: string): void {
 	state.channels.delete(channelId);
 }
 
+type FreshGuard = {
+	gen: number;
+	touched: Set<string>;
+};
+
+const freshGuards = new Map<string, FreshGuard>();
+
+function touchDuringFresh(channelId: string, messageId: string): void {
+	freshGuards.get(channelId)?.touched.add(messageId);
+}
+
 async function _fetchPage(
 	channelId: string,
 	q?: { since?: string; last_id?: string }
@@ -655,42 +829,112 @@ async function _fetchPage(
 		state.channels.set(channelId, newChannelState());
 	}
 	const ch = state.channels.get(channelId) ?? newChannelState();
-	if (ch.loading) {
+	if (ch.loading && q != null) {
 		return;
 	}
-	const gen = (ch.requestGeneration += 1);
-	ch.loading = true;
+	const gen = ++requestSerial;
+	const freshLatest = q == null;
+
+	if (freshLatest) {
+		freshGuards.set(channelId, {
+			gen,
+			touched: new Set()
+		});
+	}
+
+	state.channels.set(channelId, {
+		...ch,
+		requestGeneration: gen,
+		loading: true
+	});
 	try {
 		const res = await api.messages.list(channelId, q);
+		const current = state.channels.get(channelId);
+		if (!current || current.requestGeneration !== gen) {
+			return;
+		}
 		const ch2 = state.channels.get(channelId);
 		// Discard if the channel was evicted/refreshed while in flight (P0.4).
 		if (!ch2 || ch2.requestGeneration !== gen) {
 			return;
 		}
+
 		const newByd = new SvelteMap<string, MessageWithAttachment>();
-		// Re-apply tombstones to existing messages (a delayed page may
-		// re-list a message that was deleted via WS after it was cached).
-		for (const [id, m] of ch2.byId) {
-			const merged = mergeFetchedMessage(m, m, ch2);
-			if (merged) {
-				newByd.set(id, merged);
+
+		if (!freshLatest) {
+			for (const [id, m] of ch2.byId) {
+				const merged = mergeFetchedMessage(m, m, ch2);
+
+				if (merged) {
+					newByd.set(id, merged);
+				}
 			}
 		}
 		for (const m of res.messages) {
-			const merged = mergeFetchedMessage(ch2.byId.get(m.id), m, ch2);
+			const existing = freshLatest ? undefined : ch2.byId.get(m.id);
+
+			const merged = mergeFetchedMessage(existing, m, ch2);
+
 			if (merged) {
 				newByd.set(m.id, merged);
+			}
+		}
+		let needsFreshRetry = false;
+
+		if (freshLatest) {
+			const guard = freshGuards.get(channelId);
+
+			if (guard?.gen === gen) {
+				for (const messageId of guard.touched) {
+					if (ch2.deletedMessageIds.has(messageId)) {
+						newByd.delete(messageId);
+						continue;
+					}
+
+					const currentMessage = ch2.byId.get(messageId);
+
+					const restMessage = newByd.get(messageId);
+
+					if (!currentMessage) {
+						// O WS alterou uma mensagem que não existia
+						// na janela anterior. Não temos uma versão local
+						// completa para fazer merge.
+						if (restMessage) {
+							needsFreshRetry = true;
+						}
+
+						continue;
+					}
+
+					if (!restMessage) {
+						newByd.set(messageId, currentMessage);
+
+						continue;
+					}
+
+					const merged = mergeFetchedMessage(currentMessage, restMessage, ch2);
+
+					if (merged) {
+						newByd.set(messageId, merged);
+					}
+				}
 			}
 		}
 		// Trim to MAX_WINDOW.
 		const dropCount = newByd.size - MAX_WINDOW;
 		let drop: string[] = [];
+		let trimmedNewer = false;
+
 		if (dropCount > 0) {
 			const ids = sortedIds(newByd);
-			drop =
-				ch2.windowMode === 'latest'
-					? ids.slice(0, dropCount)
-					: ids.slice(ids.length - dropCount);
+
+			if (ch2.windowMode === 'latest') {
+				drop = ids.slice(0, dropCount);
+			} else {
+				drop = ids.slice(ids.length - dropCount);
+				trimmedNewer = true;
+			}
+
 			for (const id of drop) {
 				newByd.delete(id);
 			}
@@ -698,20 +942,40 @@ async function _fetchPage(
 		state.channels.set(channelId, {
 			...ch2,
 			byId: newByd,
+			hasMoreNewer: q == null ? false : ch2.hasMoreNewer || trimmedNewer,
 			ids: sortedIds(newByd),
 			loaded: true,
-			loading: false,
 			hasMoreOlder: res.has_more,
-			cursorOlder: nextCursor(res.messages) ?? null,
+			cursorOlder: nextCursor(res.messages) ?? null
 			// A fresh load (q == null) is anchored at the newest message.
-			...((q == null) ? { hasMoreNewer: false } : {}),
 		});
+		for (const message of res.messages) {
+			if (newByd.has(message.id)) {
+				applyPendingPreview(state, message.id);
+			}
+		}
+		if (needsFreshRetry) {
+			load(channelId);
+		}
 	} finally {
-		const ch3 = state.channels.get(channelId);
-		if (ch3) {
-			ch3.loading = false;
+		const guard = freshGuards.get(channelId);
+
+		if (guard?.gen === gen) {
+			freshGuards.delete(channelId);
+		}
+		const current = state.channels.get(channelId);
+
+		if (current && current.requestGeneration === gen) {
+			state.channels.set(channelId, {
+				...current,
+				loading: false
+			});
 		}
 	}
+}
+
+export function getPreview(previewId: string): LinkPreviewWithImage | null {
+	return previewCache.get(previewId) ?? null;
 }
 
 export function load(channelId: string): void {
@@ -724,9 +988,7 @@ export function load(channelId: string): void {
 	state.channels.set(channelId, {
 		...ch,
 		windowMode: 'latest',
-		hasMoreNewer: false,
-		deletedMessageIds: new Set(),
-		previewTombstones: new Set(),
+		hasMoreNewer: false
 	});
 	_fetchPage(channelId);
 }
@@ -741,7 +1003,7 @@ export function loadMoreOlder(channelId: string): void {
 	state.channels.set(channelId, { ...ch, windowMode: 'historical' });
 	_fetchPage(channelId, {
 		since: ch.cursorOlder.since,
-		last_id: ch.cursorOlder.last_id,
+		last_id: ch.cursorOlder.last_id
 	});
 }
 
@@ -750,21 +1012,16 @@ export function setLatest(channelId: string): void {
 	load(channelId);
 }
 
-export function send(
-	payload: {
-		channel_id: string;
-		content: string | null;
-		reply_to: string | null;
-		files?: File[];
-	}
-): Promise<MessageWithAttachment> {
+export function send(payload: {
+	channel_id: string;
+	content: string | null;
+	reply_to: string | null;
+	files?: File[];
+}): Promise<MessageWithAttachment> {
 	return api.messages.send(payload);
 }
 
-export function edit(
-	messageId: string,
-	content: string
-): Promise<MessageWithAttachment> {
+export function edit(messageId: string, content: string): Promise<MessageWithAttachment> {
 	return api.messages.edit(messageId, { content: content });
 }
 
@@ -775,14 +1032,16 @@ export function remove(messageId: string): Promise<void> {
 export function pin(
 	channelId: string,
 	messageId: string
-): Promise<{ channel_id: string; message_id: string; pinned_by: string | null; pinned_at: string }> {
+): Promise<{
+	channel_id: string;
+	message_id: string;
+	pinned_by: string | null;
+	pinned_at: string;
+}> {
 	return api.messages.pin(channelId, messageId);
 }
 
-export function unpin(
-	channelId: string,
-	messageId: string
-): Promise<void> {
+export function unpin(channelId: string, messageId: string): Promise<void> {
 	return api.messages.unpin(channelId, messageId);
 }
 
@@ -794,18 +1053,17 @@ function updateUserReactions(
 	userReaction: { id?: string; emoji_id: string | null; unicode: string | null },
 	remove?: boolean
 ): void {
+	touchDuringFresh(channelId, messageId);
 	const ch = state.channels.get(channelId);
 	const msg = ch?.byId.get(messageId);
 	if (!ch || !msg) {
 		return;
 	}
-	const key = (e: string | null, u: string | null) =>
-		(`${e ?? ''}:${u ?? ''}`);
+	const key = (e: string | null, u: string | null) => `${e ?? ''}:${u ?? ''}`;
 	let nextUserReactions: { id: string; emoji_id: string | null; unicode: string | null }[];
 	if (remove) {
 		nextUserReactions = msg.user_reactions.filter(
-			(ur) =>
-				key(ur.emoji_id, ur.unicode) !== key(userReaction.emoji_id, userReaction.unicode)
+			(ur) => key(ur.emoji_id, ur.unicode) !== key(userReaction.emoji_id, userReaction.unicode)
 		);
 	} else {
 		if (userReaction.id === undefined) {
@@ -813,11 +1071,9 @@ function updateUserReactions(
 		}
 		nextUserReactions = [
 			...msg.user_reactions.filter(
-				(ur) =>
-					key(ur.emoji_id, ur.unicode) !==
-					key(userReaction.emoji_id, userReaction.unicode)
+				(ur) => key(ur.emoji_id, ur.unicode) !== key(userReaction.emoji_id, userReaction.unicode)
 			),
-			{ id: userReaction.id, emoji_id: userReaction.emoji_id, unicode: userReaction.unicode },
+			{ id: userReaction.id, emoji_id: userReaction.emoji_id, unicode: userReaction.unicode }
 		];
 	}
 	const newByd = new SvelteMap<string, MessageWithAttachment>();
@@ -828,7 +1084,7 @@ function updateUserReactions(
 	state.channels.set(channelId, {
 		...ch,
 		byId: newByd,
-		ids: sortedIds(newByd),
+		ids: sortedIds(newByd)
 	});
 }
 
@@ -843,21 +1099,31 @@ export function react(
 	unicode: string | null;
 	created_at: string;
 }> {
-	return api.messages
-		.react(channelId, messageId, req)
-		.then((r) => {
+	const epoch = storeEpoch;
+
+	return api.messages.react(channelId, messageId, req).then((r) => {
+		if (epoch === storeEpoch) {
 			updateUserReactions(channelId, messageId, r);
-			return r;
-		});
+		}
+
+		return r;
+	});
 }
 
 export function unreact(
 	channelId: string,
 	messageId: string,
-	req: { emoji_id: string | null; unicode: string | null }
+	req: {
+		emoji_id: string | null;
+		unicode: string | null;
+	}
 ): Promise<void> {
+	const epoch = storeEpoch;
+
 	return api.messages.unreact(channelId, messageId, req).then(() => {
-		updateUserReactions(channelId, messageId, req, true);
+		if (epoch === storeEpoch) {
+			updateUserReactions(channelId, messageId, req, true);
+		}
 	});
 }
 
@@ -867,7 +1133,12 @@ export function reactionUsers(
 	q?: { since?: string; last_id?: string }
 ): Promise<{
 	message_id: string;
-	reactions: { emoji_id: string | null; unicode: string | null; count: number; users: { id: string; user_id: string; created_at: string }[] }[];
+	reactions: {
+		emoji_id: string | null;
+		unicode: string | null;
+		count: number;
+		users: { id: string; user_id: string; created_at: string }[];
+	}[];
 	has_more: boolean;
 }> {
 	return api.messages.reactionUsers(channelId, messageId, q);
@@ -875,32 +1146,52 @@ export function reactionUsers(
 
 export function loadPinned(channelId: string): void {
 	const ch = state.channels.get(channelId);
-	if (!ch) {
+
+	if (!ch || ch.pinnedLoading) {
 		return;
 	}
-	state.channels.set(channelId, { ...ch, pinnedLoading: true });
-	api.channels.pinned(channelId).then((res) => {
-		const c = state.channels.get(channelId);
-		if (!c) {
-			return;
-		}
-		state.channels.set(channelId, {
-			...c,
-			pinned: res.pinned,
-			pinnedLoaded: true,
-			pinnedLoading: false,
-		});
+
+	const gen = ++requestSerial;
+
+	state.channels.set(channelId, {
+		...ch,
+		pinnedLoading: true,
+		pinnedGeneration: gen
 	});
+
+	void api.channels
+		.pinned(channelId)
+		.then((res) => {
+			const current = state.channels.get(channelId);
+
+			if (!current || current.pinnedGeneration !== gen) {
+				return;
+			}
+
+			state.channels.set(channelId, {
+				...current,
+				pinned: res.pinned.filter((message) => !current.deletedMessageIds.has(message.id)),
+				pinnedLoaded: true
+			});
+		})
+		.catch(() => {})
+		.finally(() => {
+			const current = state.channels.get(channelId);
+
+			if (current && current.pinnedGeneration === gen) {
+				state.channels.set(channelId, {
+					...current,
+					pinnedLoading: false
+				});
+			}
+		});
 }
 
 export function getChannel(channelId: string): ChannelMessagesState | null {
 	return state.channels.get(channelId) ?? null;
 }
 
-export function getMessage(
-	channelId: string,
-	messageId: string
-): MessageWithAttachment | null {
+export function getMessage(channelId: string, messageId: string): MessageWithAttachment | null {
 	const ch = state.channels.get(channelId);
 	if (!ch) {
 		return null;
@@ -910,22 +1201,26 @@ export function getMessage(
 
 // Applied after a successful send/edit so the cache matches the server's
 // response.
-export function applySendResponse(
-	channelId: string,
-	msg: MessageWithAttachment
-): void {
-	// A send is always in the latest window.
+export function applySendResponse(channelId: string, msg: MessageWithAttachment): void {
 	const ch = state.channels.get(channelId);
-	if (ch) {
-		state.channels.set(channelId, { ...ch, windowMode: 'latest' });
+
+	if (ch?.windowMode === 'historical') {
+		setLatest(channelId);
+		return;
 	}
+
 	upsertMessage(state, channelId, msg);
 }
 
 // Full reset (logout / 401 / account switch) — clears every channel cache and
 // the module-level preview/pending maps.
 export function reset(): void {
+	storeEpoch += 1;
+
+	previewRequests.clear();
+	freshGuards.clear();
 	state.channels.clear();
 	pendingPreviews.clear();
 	previewCache.clear();
+	previewTombstones.clear();
 }

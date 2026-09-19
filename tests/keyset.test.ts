@@ -10,11 +10,11 @@ describe('nextCursor', () => {
 		const msgs = [
 			{ id: 'c', created_at: '2024-01-01T00:00:02Z' },
 			{ id: 'b', created_at: '2024-01-01T00:00:01Z' },
-			{ id: 'a', created_at: '2024-01-01T00:00:00Z' },
+			{ id: 'a', created_at: '2024-01-01T00:00:00Z' }
 		];
 		expect(nextCursor(msgs)).toEqual({
 			since: '2024-01-01T00:00:00Z',
-			last_id: 'a',
+			last_id: 'a'
 		});
 	});
 
@@ -22,7 +22,7 @@ describe('nextCursor', () => {
 		// Same created_at: larger id is "newer" → appears earlier in DESC order.
 		const msgs = [
 			{ id: 'b', created_at: '2024-01-01T00:00:00Z' },
-			{ id: 'a', created_at: '2024-01-01T00:00:00Z' },
+			{ id: 'a', created_at: '2024-01-01T00:00:00Z' }
 		];
 		// oldest = last = smaller id ('a')
 		expect(nextCursor(msgs)?.last_id).toBe('a');
@@ -61,20 +61,20 @@ describe('mergeGroups', () => {
 				emoji_id: 'e1',
 				unicode: null,
 				count: 2,
-				users: [{ id: 'r1', user_id: 'u1', created_at: 'a' }],
+				users: [{ id: 'r1', user_id: 'u1', created_at: 'a' }]
 			},
 			{
 				emoji_id: 'e1',
 				unicode: null,
 				count: 3,
-				users: [{ id: 'r2', user_id: 'u2', created_at: 'b' }],
+				users: [{ id: 'r2', user_id: 'u2', created_at: 'b' }]
 			},
 			{
 				emoji_id: 'e2',
 				unicode: null,
 				count: 1,
-				users: [],
-			},
+				users: []
+			}
 		];
 		const merged = mergeGroups(groups);
 		expect(merged).toHaveLength(2);
@@ -91,7 +91,7 @@ describe('mergeGroups', () => {
 	it('keeps distinct emoji groups separate', () => {
 		const groups = [
 			{ emoji_id: 'e1', unicode: null, count: 1, users: [] },
-			{ emoji_id: 'e2', unicode: null, count: 1, users: [] },
+			{ emoji_id: 'e2', unicode: null, count: 1, users: [] }
 		];
 		expect(mergeGroups(groups)).toHaveLength(2);
 	});
@@ -99,7 +99,7 @@ describe('mergeGroups', () => {
 	it('treats (emoji_id, unicode) as distinct from (emoji_id, other_unicode)', () => {
 		const groups = [
 			{ emoji_id: 'e1', unicode: null, count: 1, users: [] },
-			{ emoji_id: 'e1', unicode: 'x', count: 1, users: [] },
+			{ emoji_id: 'e1', unicode: 'x', count: 1, users: [] }
 		];
 		expect(mergeGroups(groups)).toHaveLength(2);
 	});

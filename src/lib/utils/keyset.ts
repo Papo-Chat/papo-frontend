@@ -32,7 +32,7 @@ export function nextCursor<T extends { created_at: string; id: string }>(
 	const oldest = items[items.length - 1];
 	return {
 		since: oldest.created_at,
-		last_id: oldest.id,
+		last_id: oldest.id
 	};
 }
 
@@ -43,9 +43,7 @@ export function toQuery(cursor: KeysetCursor | null): string | null {
 	if (!cursor) {
 		return null;
 	}
-	return `since=${encodeURIComponent(cursor.since)}&last_id=${encodeURIComponent(
-		cursor.last_id
-	)}`;
+	return `since=${encodeURIComponent(cursor.since)}&last_id=${encodeURIComponent(cursor.last_id)}`;
 }
 
 // Merges reaction groups across keyset pages (F17). Groups are identified
@@ -56,10 +54,7 @@ export interface ReactionGroupKey {
 	unicode: string | null;
 }
 
-export function groupKey(
-	emoji_id: string | null,
-	unicode: string | null
-): string {
+export function groupKey(emoji_id: string | null, unicode: string | null): string {
 	return `${String(emoji_id) ?? ''}|${String(unicode) ?? ''}`;
 }
 
@@ -76,8 +71,15 @@ export function mergeGroups(
 	count: number;
 	users: { id: string; user_id: string; created_at: string }[];
 }[] {
-	const merged: Map<string, { emoji_id: string | null; unicode: string | null; count: number; users: { id: string; user_id: string; created_at: string }[] }> =
-		new Map();
+	const merged: Map<
+		string,
+		{
+			emoji_id: string | null;
+			unicode: string | null;
+			count: number;
+			users: { id: string; user_id: string; created_at: string }[];
+		}
+	> = new Map();
 
 	for (const g of groups) {
 		const key = groupKey(g.emoji_id, g.unicode);
@@ -87,7 +89,7 @@ export function mergeGroups(
 				emoji_id: g.emoji_id,
 				unicode: g.unicode,
 				count: g.count,
-				users: [...g.users],
+				users: [...g.users]
 			});
 		} else {
 			existing.count += g.count;

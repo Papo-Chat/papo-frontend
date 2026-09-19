@@ -5,7 +5,13 @@
 // typingUsers / pruneTyping.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { state, setTyping, isTyping, typingUsers, pruneTyping } from '../src/lib/store/users.svelte';
+import {
+	state,
+	setTyping,
+	isTyping,
+	typingUsers,
+	pruneTyping
+} from '../src/lib/store/users.svelte';
 
 // Fixed clock so TTL tests are deterministic.
 let now = 0;

@@ -14,9 +14,7 @@ export const minPasswordLength = 8;
 export function isValidPassword(password: string): PasswordValidation {
 	const errors: string[] = [];
 	if (password.length < minPasswordLength) {
-		errors.push(
-			`senha deve ter no mínimo ${minPasswordLength} caracteres`
-		);
+		errors.push(`senha deve ter no mínimo ${minPasswordLength} caracteres`);
 	}
 	if (!/[A-Z]/.test(password)) {
 		errors.push('senha deve conter ao menos 1 letra maiúscula');

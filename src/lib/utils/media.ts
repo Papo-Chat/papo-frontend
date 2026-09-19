@@ -9,14 +9,14 @@ const FORMAT_TO_MIME: Record<string, string> = {
 	JPEG: 'image/jpeg',
 	JPG: 'image/jpeg',
 	WEBP: 'image/webp',
-	GIF: 'image/gif',
+	GIF: 'image/gif'
 };
 
 const MIME_TO_FORMAT: Record<string, string> = {
 	'image/png': 'PNG',
 	'image/jpeg': 'JPEG',
 	'image/webp': 'WEBP',
-	'image/gif': 'GIF',
+	'image/gif': 'GIF'
 };
 
 export function formatToMime(format: string): string {
@@ -50,10 +50,7 @@ export function attachmentThumbnailUrl(id: string): string {
 
 // Fetch a binary resource and return the Blob. The caller is responsible for
 // auth (the native fetch here uses the same-origin HttpOnly Auth cookie).
-export async function fetchMediaBlob(
-	url: string,
-	signal?: AbortSignal
-): Promise<Blob> {
+export async function fetchMediaBlob(url: string, signal?: AbortSignal): Promise<Blob> {
 	const res = await fetch(url, { signal });
 	if (!res.ok) {
 		throw new Error(`media fetch failed: ${res.status} ${res.statusText}`);
@@ -92,11 +89,7 @@ export function blobToUrl(base64: string, format: string): string {
 	if (!base64) {
 		return '';
 	}
-	if (
-		typeof atob === 'undefined' ||
-		typeof Blob === 'undefined' ||
-		typeof window === 'undefined'
-	) {
+	if (typeof atob === 'undefined' || typeof Blob === 'undefined' || typeof window === 'undefined') {
 		return '';
 	}
 	const mime = formatToMime(format);

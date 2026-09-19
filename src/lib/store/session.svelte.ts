@@ -8,19 +8,9 @@
 //   call. It also disconnects the WS (no reconnect) and drops voice.
 
 import { api, setOnUnauthorized } from '../api';
-import {
-	seedMe,
-	loadList as loadUsersList,
-	reset as usersReset,
-} from '../store/users.svelte';
-import {
-	load as loadRoles,
-	reset as rolesReset,
-} from '../store/roles.svelte';
-import {
-	seed as seedSettings,
-	reset as settingsReset,
-} from '../store/settings.svelte';
+import { seedMe, loadList as loadUsersList, reset as usersReset } from '../store/users.svelte';
+import { load as loadRoles, reset as rolesReset } from '../store/roles.svelte';
+import { seed as seedSettings, reset as settingsReset } from '../store/settings.svelte';
 import * as channelsStore from '../store/channels.svelte';
 import * as messagesStore from '../store/messages.svelte';
 import * as notificationsStore from '../store/notifications.svelte';
@@ -28,6 +18,11 @@ import * as emojisStore from '../store/emojis.svelte';
 import * as websocketStore from '../store/websocket.svelte';
 import * as voiceStore from '../store/voice.svelte';
 import type { RoleSummary } from '../types';
+import {
+	bumpSessionEpoch,
+	currentSessionEpoch,
+	isCurrentSessionEpoch
+} from '$lib/utils/session-epoch';
 
 // 11h — refreshes before the 12h cookie expiry.
 const REFRESH_INTERVAL = 11 * 3600 * 1000;
@@ -41,7 +36,7 @@ export const state = $state({
 	status: null as 'away' | 'busy' | null,
 	roles: [] as RoleSummary[],
 	loaded: false,
-	loading: false,
+	loading: false
 });
 
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -79,7 +74,11 @@ export async function load(): Promise<void> {
 	// requests (login/register) bypass the hook via authFailure: 'ignore'.
 	setOnUnauthorized(() => clearLocalSession());
 	try {
+		const epoch = currentSessionEpoch();
 		const me = await api.auth.whoami();
+		if (!isCurrentSessionEpoch(epoch)) {
+			throw new Error('stale session');
+		}
 		state.userId = me.id;
 		state.username = me.username;
 		state.avatarBlob = me.avatar_blob;
@@ -99,6 +98,7 @@ export async function load(): Promise<void> {
 
 // 401-only path: local teardown only, no server logout call.
 export function clearLocalSession(): void {
+	bumpSessionEpoch();
 	stopTimer();
 	// Stop the refresh timer, disconnect the WS (no reconnect), drop voice.
 	websocketStore.disconnect();

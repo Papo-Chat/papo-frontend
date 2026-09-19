@@ -43,6 +43,6 @@ export function debounce<Args extends unknown[]>(
 				clearTimeout(timer);
 				timer = null;
 			}
-		},
+		}
 	};
 }

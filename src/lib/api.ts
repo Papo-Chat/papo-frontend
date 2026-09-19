@@ -63,7 +63,7 @@ import type {
 	AuditLogFilters,
 	Emoji,
 	AuditLogEntry,
-	ICEServer,
+	ICEServer
 } from './types';
 
 // ── ApiError (RFC 7807) ─────────────────────────────────
@@ -84,25 +84,19 @@ export class ApiError extends Error {
 					status?: number;
 					detail?: string;
 					instance?: string | null;
-				}
+			  }
 			| string,
 		requestId: string | null
 	) {
 		const d =
-			typeof data === 'string'
-				? { detail: data }
-				: (data ?? {}) as Record<string, unknown>;
+			typeof data === 'string' ? { detail: data } : ((data ?? {}) as Record<string, unknown>);
 		const msg = String(d.detail ?? d.title ?? String(d));
 		super(msg);
 		this.name = 'ApiError';
-		this.type =
-			typeof d.type === 'string' ? d.type : 'about:blank';
-		this.title =
-			typeof d.title === 'string' ? d.title : 'Error';
-		this.status =
-			typeof d.status === 'number' ? d.status : 0;
-		this.detail =
-			typeof d.detail === 'string' ? d.detail : String(d.detail ?? '');
+		this.type = typeof d.type === 'string' ? d.type : 'about:blank';
+		this.title = typeof d.title === 'string' ? d.title : 'Error';
+		this.status = typeof d.status === 'number' ? d.status : 0;
+		this.detail = typeof d.detail === 'string' ? d.detail : String(d.detail ?? '');
 		this.instance = d.instance == null ? null : String(d.instance);
 		this.requestId = requestId;
 	}
@@ -179,7 +173,7 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 
 	const headers: Record<string, string> = {
 		'X-Request-ID': requestId,
-		Accept: 'application/problem+json, application/json',
+		Accept: 'application/problem+json, application/json'
 	};
 	// FormData (multipart) keeps its own Content-Type (with boundary); we
 	// must not override it with application/json.
@@ -193,21 +187,15 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 		res = await fetch(buildUrl(path, q), {
 			method,
 			headers,
-			body:
-				body != null && method !== 'GET'
-					? isForm
-						? body
-						: JSON.stringify(body)
-					: undefined,
+			body: body != null && method !== 'GET' ? (isForm ? body : JSON.stringify(body)) : undefined,
 			credentials: 'include',
-			signal,
+			signal
 		});
 	} catch (e) {
 		if (isAbortError(e)) {
 			throw e;
 		}
-		const detail =
-			e instanceof Error ? e.message : String(e);
+		const detail = e instanceof Error ? e.message : String(e);
 		throw new ApiError({ detail }, requestId);
 	}
 
@@ -225,11 +213,7 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 		} catch {
 			data = {};
 		}
-		if (
-			res.status === 401 &&
-			authFailure !== 'ignore' &&
-			unauthorizedHook
-		) {
+		if (res.status === 401 && authFailure !== 'ignore' && unauthorizedHook) {
 			unauthorizedHook();
 		}
 		throw new ApiError(data as any, requestId);
@@ -245,10 +229,7 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 }
 
 // Binary fetch (attachments / media). Returns the Blob.
-export async function fetchBlob(
-	path: string,
-	signal?: AbortSignal
-): Promise<Blob> {
+export async function fetchBlob(path: string, signal?: AbortSignal): Promise<Blob> {
 	const requestId = crypto.randomUUID();
 	const url = buildUrl(path, null);
 	let res: Response;
@@ -256,7 +237,7 @@ export async function fetchBlob(
 		res = await fetch(url, {
 			headers: { 'X-Request-ID': requestId },
 			credentials: 'include',
-			signal,
+			signal
 		});
 	} catch (e) {
 		if (isAbortError(e)) {
@@ -286,7 +267,7 @@ export const health = {
 	// GET /health → plain text "OK" (no auth).
 	ping(): Promise<string> {
 		return request<string>('/health', { raw: true });
-	},
+	}
 };
 
 // ── auth ────────────────────────────────────────────────
@@ -296,21 +277,21 @@ export const auth = {
 		return request<RegisterResponse>('/auth/register', {
 			method: 'POST',
 			body: req,
-			authFailure: 'ignore',
+			authFailure: 'ignore'
 		});
 	},
 	login(req: LoginRequest): Promise<LoginResponse> {
 		return request<LoginResponse>('/auth/login', {
 			method: 'POST',
 			body: req,
-			authFailure: 'ignore',
+			authFailure: 'ignore'
 		});
 	},
 	loginServer(req: LoginServerRequest): Promise<void> {
 		return request<void>('/auth/login_server', {
 			method: 'POST',
 			body: req,
-			authFailure: 'ignore',
+			authFailure: 'ignore'
 		});
 	},
 	whoami(): Promise<WhoamiResponse> {
@@ -331,17 +312,15 @@ export const auth = {
 	dropConnection(req: DropConnectionRequest): Promise<DropConnectionResponse> {
 		return request<DropConnectionResponse>('/auth/drop_connection', {
 			method: 'POST',
-			body: req,
+			body: req
 		});
-	},
+	}
 };
 
 // ── users ──────────────────────────────────────────────
 
 export const users = {
-	list(
-		q?: { since?: string; last_id?: string }
-	): Promise<UserList> {
+	list(q?: { since?: string; last_id?: string }): Promise<UserList> {
 		return request<UserList>('/users', { query: q });
 	},
 	profile(id: string): Promise<UserProfile> {
@@ -350,25 +329,25 @@ export const users = {
 	profileBatch(ids: string[]): Promise<{ profiles: UserProfile[] }> {
 		return request<{ profiles: UserProfile[] }>('/users/profile_batch', {
 			method: 'POST',
-			body: { ids },
+			body: { ids }
 		});
 	},
 	update(id: string, req: UpdateUserRequest): Promise<{ response: string }> {
 		return request<{ response: string }>(`/users/${encodeURIComponent(id)}`, {
 			method: 'PUT',
-			body: req,
+			body: req
 		});
 	},
 	updateStatus(id: string, req: UpdateStatusRequest): Promise<{ response: string }> {
 		return request<{ response: string }>(`/users/${encodeURIComponent(id)}/status`, {
 			method: 'PUT',
-			body: req,
+			body: req
 		});
 	},
 	changePassword(id: string, req: ChangePasswordRequest): Promise<{ response: string }> {
 		return request<{ response: string }>(`/users/${encodeURIComponent(id)}/password`, {
 			method: 'PUT',
-			body: req,
+			body: req
 		});
 	},
 	updateSettings(config: UserConfig): Promise<{
@@ -387,41 +366,41 @@ export const users = {
 	updateAvatar(id: string, req: UpdateAvatarRequest): Promise<{ response: string }> {
 		return request<{ response: string }>(`/users/${encodeURIComponent(id)}/avatar`, {
 			method: 'PUT',
-			body: req,
+			body: req
 		});
 	},
 	updateBanner(id: string, req: UpdateBannerRequest): Promise<{ response: string }> {
 		return request<{ response: string }>(`/users/${encodeURIComponent(id)}/banner`, {
 			method: 'PUT',
-			body: req,
+			body: req
 		});
 	},
 	ban(req: BanUserRequest): Promise<{ response: string }> {
 		return request<{ response: string }>(`/users/${encodeURIComponent(req.user_id)}/ban`, {
 			method: 'PUT',
-			body: req,
+			body: req
 		});
 	},
 	resetPassword(id: string): Promise<{ response: string }> {
 		return request<{ response: string }>(`/users/${encodeURIComponent(id)}/reset`, {
-			method: 'POST',
+			method: 'POST'
 		});
 	},
-	notifications(
-		id: string,
-		q?: { since?: string; last_id?: string }
-	): Promise<NotificationList> {
+	notifications(id: string, q?: { since?: string; last_id?: string }): Promise<NotificationList> {
 		return request<NotificationList>(`/users/${encodeURIComponent(id)}/notifications`, {
-			query: q,
+			query: q
 		});
 	},
 	markRead(id: string, req: ReadNotificationRequest): Promise<{ updated: number }> {
 		return request<{ updated: number }>(`/users/${encodeURIComponent(id)}/read_notification`, {
 			method: 'PUT',
-			body: req,
+			body: req
 		});
 	},
-	assignRole(userId: string, req: AssignUserRoleRequest): Promise<{
+	assignRole(
+		userId: string,
+		req: AssignUserRoleRequest
+	): Promise<{
 		user_id: string;
 		role_id: string;
 		assigned_at: string;
@@ -432,7 +411,7 @@ export const users = {
 			assigned_at: string;
 		}>(`/users/${encodeURIComponent(userId)}/roles`, {
 			method: 'POST',
-			body: req,
+			body: req
 		});
 	},
 	unassignRole(userId: string, roleId: string): Promise<void> {
@@ -440,7 +419,7 @@ export const users = {
 			`/users/${encodeURIComponent(userId)}/roles/${encodeURIComponent(roleId)}`,
 			{ method: 'DELETE' }
 		);
-	},
+	}
 };
 
 // ── server ─────────────────────────────────────────────
@@ -463,16 +442,14 @@ export const server = {
 	},
 	update(req: UpdateServerRequest): Promise<Server> {
 		return request<Server>('/server', { method: 'PUT', body: req });
-	},
+	}
 };
 
 // ── channels ───────────────────────────────────────────
 
 export const channels = {
 	list(): Promise<Channel[]> {
-		return request<{ channels: Channel[] }>('/channels').then(
-			(res) => res.channels
-		);
+		return request<{ channels: Channel[] }>('/channels').then((res) => res.channels);
 	},
 	create(req: CreateChannelRequest): Promise<Channel> {
 		return request<Channel>('/channels', { method: 'POST', body: req });
@@ -480,21 +457,18 @@ export const channels = {
 	update(id: string, req: UpdateChannelRequest): Promise<Channel> {
 		return request<Channel>(`/channels/${encodeURIComponent(id)}`, {
 			method: 'PUT',
-			body: req,
+			body: req
 		});
 	},
-	changePosition(
-		id: string,
-		req: ChangeChannelPositionRequest
-	): Promise<Channel> {
+	changePosition(id: string, req: ChangeChannelPositionRequest): Promise<Channel> {
 		return request<Channel>(`/channels/${encodeURIComponent(id)}/change_position`, {
 			method: 'PUT',
-			body: req,
+			body: req
 		});
 	},
 	remove(id: string): Promise<void> {
 		return request<void>(`/channels/${encodeURIComponent(id)}`, {
-			method: 'DELETE',
+			method: 'DELETE'
 		});
 	},
 	pinned(id: string): Promise<PinnedMessageList> {
@@ -524,18 +498,15 @@ export const channels = {
 			`/channels/${encodeURIComponent(channelId)}/user/${encodeURIComponent(userId)}/settings`,
 			{ method: 'POST', body: req }
 		);
-	},
+	}
 };
 
 // ── messages ───────────────────────────────────────────
 
 export const messages = {
-	list(
-		channelId: string,
-		q?: { since?: string; last_id?: string }
-	): Promise<MessageList> {
+	list(channelId: string, q?: { since?: string; last_id?: string }): Promise<MessageList> {
 		return request<MessageList>(`/channels/${encodeURIComponent(channelId)}/messages`, {
-			query: q,
+			query: q
 		});
 	},
 	// Multipart POST /messages (F13): fields channel_id, content, reply_to?,
@@ -554,21 +525,24 @@ export const messages = {
 		}
 		return request<MessageWithAttachment>('/messages', {
 			method: 'POST',
-			body: form,
+			body: form
 		});
 	},
 	edit(messageId: string, req: { content: string }): Promise<MessageWithAttachment> {
 		return request<MessageWithAttachment>(`/messages/${encodeURIComponent(messageId)}`, {
 			method: 'PUT',
-			body: req,
+			body: req
 		});
 	},
 	remove(messageId: string): Promise<void> {
 		return request<void>(`/messages/${encodeURIComponent(messageId)}`, {
-			method: 'DELETE',
+			method: 'DELETE'
 		});
 	},
-	pin(channelId: string, messageId: string): Promise<{
+	pin(
+		channelId: string,
+		messageId: string
+	): Promise<{
 		channel_id: string;
 		message_id: string;
 		pinned_by: string | null;
@@ -579,10 +553,9 @@ export const messages = {
 			message_id: string;
 			pinned_by: string | null;
 			pinned_at: string;
-		}>(
-			`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/pin`,
-			{ method: 'POST' }
-		);
+		}>(`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/pin`, {
+			method: 'POST'
+		});
 	},
 	unpin(channelId: string, messageId: string): Promise<void> {
 		return request<void>(
@@ -612,11 +585,7 @@ export const messages = {
 			{ method: 'POST', body: req }
 		);
 	},
-	unreact(
-		channelId: string,
-		messageId: string,
-		req: ReactionRequest
-	): Promise<void> {
+	unreact(channelId: string, messageId: string, req: ReactionRequest): Promise<void> {
 		return request<void>(
 			`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/reactions`,
 			{ method: 'DELETE', body: req }
@@ -631,7 +600,7 @@ export const messages = {
 			`/channels/${encodeURIComponent(channelId)}/messages/${encodeURIComponent(messageId)}/reactions`,
 			{ query: q }
 		);
-	},
+	}
 };
 
 // (fetchJson removed: request() now handles FormData directly.)
@@ -640,10 +609,8 @@ export const messages = {
 
 export const linkPreviews = {
 	get(previewId: string): Promise<LinkPreviewWithImage> {
-		return request<LinkPreviewWithImage>(
-			`/link-previews/${encodeURIComponent(previewId)}`
-		);
-	},
+		return request<LinkPreviewWithImage>(`/link-previews/${encodeURIComponent(previewId)}`);
+	}
 };
 
 // ── roles ──────────────────────────────────────────────
@@ -658,24 +625,22 @@ export const roles = {
 	update(id: string, req: UpdateRoleRequest): Promise<Role> {
 		return request<Role>(`/roles/${encodeURIComponent(id)}`, {
 			method: 'PUT',
-			body: req,
+			body: req
 		});
 	},
 	remove(id: string): Promise<void> {
 		return request<void>(`/roles/${encodeURIComponent(id)}`, {
-			method: 'DELETE',
+			method: 'DELETE'
 		});
-	},
+	}
 };
 
 // ── emojis ─────────────────────────────────────────────
 
 export const emojis = {
-	list(
-		q?: { since?: string; last_id?: string }
-	): Promise<{ emojis: Emoji[]; has_more: boolean }> {
+	list(q?: { since?: string; last_id?: string }): Promise<{ emojis: Emoji[]; has_more: boolean }> {
 		return request<{ emojis: Emoji[]; has_more: boolean }>('/emojis', {
-			query: q,
+			query: q
 		});
 	},
 	create(req: CreateEmojiRequest): Promise<Emoji> {
@@ -683,24 +648,21 @@ export const emojis = {
 	},
 	remove(id: string): Promise<void> {
 		return request<void>(`/emojis/${encodeURIComponent(id)}`, {
-			method: 'DELETE',
+			method: 'DELETE'
 		});
-	},
+	}
 };
 
 // ── search ─────────────────────────────────────────────
 
 export const search = {
-	search(
-		req: SearchRequest,
-		q?: { since?: string; last_id?: string }
-	): Promise<SearchResponse> {
+	search(req: SearchRequest, q?: { since?: string; last_id?: string }): Promise<SearchResponse> {
 		return request<SearchResponse>('/search', {
 			method: 'POST',
 			body: req,
-			query: q,
+			query: q
 		});
-	},
+	}
 };
 
 // ── admin ──────────────────────────────────────────────
@@ -712,12 +674,12 @@ export const admin = {
 	): Promise<{ logs: AuditLogEntry[]; has_more: boolean }> {
 		const all: Record<string, string | null> = {
 			...filters,
-			...q,
+			...q
 		};
 		return request<{ logs: AuditLogEntry[]; has_more: boolean }>('/admin/audit-logs', {
-			query: all,
+			query: all
 		});
-	},
+	}
 };
 
 // ── voice ──────────────────────────────────────────────
@@ -725,7 +687,7 @@ export const admin = {
 export const voice = {
 	iceServers(): Promise<{ ice_servers: ICEServer[] }> {
 		return request<{ ice_servers: ICEServer[] }>('/voice/ice-servers');
-	},
+	}
 };
 
 export const api = {
@@ -740,5 +702,5 @@ export const api = {
 	emojis,
 	search,
 	admin,
-	voice,
+	voice
 };

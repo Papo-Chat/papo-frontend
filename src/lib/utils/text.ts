@@ -15,7 +15,8 @@ export function hasEveryone(text: string): boolean {
 export function extractMentions(text: string): string[] {
 	const seen = new Set<string>();
 	const out: string[] = [];
-	for (const m of text.match(/@[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi) ?? []) {
+	for (const m of text.match(/@[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi) ??
+		[]) {
 		const id = m.slice(1);
 		if (!seen.has(id)) {
 			seen.add(id);

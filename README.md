@@ -42,7 +42,7 @@ npm run check
 
 ## Variáveis de ambiente (`.env`)
 
-| Variável | Descrição |
-|---|---|
-| `PUBLIC_API_URL` | Base URL da API. Vazio = same-origin. |
-| `PUBLIC_WS_URL` | Base URL do WebSocket (ex: `ws://localhost:8080`). Vazio = same-origin. |
+| Variável         | Descrição                                                               |
+| ---------------- | ----------------------------------------------------------------------- |
+| `PUBLIC_API_URL` | Base URL da API. Vazio = same-origin.                                   |
+| `PUBLIC_WS_URL`  | Base URL do WebSocket (ex: `ws://localhost:8080`). Vazio = same-origin. |

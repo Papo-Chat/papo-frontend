@@ -5,13 +5,8 @@ import { SvelteMap } from 'svelte/reactivity';
 import { api } from '../api';
 import { nextCursor } from '../utils/keyset';
 import { blobToUrl } from '../utils/media';
-import type {
-	UserSummary,
-	UserProfile,
-	UserList,
-	KeysetCursor,
-	PresenceStatus,
-} from '../types';
+import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
+import type { UserSummary, UserProfile, UserList, KeysetCursor, PresenceStatus } from '../types';
 
 const TYPING_TTL = 5000; // ms
 
@@ -37,8 +32,8 @@ export const state = $state({
 		cursor: null as KeysetCursor | null,
 		loading: false,
 		// Guards against concurrent load/loadMore (P1.11).
-		loadGeneration: 0,
-	},
+		loadGeneration: 0
+	}
 });
 
 // ── list (keyset, 100/page) ─────────────────────────────
@@ -84,28 +79,26 @@ export function loadMore(): void {
 	}
 	listLoad({
 		since: state.list.cursor.since,
-		last_id: state.list.cursor.last_id,
+		last_id: state.list.cursor.last_id
 	});
 }
 
 // Seed the current user from the whoami response (richer than the /users
 // list: includes avatar_blob, banner_media, status, settings). Called by the
 // session store on load.
-export function seedMe(
-	me: {
-		id: string;
-		username: string;
-		nickname: string | null;
-		avatar_blob: string | null;
-		avatar_format: string;
-		status: 'away' | 'busy' | null;
-		status_message: string | null;
-		typing: string | null;
-		status_updated_at: string | null;
-		created_at: string;
-		roles: { id: string; name: string; color: string | null }[];
-	}
-): void {
+export function seedMe(me: {
+	id: string;
+	username: string;
+	nickname: string | null;
+	avatar_blob: string | null;
+	avatar_format: string;
+	status: 'away' | 'busy' | null;
+	status_message: string | null;
+	typing: string | null;
+	status_updated_at: string | null;
+	created_at: string;
+	roles: { id: string; name: string; color: string | null }[];
+}): void {
 	const summary: UserSummary = {
 		id: me.id,
 		username: me.username,
@@ -115,7 +108,7 @@ export function seedMe(
 		typing: me.typing,
 		status_updated_at: me.status_updated_at,
 		created_at: me.created_at,
-		roles: me.roles,
+		roles: me.roles
 	};
 	state.byId.set(me.id, summary);
 }
@@ -131,7 +124,11 @@ export async function ensureProfile(id: string): Promise<UserProfile> {
 	if (cached) {
 		return cached;
 	}
+	const epoch = currentSessionEpoch();
 	const profile = await api.users.profile(id);
+	if (!isCurrentSessionEpoch(epoch)) {
+		throw new Error('stale session');
+	}
 	state.profiles.set(id, profile);
 	// Seed the summary even when the user is unknown — a new author / a
 	// profile fetched directly must still appear in the summaries map.
@@ -144,7 +141,7 @@ export async function ensureProfile(id: string): Promise<UserProfile> {
 		typing: profile.typing,
 		status_updated_at: profile.status_updated_at,
 		created_at: profile.created_at,
-		roles: profile.roles,
+		roles: profile.roles
 	};
 	state.byId.set(id, summary);
 	return profile;
@@ -155,7 +152,11 @@ export async function ensureProfiles(ids: string[]): Promise<UserProfile[]> {
 	// Chunk ≤ 50.
 	for (let i = 0; i < ids.length; i += 50) {
 		const chunk = ids.slice(i, i + 50);
+		const epoch = currentSessionEpoch();
 		const res = await api.users.profileBatch(chunk);
+		if (!isCurrentSessionEpoch(epoch)) {
+			throw new Error('stale session');
+		}
 		for (const p of res.profiles) {
 			state.profiles.set(p.id, p);
 			out.push(p);
@@ -173,9 +174,7 @@ export function presenceStatus(id: string): PresenceStatus | null {
 // Effective status for display. An *unknown* presence (user not in the sync
 // snapshot) is **not** treated as online — fall back to the persisted
 // summary status, else 'offline'.
-export function effectiveStatus(
-	id: string
-): 'online' | 'offline' | 'away' | 'busy' {
+export function effectiveStatus(id: string): 'online' | 'offline' | 'away' | 'busy' {
 	const pres = state.presence.get(id);
 	if (pres) {
 		return pres.status;
@@ -187,14 +186,19 @@ export function effectiveStatus(
 // Replaces the ephemeral presence snapshot with the given members. The
 // snapshot is authoritative: users not listed are no longer online.
 export function setPresence(
-	members: { user_id: string; status: string; status_message: string | null; nickname?: string | null }[]
+	members: {
+		user_id: string;
+		status: string;
+		status_message: string | null;
+		nickname?: string | null;
+	}[]
 ): void {
 	const next: SvelteMap<string, LivePresence> = new SvelteMap();
 	for (const m of members) {
 		next.set(m.user_id, {
 			status: (m.status === 'offline' ? 'offline' : m.status) as PresenceStatus,
 			status_message: m.status_message ?? null,
-			nickname: m.nickname ?? null,
+			nickname: m.nickname ?? null
 		});
 	}
 	state.presence = next;
@@ -275,31 +279,30 @@ export function handlePresenceSync(
 
 // presence_update: patch one user's live presence and summary (nickname /
 // status_message are surfaced in the summary).
-export function handlePresenceUpdate(
-	ev: {
-		user_id: string;
-		status: PresenceStatus;
-		status_message: string | null;
-		typing?: string | null;
-		nickname?: string | null;
-	}
-): void {
+export function handlePresenceUpdate(ev: {
+	user_id: string;
+	status: PresenceStatus;
+	status_message: string | null;
+	typing?: string | null;
+	nickname?: string | null;
+}): void {
 	const { user_id, status, status_message, nickname } = ev;
 	const summary = state.byId.get(user_id);
 	if (summary) {
 		const next: UserSummary = { ...summary };
-		if (status_message != null) {
-			next.status_message = status_message;
+		if ('status_message' in ev) {
+			next.status_message = status_message ?? null;
 		}
-		if (nickname != null) {
-			next.nickname = nickname;
+
+		if ('nickname' in ev) {
+			next.nickname = nickname ?? null;
 		}
 		state.byId.set(user_id, next);
 	}
 	state.presence.set(user_id, {
 		status,
 		status_message: status_message ?? null,
-		nickname: nickname ?? null,
+		nickname: nickname ?? null
 	});
 }
 
@@ -343,11 +346,13 @@ export function reset(): void {
 	state.profiles.clear();
 	state.presence.clear();
 	state.typing.clear();
+	const nextGeneration = state.list.loadGeneration + 1;
+
 	state.list = {
 		items: [],
 		hasMore: false,
 		cursor: null,
 		loading: false,
-		loadGeneration: 0,
+		loadGeneration: nextGeneration
 	};
 }

@@ -4,12 +4,9 @@
 import { api } from '../api';
 import { debounce } from '../utils/throttle';
 import { meId as sessionMeId } from '../store/session.svelte';
+import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
 import { nextCursor } from '../utils/keyset';
-import type {
-	NotificationSummary,
-	KeysetCursor,
-	WsNewNotification,
-} from '../types';
+import type { NotificationSummary, KeysetCursor, WsNewNotification } from '../types';
 
 export const state = $state({
 	items: [] as NotificationSummary[],
@@ -21,7 +18,7 @@ export const state = $state({
 	loading: false,
 	loaded: false,
 	// Guards against concurrent load/loadMore (P1.11).
-	loadGeneration: 0,
+	loadGeneration: 0
 });
 
 // Debounced refetch after a new_notification (F3).
@@ -69,7 +66,7 @@ export function loadMore(): void {
 	api.users
 		.notifications(userId, {
 			since: state.cursor.since,
-			last_id: state.cursor.last_id,
+			last_id: state.cursor.last_id
 		})
 		.then((res) => {
 			if (state.loadGeneration !== gen) {
@@ -89,14 +86,14 @@ export function markRead(ids: string[]): void {
 	if (!userId || ids.length === 0) {
 		return;
 	}
-	api.users
-		.markRead(userId, { notification_ids: ids })
-		.then((res) => {
-			state.items = state.items.map((n) =>
-				ids.includes(n.id) ? { ...n, read: true } : n
-			);
-			state.unreadCount = Math.max(0, state.unreadCount - res.updated);
-		});
+	const epoch = currentSessionEpoch();
+	api.users.markRead(userId, { notification_ids: ids }).then((res) => {
+		if (!isCurrentSessionEpoch(epoch)) {
+			throw new Error('stale session');
+		}
+		state.items = state.items.map((n) => (ids.includes(n.id) ? { ...n, read: true } : n));
+		state.unreadCount = Math.max(0, state.unreadCount - res.updated);
+	});
 }
 
 // new_notification (F3): the id may be ephemeral — never insert the event
@@ -108,11 +105,11 @@ export function handleNewNotification(_event: WsNewNotification): void {
 
 // Full reset (logout / 401 / account switch).
 export function reset(): void {
+	state.loadGeneration += 1;
 	state.items = [];
 	state.hasMore = false;
 	state.cursor = null;
 	state.unreadCount = 0;
 	state.loading = false;
 	state.loaded = false;
-	state.loadGeneration = 0;
 }

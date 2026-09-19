@@ -2,6 +2,7 @@
 
 import { SvelteMap } from 'svelte/reactivity';
 import { api } from '../api';
+import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
 import { nextCursor } from '../utils/keyset';
 import { blobToUrl } from '../utils/media';
 import type { Emoji, KeysetCursor } from '../types';
@@ -14,7 +15,7 @@ export const state = $state({
 	hasMore: false,
 	cursor: null as KeysetCursor | null,
 	// Guards against concurrent load/loadMore (P1.11).
-	loadGeneration: 0,
+	loadGeneration: 0
 });
 
 async function _loadPage(q?: { since?: string; last_id?: string }): Promise<void> {
@@ -61,26 +62,30 @@ export function loadMore(): void {
 	}
 	_loadPage({
 		since: state.cursor.since,
-		last_id: state.cursor.last_id,
+		last_id: state.cursor.last_id
 	});
 }
 
 export function create(req: { name: string; format: string; image_blob: string }): void {
-	api.emojis
-		.create(req)
-		.then((e) => {
-			state.byId.set(e.id, e);
-			state.list = [...state.list, e];
-		});
+	const epoch = currentSessionEpoch();
+	api.emojis.create(req).then((e) => {
+		if (!isCurrentSessionEpoch(epoch)) {
+			throw new Error('stale session');
+		}
+		state.byId.set(e.id, e);
+		state.list = [...state.list, e];
+	});
 }
 
 export function remove(id: string): void {
-	api.emojis
-		.remove(id)
-		.then(() => {
-			state.byId.delete(id);
-			state.list = state.list.filter((e) => e.id !== id);
-		});
+	const epoch = currentSessionEpoch();
+	api.emojis.remove(id).then(() => {
+		if (!isCurrentSessionEpoch(epoch)) {
+			throw new Error('stale session');
+		}
+		state.byId.delete(id);
+		state.list = state.list.filter((e) => e.id !== id);
+	});
 }
 
 // base64 → objectURL (cached).
@@ -93,11 +98,11 @@ export function emojiUrl(emoji: Emoji): string {
 
 // Full reset (logout / 401 / account switch).
 export function reset(): void {
+	state.loadGeneration += 1;
 	state.byId.clear();
 	state.list = [];
 	state.loaded = false;
 	state.loading = false;
 	state.hasMore = false;
 	state.cursor = null;
-	state.loadGeneration = 0;
 }

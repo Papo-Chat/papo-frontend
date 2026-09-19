@@ -27,7 +27,7 @@ export const state = $state({
 	connected: false,
 	reconnectAttempts: 0,
 	lastPing: 0,
-	heartbeatTimer: 30000,
+	heartbeatTimer: 30000
 });
 
 let ws: WebSocket | null = null;
@@ -59,21 +59,23 @@ function stopTimers(): void {
 	}
 }
 
-function startPing(): void {
+function startPing(socket: WebSocket, gen: number): void {
 	if (pingTimer) {
 		clearInterval(pingTimer);
 		pingTimer = null;
 	}
+
 	pingTimer = setInterval(() => {
-		if (ws?.readyState === WebSocket.OPEN) {
-			try {
-				wsSend({ type: 'heartbeat' } as WsInbound);
-			} catch {
-				// ignore
-			}
-			state.lastPing = Date.now();
+		if (gen !== generation || socket !== ws || socket.readyState !== WebSocket.OPEN) {
+			return;
 		}
-	}, 30000);
+
+		wsSend({
+			type: 'heartbeat'
+		} as WsInbound);
+
+		state.lastPing = Date.now();
+	}, state.heartbeatTimer);
 }
 
 // Minimal REST reconciliation after a reconnect (P1.10). Only run when a
@@ -100,22 +102,27 @@ export function connect(): void {
 	shouldReconnect = true;
 	const gen = ++generation;
 	stopTimers();
-	ws = new WebSocket(wsUrl());
-	setInstance(ws);
-	ws.onopen = () => {
-		if (gen !== generation) {
+	const socket = new WebSocket(wsUrl());
+
+	ws = socket;
+	setInstance(socket);
+	socket.onopen = () => {
+		if (gen !== generation || socket !== ws) {
 			return;
 		}
 		const wasConnected = hasConnected;
 		hasConnected = true;
 		state.connected = true;
 		state.reconnectAttempts = 0;
-		startPing();
+		startPing(socket, gen);
 		if (wasConnected) {
 			resync();
 		}
 	};
-	ws.onmessage = (e) => {
+	socket.onmessage = (e) => {
+		if (gen !== generation || socket !== ws) {
+			return;
+		}
 		try {
 			const event = JSON.parse(e.data as string) as WsOutbound;
 			dispatchEvent(event);
@@ -123,8 +130,8 @@ export function connect(): void {
 			// ignore malformed frames
 		}
 	};
-	ws.onclose = () => {
-		if (gen !== generation) {
+	socket.onclose = () => {
+		if (gen !== generation || socket !== ws) {
 			return;
 		}
 		stopTimers();
@@ -145,7 +152,10 @@ export function connect(): void {
 			connect();
 		}, delay);
 	};
-	ws.onerror = () => {
+	socket.onerror = () => {
+		if (gen !== generation || socket !== ws) {
+			return;
+		}
 		// onclose follows; just ensure a clean close.
 		ws?.close();
 	};

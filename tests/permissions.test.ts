@@ -1,16 +1,12 @@
 // Vitest on core logic: channel/role permission helpers (pure, testable).
 
 import { describe, it, expect } from 'vitest';
-import {
-	myRolePermissions,
-	channelAccess,
-	can,
-} from '../src/lib/utils/permissions';
+import { myRolePermissions, channelAccess, can } from '../src/lib/utils/permissions';
 import type {
 	Channel,
 	ChannelPermissionEntry,
 	Role,
-	RolePermissions,
+	RolePermissions
 } from '../src/lib/types/models';
 
 // ── fixtures ─────────────────────────────────────────────
@@ -23,7 +19,7 @@ function allFalse(): RolePermissions {
 		ban_members: false,
 		pin_message: false,
 		everyone_message: false,
-		send_attachment: false,
+		send_attachment: false
 	};
 }
 
@@ -33,13 +29,11 @@ function makeRole(id: string, perms: Partial<RolePermissions>): Role {
 		name: id,
 		color: null,
 		permissions: { ...allFalse(), ...perms },
-		created_at: '2024-01-01T00:00:00Z',
+		created_at: '2024-01-01T00:00:00Z'
 	};
 }
 
-function makeChannel(
-	permissions: ChannelPermissionEntry[] = []
-): Channel {
+function makeChannel(permissions: ChannelPermissionEntry[] = []): Channel {
 	return {
 		id: 'ch1',
 		name: 'general',
@@ -51,7 +45,7 @@ function makeChannel(
 		last_message: null,
 		last_read_message: null,
 		last_read_at: null,
-		notification_settings: 'all',
+		notification_settings: 'all'
 	};
 }
 
@@ -66,7 +60,7 @@ describe('myRolePermissions', () => {
 			ban_members: true,
 			pin_message: true,
 			everyone_message: true,
-			send_attachment: true,
+			send_attachment: true
 		});
 	});
 
@@ -78,7 +72,7 @@ describe('myRolePermissions', () => {
 		const perms = myRolePermissions(
 			[
 				makeRole('r1', { manage_channels: true, pin_message: true }),
-				makeRole('r2', { manage_server: true, everyone_message: true }),
+				makeRole('r2', { manage_server: true, everyone_message: true })
 			],
 			false
 		);
@@ -89,7 +83,7 @@ describe('myRolePermissions', () => {
 			ban_members: false,
 			pin_message: true,
 			everyone_message: true,
-			send_attachment: false,
+			send_attachment: false
 		});
 	});
 });
@@ -106,15 +100,15 @@ describe('channelAccess', () => {
 					read_channel: false,
 					send_messages: false,
 					delete_messages: false,
-					connect_voice: false,
-				},
-			},
+					connect_voice: false
+				}
+			}
 		]);
 		expect(channelAccess(ch, { roles: [], isOwner: true })).toEqual({
 			read: true,
 			send: true,
 			del: true,
-			voice: true,
+			voice: true
 		});
 	});
 
@@ -124,7 +118,7 @@ describe('channelAccess', () => {
 			read: true,
 			send: true,
 			del: true,
-			voice: true,
+			voice: true
 		});
 	});
 
@@ -137,8 +131,8 @@ describe('channelAccess', () => {
 					read_channel: true,
 					send_messages: false,
 					delete_messages: false,
-					connect_voice: true,
-				},
+					connect_voice: true
+				}
 			},
 			{
 				role_id: 'r2',
@@ -147,13 +141,13 @@ describe('channelAccess', () => {
 					read_channel: false,
 					send_messages: true,
 					delete_messages: true,
-					connect_voice: false,
-				},
-			},
+					connect_voice: false
+				}
+			}
 		]);
 		const access = channelAccess(ch, {
 			roles: [makeRole('r1', {}), makeRole('r2', {})],
-			isOwner: false,
+			isOwner: false
 		});
 		expect(access).toEqual({ read: true, send: true, del: true, voice: true });
 	});
@@ -167,13 +161,13 @@ describe('channelAccess', () => {
 					read_channel: true,
 					send_messages: true,
 					delete_messages: true,
-					connect_voice: true,
-				},
-			},
+					connect_voice: true
+				}
+			}
 		]);
 		const access = channelAccess(ch, {
 			roles: [makeRole('r1', {})],
-			isOwner: false,
+			isOwner: false
 		});
 		expect(access).toEqual({ read: false, send: false, del: false, voice: false });
 	});
@@ -190,7 +184,7 @@ describe('can', () => {
 	it('reflects a permission granted by a role', () => {
 		const ctx = {
 			roles: [makeRole('r1', { ban_members: true })],
-			isOwner: false,
+			isOwner: false
 		};
 		expect(can('ban_members', ctx)).toBe(true);
 	});

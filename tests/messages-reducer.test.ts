@@ -19,16 +19,14 @@ import {
 	react,
 	unreact,
 	state as globalState,
+	reset
 } from '../src/lib/store/messages.svelte';
-import type {
-	ChannelMessagesState,
-	MessagesState,
-} from '../src/lib/store/messages.types';
+import type { ChannelMessagesState, MessagesState } from '../src/lib/store/messages.types';
 import { SvelteMap } from 'svelte/reactivity';
 import type {
 	MessageWithAttachment,
 	LinkPreview,
-	LinkPreviewWithImage,
+	LinkPreviewWithImage
 } from '../src/lib/types/models';
 import type {
 	WsMessage,
@@ -38,26 +36,24 @@ import type {
 	WsReactUpdate,
 	WsRemovePreview,
 	WsLinkPreviewUpdate,
-	WsAttachmentModerationUpdate,
+	WsAttachmentModerationUpdate
 } from '../src/lib/types/websocket';
 import { messages as apiMessages } from '../src/lib/api';
 
 // buildUrl() in api.ts reads window.location.origin.
 // Stubbed per-test (afterEach un-stubs it via unstubAllGlobals).
 const windowStub = {
-	location: { origin: 'http://localhost:3000' },
+	location: { origin: 'http://localhost:3000' }
 } as unknown as Window;
 
 beforeEach(() => {
 	vi.stubGlobal('window', windowStub);
+	reset();
 });
 
 // ── fixtures ─────────────────────────────────────────────
 
-function msg(
-	id: string,
-	overrides: Partial<MessageWithAttachment> = {}
-): MessageWithAttachment {
+function msg(id: string, overrides: Partial<MessageWithAttachment> = {}): MessageWithAttachment {
 	return {
 		id,
 		channel_id: 'ch1',
@@ -70,7 +66,7 @@ function msg(
 		previews: [],
 		reactions: [],
 		user_reactions: [],
-		...overrides,
+		...overrides
 	};
 }
 
@@ -93,7 +89,8 @@ function newState(
 		pinned: [],
 		pinnedLoaded: false,
 		pinnedLoading: false,
-		...overrides,
+		pinnedGeneration: 0,
+		...overrides
 	};
 	for (const m of messages) {
 		ch.byId.set(m.id, m);
@@ -104,10 +101,7 @@ function newState(
 	return { channels };
 }
 
-function wsMsg(
-	id: string,
-	overrides: Partial<WsMessage> = {}
-): WsMessage {
+function wsMsg(id: string, overrides: Partial<WsMessage> = {}): WsMessage {
 	return {
 		type: 'message',
 		id,
@@ -116,7 +110,7 @@ function wsMsg(
 		content: 'hi',
 		created_at: '2024-01-01T00:00:00Z',
 		reply_to: null,
-		...overrides,
+		...overrides
 	};
 }
 
@@ -142,9 +136,9 @@ describe('wsMessageToMsg', () => {
 					size_bytes: 10,
 					thumbnail_id: null,
 					created_at: '2024-01-01T00:00:00Z',
-					moderation_status: 'ok',
-				},
-			],
+					moderation_status: 'ok'
+				}
+			]
 		});
 		const m = wsMessageToMsg(ev);
 		expect(m.attachments).toHaveLength(1);
@@ -189,7 +183,7 @@ describe('applyEvent(message_edit)', () => {
 			id: 'm1',
 			channel_id: 'ch1',
 			content: 'edited',
-			edited_at: '2024-01-02T00:00:00Z',
+			edited_at: '2024-01-02T00:00:00Z'
 		} satisfies WsMessageEdit);
 		const m = state.channels.get('ch1')!.byId.get('m1')!;
 		expect(m.content).toBe('edited');
@@ -203,7 +197,7 @@ describe('applyEvent(message_edit)', () => {
 			id: 'm9',
 			channel_id: 'ch1',
 			content: 'edited',
-			edited_at: '2024-01-02T00:00:00Z',
+			edited_at: '2024-01-02T00:00:00Z'
 		} satisfies WsMessageEdit);
 		expect(state.channels.get('ch1')!.byId.get('m1')!.content).toBe('hello');
 	});
@@ -219,7 +213,7 @@ describe('applyEvent(message_delete)', () => {
 		applyEvent(state, {
 			type: 'message_delete',
 			id: 'm1',
-			channel_id: 'ch1',
+			channel_id: 'ch1'
 		} satisfies WsMessageDelete);
 		const ch = state.channels.get('ch1')!;
 		expect(ch.byId.size).toBe(1);
@@ -233,7 +227,7 @@ describe('applyEvent(message_delete)', () => {
 		applyEvent(state, {
 			type: 'message_delete',
 			id: 'm9',
-			channel_id: 'ch1',
+			channel_id: 'ch1'
 		} satisfies WsMessageDelete);
 		expect(state.channels.get('ch1')!.byId.size).toBe(1);
 	});
@@ -247,7 +241,7 @@ describe('applyEvent(message_pin)', () => {
 		applyEvent(state, {
 			type: 'message_pin',
 			message_id: 'm1',
-			is_pinned: true,
+			is_pinned: true
 		} satisfies WsMessagePin);
 		expect(state.channels.get('ch1')!.pinned).toHaveLength(1);
 		expect(state.channels.get('ch1')!.pinned[0].id).toBe('m1');
@@ -260,7 +254,7 @@ describe('applyEvent(message_pin)', () => {
 		applyEvent(state, {
 			type: 'message_pin',
 			message_id: 'm1',
-			is_pinned: false,
+			is_pinned: false
 		} satisfies WsMessagePin);
 		expect(state.channels.get('ch1')!.pinned).toHaveLength(0);
 	});
@@ -278,7 +272,7 @@ describe('applyEvent(message_pin)', () => {
 		applyEvent(state, {
 			type: 'message_pin',
 			message_id: 'm9',
-			is_pinned: true,
+			is_pinned: true
 		} satisfies WsMessagePin);
 		expect(state.channels.get('ch1')!.pinned).toHaveLength(0);
 	});
@@ -289,17 +283,17 @@ describe('applyEvent(message_pin)', () => {
 describe('applyEvent(react_update)', () => {
 	it('updates an existing reaction count', () => {
 		const state = newState([
-			msg('m1', { reactions: [{ emoji_id: 'e1', unicode: null, count: 2 }] }),
+			msg('m1', { reactions: [{ emoji_id: 'e1', unicode: null, count: 2 }] })
 		]);
 		applyEvent(state, {
 			type: 'react_update',
 			message_id: 'm1',
 			emoji_id: 'e1',
 			unicode: null,
-			count: 5,
+			count: 5
 		} satisfies WsReactUpdate);
 		expect(state.channels.get('ch1')!.byId.get('m1')!.reactions).toEqual([
-			{ emoji_id: 'e1', unicode: null, count: 5 },
+			{ emoji_id: 'e1', unicode: null, count: 5 }
 		]);
 	});
 
@@ -308,19 +302,19 @@ describe('applyEvent(react_update)', () => {
 			msg('m1', {
 				reactions: [
 					{ emoji_id: 'e1', unicode: null, count: 2 },
-					{ emoji_id: 'e2', unicode: null, count: 1 },
-				],
-			}),
+					{ emoji_id: 'e2', unicode: null, count: 1 }
+				]
+			})
 		]);
 		applyEvent(state, {
 			type: 'react_update',
 			message_id: 'm1',
 			emoji_id: 'e1',
 			unicode: null,
-			count: 0,
+			count: 0
 		} satisfies WsReactUpdate);
 		expect(state.channels.get('ch1')!.byId.get('m1')!.reactions).toEqual([
-			{ emoji_id: 'e2', unicode: null, count: 1 },
+			{ emoji_id: 'e2', unicode: null, count: 1 }
 		]);
 	});
 
@@ -331,10 +325,10 @@ describe('applyEvent(react_update)', () => {
 			message_id: 'm1',
 			emoji_id: 'e9',
 			unicode: null,
-			count: 1,
+			count: 1
 		} satisfies WsReactUpdate);
 		expect(state.channels.get('ch1')!.byId.get('m1')!.reactions).toEqual([
-			{ emoji_id: 'e9', unicode: null, count: 1 },
+			{ emoji_id: 'e9', unicode: null, count: 1 }
 		]);
 	});
 
@@ -342,18 +336,18 @@ describe('applyEvent(react_update)', () => {
 		const state = newState([
 			msg('m1', {
 				reactions: [{ emoji_id: 'e1', unicode: null, count: 2 }],
-				user_reactions: [{ id: 'ur1', emoji_id: 'e1', unicode: null }],
-			}),
+				user_reactions: [{ id: 'ur1', emoji_id: 'e1', unicode: null }]
+			})
 		]);
 		applyEvent(state, {
 			type: 'react_update',
 			message_id: 'm1',
 			emoji_id: 'e1',
 			unicode: null,
-			count: 3,
+			count: 3
 		} satisfies WsReactUpdate);
 		expect(state.channels.get('ch1')!.byId.get('m1')!.user_reactions).toEqual([
-			{ id: 'ur1', emoji_id: 'e1', unicode: null },
+			{ id: 'ur1', emoji_id: 'e1', unicode: null }
 		]);
 	});
 
@@ -362,20 +356,20 @@ describe('applyEvent(react_update)', () => {
 			msg('m1', {
 				reactions: [
 					{ emoji_id: 'e1', unicode: null, count: 2 },
-					{ emoji_id: 'e1', unicode: 'x', count: 1 },
-				],
-			}),
+					{ emoji_id: 'e1', unicode: 'x', count: 1 }
+				]
+			})
 		]);
 		applyEvent(state, {
 			type: 'react_update',
 			message_id: 'm1',
 			emoji_id: 'e1',
 			unicode: null,
-			count: 9,
+			count: 9
 		} satisfies WsReactUpdate);
 		expect(state.channels.get('ch1')!.byId.get('m1')!.reactions).toEqual([
 			{ emoji_id: 'e1', unicode: null, count: 9 },
-			{ emoji_id: 'e1', unicode: 'x', count: 1 },
+			{ emoji_id: 'e1', unicode: 'x', count: 1 }
 		]);
 	});
 });
@@ -386,30 +380,23 @@ describe('applyEvent(remove_preview)', () => {
 	it('removes a preview by id (leaves others)', () => {
 		const state = newState([
 			msg('m1', {
-				previews: [
-					preview('p1'),
-					preview('p2'),
-				],
-			}),
+				previews: [preview('p1'), preview('p2')]
+			})
 		]);
 		applyEvent(state, {
 			type: 'remove_preview',
 			message_id: 'm1',
-			preview_id: 'p1',
+			preview_id: 'p1'
 		} satisfies WsRemovePreview);
-		expect(state.channels.get('ch1')!.byId.get('m1')!.previews).toEqual([
-			preview('p2'),
-		]);
+		expect(state.channels.get('ch1')!.byId.get('m1')!.previews).toEqual([preview('p2')]);
 	});
 
 	it('is a no-op when the preview is absent', () => {
-		const state = newState([
-			msg('m1', { previews: [preview('p1')] }),
-		]);
+		const state = newState([msg('m1', { previews: [preview('p1')] })]);
 		applyEvent(state, {
 			type: 'remove_preview',
 			message_id: 'm1',
-			preview_id: 'missing',
+			preview_id: 'missing'
 		} satisfies WsRemovePreview);
 		expect(state.channels.get('ch1')!.byId.get('m1')!.previews).toHaveLength(1);
 	});
@@ -419,17 +406,14 @@ describe('applyEvent(link_preview_update)', () => {
 	it('replaces a preview by id (others untouched)', () => {
 		const state = newState([
 			msg('m1', {
-				previews: [
-					preview('p1'),
-					preview('p2'),
-				],
-			}),
+				previews: [preview('p1'), preview('p2')]
+			})
 		]);
 		applyEvent(state, {
 			type: 'link_preview_update',
 			channel_id: 'ch1',
 			message_id: 'm1',
-			preview: { ...preview('p2'), title: 'updated', image_data: null },
+			preview: { ...preview('p2'), title: 'updated', image_data: null }
 		} satisfies WsLinkPreviewUpdate);
 		const previews = state.channels.get('ch1')!.byId.get('m1')!.previews;
 		expect(previews[0].id).toBe('p1');
@@ -455,7 +439,7 @@ describe('mergePreview', () => {
 			image_mime_type: null,
 			image_size_bytes: null,
 			fetched_at: '2024-01-01T00:00:00Z',
-			image_data: 'b64',
+			image_data: 'b64'
 		});
 		const previews = state.channels.get('ch1')!.byId.get('m1')!.previews;
 		expect(previews).toHaveLength(1);
@@ -467,7 +451,7 @@ describe('mergePreview', () => {
 		const state = newState([msg('m1')]);
 		const p: LinkPreviewWithImage = {
 			...preview('p1'),
-			image_data: 'b64',
+			image_data: 'b64'
 		};
 		mergePreview(state, 'm1', p);
 		mergePreview(state, 'm1', p);
@@ -489,17 +473,17 @@ describe('applyEvent(attachment_moderation_update)', () => {
 						size_bytes: 100,
 						thumbnail_id: null,
 						created_at: '2024-01-01T00:00:00Z',
-						moderation_status: 'pending',
-					},
-				],
-			}),
+						moderation_status: 'pending'
+					}
+				]
+			})
 		]);
 		applyEvent(state, {
 			type: 'attachment_moderation_update',
 			channel_id: 'ch1',
 			message_id: 'm1',
 			attachment_id: 'a1',
-			status: 'removed',
+			status: 'removed'
 		} satisfies WsAttachmentModerationUpdate);
 		const a = state.channels.get('ch1')!.byId.get('m1')!.attachments[0];
 		expect(a.moderation_status).toBe('removed');
@@ -512,7 +496,7 @@ describe('applyEvent(attachment_moderation_update)', () => {
 			channel_id: 'ch1',
 			message_id: 'm1',
 			attachment_id: 'a9',
-			status: 'removed',
+			status: 'removed'
 		} satisfies WsAttachmentModerationUpdate);
 		expect(state.channels.get('ch1')!.byId.get('m1')!.attachments).toHaveLength(0);
 	});
@@ -536,7 +520,7 @@ describe('keyset merge of REST pages (load / loadMoreOlder)', () => {
 		vi.mocked(apiMessages.list).mockResolvedValue({
 			channel_id: 'ch_k',
 			messages: [newest, older], // API returns DESC (newest first)
-			has_more: true,
+			has_more: true
 		});
 		load('ch_k');
 		await vi.waitFor(() => {
@@ -559,7 +543,7 @@ describe('keyset merge of REST pages (load / loadMoreOlder)', () => {
 		vi.mocked(apiMessages.list).mockResolvedValue({
 			channel_id: 'ch_k',
 			messages: [newest, older],
-			has_more: true,
+			has_more: true
 		});
 		load('ch_k');
 		await vi.waitFor(() => {
@@ -572,7 +556,7 @@ describe('keyset merge of REST pages (load / loadMoreOlder)', () => {
 		vi.mocked(apiMessages.list).mockResolvedValue({
 			channel_id: 'ch_k',
 			messages: [older, m0],
-			has_more: false,
+			has_more: false
 		});
 		loadMoreOlder('ch_k');
 		await vi.waitFor(() => {
@@ -591,29 +575,27 @@ describe('keyset merge of REST pages (load / loadMoreOlder)', () => {
 	});
 });
 
-
 // ── REST↔WS merge edge cases (P0.4, P0.5) ──────────────
 
 describe('mergeFetchedMessage: REST does not clobber newer WS deltas', () => {
 	it('a delayed REST page does not revert a newer WS react_update count', () => {
 		const state = newState([
-			msg('m1', { reactions: [{ emoji_id: 'e1', unicode: null, count: 2 }] }),
+			msg('m1', { reactions: [{ emoji_id: 'e1', unicode: null, count: 2 }] })
 		]);
 		applyEvent(state, {
 			type: 'react_update',
 			message_id: 'm1',
 			emoji_id: 'e1',
 			unicode: null,
-			count: 9,
+			count: 9
 		} satisfies WsReactUpdate);
 		// Delayed REST returns the stale message (count 2).
-		upsertMessage(
-			state,
-			'ch1',
-			{ ...msg('m1'), reactions: [{ emoji_id: 'e1', unicode: null, count: 2 }] }
-		);
+		upsertMessage(state, 'ch1', {
+			...msg('m1'),
+			reactions: [{ emoji_id: 'e1', unicode: null, count: 2 }]
+		});
 		expect(state.channels.get('ch1')!.byId.get('m1')!.reactions).toEqual([
-			{ emoji_id: 'e1', unicode: null, count: 9 },
+			{ emoji_id: 'e1', unicode: null, count: 9 }
 		]);
 	});
 
@@ -622,7 +604,7 @@ describe('mergeFetchedMessage: REST does not clobber newer WS deltas', () => {
 		applyEvent(state, {
 			type: 'message_delete',
 			id: 'm1',
-			channel_id: 'ch1',
+			channel_id: 'ch1'
 		} satisfies WsMessageDelete);
 		upsertMessage(state, 'ch1', msg('m1'));
 		expect(state.channels.get('ch1')!.byId.has('m1')).toBe(false);
@@ -635,7 +617,7 @@ describe('preview tombstones (P0.5)', () => {
 		applyEvent(state, {
 			type: 'remove_preview',
 			message_id: 'm1',
-			preview_id: 'p1',
+			preview_id: 'p1'
 		} satisfies WsRemovePreview);
 		mergePreview(state, 'm1', { ...preview('p1'), image_data: 'b64' });
 		expect(state.channels.get('ch1')!.byId.get('m1')!.previews).toHaveLength(0);
@@ -646,13 +628,13 @@ describe('preview tombstones (P0.5)', () => {
 		applyEvent(state, {
 			type: 'remove_preview',
 			message_id: 'm1',
-			preview_id: 'p1',
+			preview_id: 'p1'
 		} satisfies WsRemovePreview);
 		linkPreviewUpdate(state, {
 			type: 'link_preview_update',
 			channel_id: 'ch1',
 			message_id: 'm1',
-			preview: { ...preview('p1'), title: 're-added', image_data: 'b64' },
+			preview: { ...preview('p1'), title: 're-added', image_data: 'b64' }
 		} satisfies WsLinkPreviewUpdate);
 		const previews = state.channels.get('ch1')!.byId.get('m1')!.previews;
 		expect(previews).toHaveLength(1);
@@ -683,6 +665,7 @@ describe('react / unreact (user_reactions)', () => {
 			pinned: [],
 			pinnedLoaded: false,
 			pinnedLoading: false,
+			pinnedGeneration: 0
 		};
 		ch.byId.set('m1', msg('m1', { user_reactions: [] }));
 		ch.ids = ['m1'];
@@ -700,11 +683,11 @@ describe('react / unreact (user_reactions)', () => {
 			user_id: 'u1',
 			emoji_id: 'e1',
 			unicode: null,
-			created_at: '2024-01-01T00:00:00Z',
+			created_at: '2024-01-01T00:00:00Z'
 		});
 		await react('ch1', 'm1', { emoji_id: 'e1', unicode: null });
 		expect(globalState.channels.get('ch1')!.byId.get('m1')!.user_reactions).toEqual([
-			{ id: 'ur1', emoji_id: 'e1', unicode: null },
+			{ id: 'ur1', emoji_id: 'e1', unicode: null }
 		]);
 		vi.mocked(apiMessages.unreact).mockResolvedValue(undefined);
 		await unreact('ch1', 'm1', { emoji_id: 'e1', unicode: null });
@@ -722,14 +705,14 @@ describe('300-message window', () => {
 		for (let i = 0; i < 350; i++) {
 			messages.push({
 				...msg(`m${i}`, {
-					created_at: new Date(Date.UTC(2024, 0, 1) + i * 60_000).toISOString(),
-				}),
+					created_at: new Date(Date.UTC(2024, 0, 1) + i * 60_000).toISOString()
+				})
 			});
 		}
 		vi.mocked(apiMessages.list).mockResolvedValue({
 			channel_id: 'ch_k',
 			messages,
-			has_more: false,
+			has_more: false
 		});
 		load('ch_k');
 		await vi.waitFor(() => {
@@ -761,8 +744,6 @@ function preview(id: string): LinkPreview {
 		embed_url: null,
 		image_mime_type: null,
 		image_size_bytes: null,
-		fetched_at: '2024-01-01T00:00:00Z',
+		fetched_at: '2024-01-01T00:00:00Z'
 	};
 }
-
-

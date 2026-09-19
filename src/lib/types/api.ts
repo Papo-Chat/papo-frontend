@@ -13,7 +13,7 @@ import type {
 	Server,
 	UserConfig,
 	UserList,
-	UserProfile,
+	UserProfile
 } from './models';
 
 // ── auth ───────────────────────────────────────────────
@@ -288,5 +288,5 @@ export type {
 	LinkPreviewWithImage,
 	SearchResponse,
 	AuditLogList,
-	UserConfig,
+	UserConfig
 } from './models';

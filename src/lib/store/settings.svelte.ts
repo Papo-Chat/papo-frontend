@@ -2,12 +2,13 @@
 // PUT /users/settings.
 
 import { api } from '../api';
+import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
 import type { UserConfig, UserSettings } from '../types';
 
 export const state = $state({
 	config: null as UserConfig | null,
 	version: 0,
-	loaded: false,
+	loaded: false
 });
 
 export function seed(config: UserConfig, version: number): void {
@@ -17,12 +18,20 @@ export function seed(config: UserConfig, version: number): void {
 }
 
 export async function load(): Promise<void> {
+	const epoch = currentSessionEpoch();
 	const res = await api.auth.whoami();
+	if (!isCurrentSessionEpoch(epoch)) {
+		throw new Error('stale session');
+	}
 	seed(res.settings.config, res.settings.version);
 }
 
 export async function update(config: UserConfig): Promise<UserSettings> {
+	const epoch = currentSessionEpoch();
 	const settings = await api.users.updateSettings(config);
+	if (!isCurrentSessionEpoch(epoch)) {
+		throw new Error('stale session');
+	}
 	state.config = settings.config;
 	state.version = settings.version;
 	return settings;

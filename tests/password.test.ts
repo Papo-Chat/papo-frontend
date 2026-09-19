@@ -24,9 +24,7 @@ describe('isValidPassword', () => {
 
 	it('reports the minimum-length error', () => {
 		const res = isValidPassword('Ab1!');
-		expect(res.errors).toContain(
-			`senha deve ter no mínimo ${minPasswordLength} caracteres`
-		);
+		expect(res.errors).toContain(`senha deve ter no mínimo ${minPasswordLength} caracteres`);
 	});
 
 	it('rejects a password without an uppercase letter', () => {

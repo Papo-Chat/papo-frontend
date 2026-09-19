@@ -11,40 +11,31 @@ export function parseISO(value: string | null | undefined): Date | null {
 }
 
 // Format a Date as a readable "day, month, year" label (locale-aware).
-export function formatDate(
-	d: Date,
-	opts?: Intl.DateTimeFormatOptions
-): string {
+export function formatDate(d: Date, opts?: Intl.DateTimeFormatOptions): string {
 	return new Intl.DateTimeFormat(undefined, {
 		year: 'numeric',
 		month: 'short',
 		day: 'numeric',
-		...(opts ?? {}),
+		...(opts ?? {})
 	}).format(d);
 }
 
 // Format a Date as a full timestamp "day, month, year, HH:mm" (locale-aware).
-export function formatTimestamp(
-	d: Date,
-	opts?: Intl.DateTimeFormatOptions
-): string {
+export function formatTimestamp(d: Date, opts?: Intl.DateTimeFormatOptions): string {
 	return new Intl.DateTimeFormat(undefined, {
 		year: 'numeric',
 		month: 'short',
 		day: 'numeric',
 		hour: '2-digit',
 		minute: '2-digit',
-		...(opts ?? {}),
+		...(opts ?? {})
 	}).format(d);
 }
 
 // Relative time like "2m ago", "3h ago", "yesterday", "yesterday at 14:30".
 // Returns '' when the date is too far in the past to be useful (older than
 // ~7 days) so the caller can fall back to an absolute date.
-export function formatRelative(
-	d: Date,
-	now: Date = new Date()
-): string {
+export function formatRelative(d: Date, now: Date = new Date()): string {
 	const nowTime = now.getTime();
 	const diff = nowTime - d.getTime();
 	const msPerMinute = 60_000;

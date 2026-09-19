@@ -19,12 +19,7 @@ import { formatBytes } from './text';
 
 // ── constants (pure) ─────────────────────────────────────
 
-export const IMAGE_MIMES = [
-	'image/gif',
-	'image/jpeg',
-	'image/png',
-	'image/webp',
-] as const;
+export const IMAGE_MIMES = ['image/gif', 'image/jpeg', 'image/png', 'image/webp'] as const;
 
 export type UploadKind = 'avatar' | 'icon' | 'emoji' | 'banner';
 
@@ -33,7 +28,7 @@ export const MAX_UPLOAD_BYTES: Record<UploadKind, number> = {
 	avatar: 2 * 1024 * 1024,
 	icon: 2 * 1024 * 1024,
 	emoji: 256 * 1024,
-	banner: 2 * 1024 * 1024,
+	banner: 2 * 1024 * 1024
 };
 
 // Canvas resize target — longest side, px (client downscale). 0 = no resize.
@@ -41,7 +36,7 @@ export const RESIZE_DIM: Record<UploadKind, number> = {
 	avatar: 512,
 	icon: 512,
 	emoji: 128,
-	banner: 2048,
+	banner: 2048
 };
 
 // Attachment budget (multipart POST /messages).
@@ -70,9 +65,7 @@ export function validateUpload(
 		errors.push('tipo inválido; use GIF, JPEG/JPG, PNG ou WEBP');
 	}
 	if (file.size > MAX_UPLOAD_BYTES[kind]) {
-		errors.push(
-			`excede o tamanho máximo de ${formatBytes(MAX_UPLOAD_BYTES[kind])}`
-		);
+		errors.push(`excede o tamanho máximo de ${formatBytes(MAX_UPLOAD_BYTES[kind])}`);
 	}
 	return { ok: errors.length === 0, errors };
 }
@@ -95,9 +88,7 @@ export function buildMessageForm(payload: MessageFormPayload): FormData {
 	}
 	const total = files.reduce((acc, f) => acc + f.size, 0);
 	if (total > MAX_ATTACHMENT_TOTAL) {
-		throw new Error(
-			`attachments excedem o tamanho máximo de ${formatBytes(MAX_ATTACHMENT_TOTAL)}`
-		);
+		throw new Error(`attachments excedem o tamanho máximo de ${formatBytes(MAX_ATTACHMENT_TOTAL)}`);
 	}
 	const form = new FormData();
 	form.append('channel_id', channelId);
@@ -131,10 +122,7 @@ type WinWithBitmap = {
 // frame. Within the size limit they are sent as-is.
 //
 // Browser-only: throws in non-browser environments.
-export async function fileToBase64(
-	file: File,
-	kind: UploadKind
-): Promise<Base64Image> {
+export async function fileToBase64(file: File, kind: UploadKind): Promise<Base64Image> {
 	if (typeof document === 'undefined') {
 		throw new Error('ambiente sem canvas (navegador necessário)');
 	}
@@ -152,8 +140,7 @@ async function resizeToBlob(file: File, dim: number): Promise<Blob> {
 	if (dim <= 0) {
 		return file;
 	}
-	const create =
-		(window as WinWithBitmap).createImageBitmap;
+	const create = (window as WinWithBitmap).createImageBitmap;
 	if (!create) {
 		// Fall back to the original blob (still within backend limits).
 		return file;
@@ -174,11 +161,9 @@ async function resizeToBlob(file: File, dim: number): Promise<Blob> {
 			}
 			ctx.drawImage(bitmap, 0, 0, w, h);
 			return await new Promise<Blob>((resolve, reject) => {
-				canvas.toBlob((b) =>
-					b ? resolve(b) : reject(new Error('falha ao exportar imagem'))
-				),
-					file.type
-				});
+				(canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('falha ao exportar imagem')))),
+					file.type);
+			});
 		} finally {
 			bitmap.close();
 		}

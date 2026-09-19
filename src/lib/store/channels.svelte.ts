@@ -3,16 +3,12 @@
 
 import { SvelteMap } from 'svelte/reactivity';
 import { api } from '../api';
+import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
 import { debounce } from '../utils/throttle';
 import { evict as messagesEvict } from '../store/messages.svelte';
 import { clearRoom as voiceClearRoom } from '../store/voice.svelte';
 import { meId as sessionMeId } from '../store/session.svelte';
-import type {
-	Channel,
-	ChannelPermissionEntry,
-	ChannelType,
-	WsMessage,
-} from '../types';
+import type { Channel, ChannelPermissionEntry, ChannelType, WsMessage } from '../types';
 
 export const state = $state({
 	byId: new SvelteMap<string, Channel>(),
@@ -23,7 +19,7 @@ export const state = $state({
 	// (seeded from REST, F6); `count` is the live WS increment.
 	unread: new SvelteMap<string, { has: boolean; count: number }>(),
 	loaded: false,
-	loading: false,
+	loading: false
 });
 
 // Debounced full reseed after channel_create (F4).
@@ -37,9 +33,13 @@ export function setOpen(channelId: string | null): void {
 
 export function load(): void {
 	state.loading = true;
+	const epoch = currentSessionEpoch();
 	api.channels
 		.list()
 		.then((channels) => {
+			if (!isCurrentSessionEpoch(epoch)) {
+				throw new Error('stale session');
+			}
 			const byId = new SvelteMap<string, Channel>();
 			const ordered: string[] = [];
 			const unread = new SvelteMap<string, { has: boolean; count: number }>();
@@ -65,32 +65,34 @@ export function load(): void {
 // Awaits the create so the reseed (channel list) happens after the channel
 // exists, avoiding a reseed-before-create race on slow connections.
 export function create(req: { name: string; type: ChannelType; topic: string | null }): void {
-	api.channels
-		.create(req)
-		.then(() => {
-			reseedChannels.run();
-		});
+	api.channels.create(req).then(() => {
+		reseedChannels.run();
+	});
 }
 
 export function update(id: string, req: { name: string; topic: string | null }): void {
-	api.channels
-		.update(id, req)
-		.then((c) => {
-			state.byId.set(c.id, c);
-			rebuildOrdered();
-		});
+	const epoch = currentSessionEpoch();
+	api.channels.update(id, req).then((c) => {
+		if (!isCurrentSessionEpoch(epoch)) {
+			throw new Error('stale session');
+		}
+		state.byId.set(c.id, c);
+		rebuildOrdered();
+	});
 }
 
 export function changePosition(
 	id: string,
 	req: { old_position: number; new_position: number }
 ): void {
-	api.channels
-		.changePosition(id, req)
-		.then((c) => {
-			state.byId.set(c.id, c);
-			rebuildOrdered();
-		});
+	const epoch = currentSessionEpoch();
+	api.channels.changePosition(id, req).then((c) => {
+		if (!isCurrentSessionEpoch(epoch)) {
+			throw new Error('stale session');
+		}
+		state.byId.set(c.id, c);
+		rebuildOrdered();
+	});
 }
 
 // Centralized local drop of a channel (REST delete + WS channel_delete both
@@ -105,11 +107,13 @@ export function dropChannelLocal(id: string): void {
 }
 
 export function remove(id: string): void {
-	api.channels
-		.remove(id)
-		.then(() => {
-			dropChannelLocal(id);
-		});
+	const epoch = currentSessionEpoch();
+	api.channels.remove(id).then(() => {
+		if (!isCurrentSessionEpoch(epoch)) {
+			throw new Error('stale session');
+		}
+		dropChannelLocal(id);
+	});
 }
 
 function rebuildOrdered(): void {
@@ -152,7 +156,7 @@ export function setChannelUserSetting(
 		return;
 	}
 	api.channels.setChannelUserSetting(channelId, userId, {
-		notification_settings,
+		notification_settings
 	});
 }
 
@@ -239,7 +243,7 @@ export function handleMessage(message: WsMessage): void {
 		content: message.content,
 		author_id: message.author_id,
 		author_username: null,
-		created_at: message.created_at,
+		created_at: message.created_at
 	};
 	state.byId.set(channel.id, next);
 

@@ -11,13 +11,13 @@ import {
 	auth,
 	ApiError,
 	setOnUnauthorized,
-	clearOnUnauthorized,
+	clearOnUnauthorized
 } from '../src/lib/api';
 
 // Provide a minimal window so buildUrl() resolves same-origin URLs in node.
 // Stubbed per-test (afterEach un-stubs it via unstubAllGlobals).
 const windowStub = {
-	location: { origin: 'http://localhost:3000' },
+	location: { origin: 'http://localhost:3000' }
 } as unknown as Window;
 
 beforeEach(() => {
@@ -45,12 +45,10 @@ function installFetch(opts: FetchOpts): { calls: FetchCall[] } {
 		if (opts.status === 204) {
 			return { status: 204 } as unknown as Response;
 		}
-		const body =
-			opts.text ??
-			(opts.body === undefined ? '' : JSON.stringify(opts.body));
+		const body = opts.text ?? (opts.body === undefined ? '' : JSON.stringify(opts.body));
 		return new Response(body, {
 			status: opts.status,
-			headers: { 'content-type': opts.contentType ?? 'application/json' },
+			headers: { 'content-type': opts.contentType ?? 'application/json' }
 		});
 	});
 	vi.stubGlobal('fetch', mock);
@@ -75,7 +73,10 @@ async function expectApiError(
 }
 
 // RFC 7807 problem body helper.
-function problem(status: number, detail: string): {
+function problem(
+	status: number,
+	detail: string
+): {
 	type: string;
 	title: string;
 	status: number;
@@ -87,7 +88,7 @@ function problem(status: number, detail: string): {
 		title: 'Problem',
 		status,
 		detail,
-		instance: null,
+		instance: null
 	};
 }
 
@@ -117,8 +118,8 @@ describe('200 / raw responses', () => {
 				created_at: '2024-01-01T00:00:00Z',
 				role_count: 0,
 				member_count: 0,
-				channel_count: 0,
-			},
+				channel_count: 0
+			}
 		});
 		const res = await server.get();
 		expect(res).not.toBeNull();
@@ -176,7 +177,7 @@ describe('X-Request-ID', () => {
 	it('sends an X-Request-ID header and echoes it in the thrown error', async () => {
 		const { calls } = installFetch({
 			status: 404,
-			body: problem(404, 'Not found'),
+			body: problem(404, 'Not found')
 		});
 		let sent: string | null = null;
 		await expectApiError(
@@ -186,8 +187,7 @@ describe('X-Request-ID', () => {
 			}
 		);
 		const call = calls[0];
-		const headerId =
-			(call.init.headers as Record<string, string>)['X-Request-ID'];
+		const headerId = (call.init.headers as Record<string, string>)['X-Request-ID'];
 		expect(headerId).toBeDefined();
 		// The same id is propagated into the ApiError.
 		expect(headerId).toBe(sent);
@@ -222,7 +222,7 @@ describe('query serialization', () => {
 	it('serializes since + last_id into the request URL', async () => {
 		const { calls } = installFetch({
 			status: 200,
-			body: { users: [], has_more: false },
+			body: { users: [], has_more: false }
 		});
 		await users.list({ since: '2024-01-01T00:00:00Z', last_id: 'abc' });
 		const url = new URL(calls[0].url);
@@ -234,7 +234,7 @@ describe('query serialization', () => {
 	it('omits undefined query values', async () => {
 		const { calls } = installFetch({
 			status: 200,
-			body: { users: [], has_more: false },
+			body: { users: [], has_more: false }
 		});
 		await users.list({ since: undefined, last_id: undefined });
 		const url = new URL(calls[0].url);
