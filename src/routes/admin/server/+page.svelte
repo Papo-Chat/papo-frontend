@@ -126,6 +126,10 @@
 		background: rgba(255, 255, 255, 0.32);
 		border: 1px solid rgba(255, 255, 255, 0.5);
 	}
+	[data-theme="dark"] .stat{
+		background: rgba(25,51,68,.6);
+		border-color: rgba(185,224,250,.14);
+	}
 	.stat span{
 		display: block;
 		font-size: 10px;

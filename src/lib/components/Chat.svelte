@@ -2,7 +2,15 @@
 	import type { MessageWithAttachment } from '$lib/types';
 	import Message from './Message.svelte';
 
-	let { messages } = $props<{ messages: MessageWithAttachment[] }>();
+	let {
+		messages,
+		onAddReaction,
+		searchActive = false
+	} = $props<{
+		messages: MessageWithAttachment[];
+		onAddReaction?: (messageId: string, emoji: string) => void;
+		searchActive?: boolean;
+	}>();
 
 	let listEl: HTMLElement | null = null;
 
@@ -23,11 +31,11 @@
 <div class="chat" bind:this={listEl}>
 	{#if messages.length === 0}
 		<div class="chat-empty">
-			<p>Nenhuma mensagem por enquanto.</p>
+			<p>{searchActive ? 'Nada encontrado.' : 'Nenhuma mensagem por enquanto.'}</p>
 		</div>
 	{:else}
 		{#each messages as m (m.id)}
-			<Message message={m} />
+			<Message message={m} onAddReaction={onAddReaction} />
 		{/each}
 	{/if}
 </div>

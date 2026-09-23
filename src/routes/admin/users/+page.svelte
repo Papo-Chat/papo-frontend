@@ -199,6 +199,9 @@
 	.user-row:hover {
 		background: rgba(255, 255, 255, 0.32);
 	}
+	[data-theme="dark"] .user-row:hover {
+		background: rgba(119,194,235,.085);
+	}
 	.user-info {
 		display: flex;
 		flex-direction: column;
@@ -222,6 +225,10 @@
 		font: inherit;
 		font-size: 12px;
 		cursor: pointer;
+	}
+	[data-theme="dark"] .user-role-select {
+		border-color: rgba(185,224,250,.14);
+		background: rgba(25,51,68,.6);
 	}
 	.role-chips {
 		display: flex;

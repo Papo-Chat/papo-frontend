@@ -117,6 +117,10 @@
 		font: inherit;
 		cursor: pointer;
 	}
+	[data-theme="dark"] .audit-filter {
+		border-color: rgba(185,224,250,.14);
+		background: rgba(25,51,68,.6);
+	}
 	.action-badge {
 		font-size: 11px;
 		font-weight: 700;
@@ -141,6 +145,18 @@
 	.action-badge.emoji {
 		background: rgba(239, 248, 252, 0.5);
 		color: var(--muted);
+	}
+	[data-theme="dark"] .action-badge {
+		background: rgba(119,194,235,.14);
+	}
+	[data-theme="dark"] .action-badge.channel {
+		color: #88d7ff;
+	}
+	[data-theme="dark"] .action-badge.role {
+		color: #5fe08f;
+	}
+	[data-theme="dark"] .action-badge.emoji {
+		background: rgba(119,194,235,.14);
 	}
 	.empty {
 		color: var(--muted-soft);

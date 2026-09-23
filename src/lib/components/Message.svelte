@@ -7,7 +7,13 @@
 	import Reactions from './Reactions.svelte';
 	import PreviewCard from './PreviewCard.svelte';
 
-	let { message } = $props<{ message: MessageWithAttachment }>();
+	let {
+		message,
+		onAddReaction
+	} = $props<{
+		message: MessageWithAttachment;
+		onAddReaction?: (messageId: string, emoji: string) => void;
+	}>();
 
 	const author = $derived(userById(message.author_id ?? ''));
 	const name = $derived(author?.nickname || author?.username || 'Usuário');
@@ -41,12 +47,11 @@
 			{/each}
 		{/if}
 
-		{#if message.reactions.length}
-			<Reactions
-				messageId={message.id}
-				reactions={message.reactions}
-				userReactions={message.user_reactions}
-			/>
-		{/if}
+		<Reactions
+			messageId={message.id}
+			reactions={message.reactions}
+			userReactions={message.user_reactions}
+			onAddReaction={(emoji) => onAddReaction?.(message.id, emoji)}
+		/>
 	</div>
 </article>

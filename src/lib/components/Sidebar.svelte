@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import type { Channel } from '$lib/types';
 	import { state } from '$lib/store/ui.svelte';
 	import { sampleChannels, sampleServer, sampleUsers } from '$lib/sample';
@@ -43,13 +44,17 @@
 		onSelectChannel(id);
 	}
 
+	// Atalhos: only route-related shortcuts are kept (channels are sample
+	// data, so the mockup channel/mockup buttons were dropped).
 	const shortcuts = [
-		{ icon: 'star', variant: 'duotone' as const, label: 'Favoritos' },
-		{ icon: 'coffee', variant: 'light' as const, label: 'Lounge' },
-		{ icon: 'game-controller', variant: 'light' as const, label: 'Jogos' },
-		{ icon: 'palette', variant: 'light' as const, label: 'Design' },
-		{ icon: 'gear', variant: 'light' as const, label: 'Ajustes' }
+		{ to: '/admin', icon: 'shield-check', variant: 'light' as const, label: 'Administração' },
+		{ to: '/user/settings', icon: 'gear', variant: 'light' as const, label: 'Ajustes' }
 	];
+
+	function navigateShortcut(to: string): void {
+		state.channelsDrawerOpen = false;
+		goto(to);
+	}
 </script>
 
 <aside class="sidebar {drawerOpen ? 'open' : ''}">
@@ -99,6 +104,7 @@
 				<button
 					class="mobile-rail-action"
 					aria-label={s.label}
+					on:click={() => navigateShortcut(s.to)}
 				>
 					<span class="mobile-rail-icon">
 						<Icon name={s.icon} variant={s.variant} />

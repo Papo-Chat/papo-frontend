@@ -41,6 +41,11 @@
 		Entrar
 		<i class="ph-light ph-arrow-right"></i>
 	</button>
+
+	<div class="auth-register">
+		<span>Não tem conta?</span>
+		<a href="/auth/register">Registre-se</a>
+	</div>
 </div>
 
 <div class="auth-bottom">

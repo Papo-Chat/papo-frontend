@@ -350,6 +350,23 @@
 	cursor: not-allowed;
 	transform: none;
 }
+.auth-register{
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 8px;
+	margin-top: 14px;
+	font-size: 12px;
+	color: #6d8391;
+}
+.auth-register a{
+	color: var(--link);
+	font-weight: 700;
+	text-decoration: none;
+}
+.auth-register a:hover{
+	text-decoration: underline;
+}
 .auth-bottom{
 	display: flex;
 	align-items: center;

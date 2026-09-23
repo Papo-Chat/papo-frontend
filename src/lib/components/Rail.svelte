@@ -1,15 +1,10 @@
 <script lang="ts">
-	// Leftmost vertical rail. Static navigation (matches the mockup). The
-	// brand orb is the current server; the rest are quick shortcuts.
+	// Leftmost vertical rail. The brand orb is the current server; only
+	// route-related shortcuts are kept (channels are sample data, so the
+	// mockup channel/mockup buttons were dropped).
+	import { goto } from '$app/navigation';
 	import { sampleServer } from '$lib/sample';
 	import Icon from './Icon.svelte';
-
-	const items = [
-		{ key: 'favoritos', icon: 'star', variant: 'duotone', title: 'Favoritos', muted: false },
-		{ key: 'lounge', icon: 'coffee', variant: 'light', title: 'Lounge', muted: true },
-		{ key: 'jogos', icon: 'game-controller', variant: 'light', title: 'Jogos', muted: true },
-		{ key: 'design', icon: 'palette', variant: 'light', title: 'Design', muted: true }
-	] as const;
 </script>
 
 <aside class="rail">
@@ -17,15 +12,14 @@
 		<Icon name="users-three" variant="duotone" />
 	</div>
 
-	{#each items as item}
-		<button
-			class="rail-btn {item.muted ? 'muted' : ''}"
-			title={item.title}
-			aria-label={item.title}
-		>
-			<Icon name={item.icon} variant={item.variant} />
-		</button>
-	{/each}
+	<button
+		class="rail-btn"
+		title="Administração"
+		aria-label="Administração"
+		on:click={() => goto('/admin')}
+	>
+		<Icon name="shield-check" variant="light" />
+	</button>
 
 	<div class="rail-spacer"></div>
 
@@ -33,6 +27,7 @@
 		class="rail-btn muted"
 		title="Configurações"
 		aria-label="Configurações"
+		on:click={() => goto('/user/settings')}
 	>
 		<Icon name="gear" variant="light" />
 	</button>

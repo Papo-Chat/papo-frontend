@@ -237,6 +237,9 @@
 	.channel-row:hover{
 		background: rgba(255, 255, 255, 0.3);
 	}
+	[data-theme="dark"] .channel-row:hover{
+		background: rgba(119,194,235,.085);
+	}
 	.channel-row.selected{
 		background: rgba(100, 196, 250, 0.16);
 		box-shadow: inset 0 0 0 1px rgba(100, 196, 250, 0.4);
@@ -264,6 +267,12 @@
 	}
 	.type-badge.category{
 		background: rgba(239, 248, 252, 0.5);
+	}
+	[data-theme="dark"] .type-badge{
+		background: rgba(119,194,235,.14);
+	}
+	[data-theme="dark"] .type-badge.category{
+		background: rgba(119,194,235,.18);
 	}
 	.channel-row-type{
 		font-size: 10px;

@@ -355,10 +355,44 @@
 .title-wrap{
 	min-width: 0;
 }
-.title-wrap h2{
+.title-row{
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.title-row h2{
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 	margin: 0;
 	font-size: 22px;
 	letter-spacing: -.02em;
+}
+.channel-admin-btn{
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+}
+.channel-admin-btn:hover{
+	transform: translateY(-2px);
+	background: rgba(255,255,255,.74);
+	box-shadow:
+		inset 0 1px 0 rgba(255,255,255,.95),
+		0 10px 20px rgba(24,81,119,.13),
+		0 0 20px rgba(90,200,250,.10);
+}
+.channel-admin-btn:active{
+	transform: translateY(0) scale(.97);
+}
+.channel-admin-btn i{
+	font-size: 15px;
+	line-height: 1;
 }
 .title-wrap p{
 	margin: 2px 0 0;
@@ -420,6 +454,19 @@
 }
 .header-icon-btn i{
 	font-size: 18px;
+}
+
+/* Members button is only needed on mobile/desktop-laptop where the members
+ * column is hidden (<= 1220px). On the full layout the column is always
+ * visible, so the button is dropped. Match `.pill.circle` specificity so it
+ * overrides the circle pill's `display: grid`. */
+.pill.circle.members-btn{
+	display: none;
+}
+@media (max-width: 1220px){
+	.pill.circle.members-btn{
+		display: grid;
+	}
 }
 
 /* ─────────────────────────────────────────────────────────────────────
@@ -2153,8 +2200,10 @@ button.name:focus-visible{
 	--banner-h: 150px;
 	--avatar-size: 92px;
 	position: absolute;
-	right: 24px;
-	bottom: 24px;
+	/* Desktop: centered on screen. Mobile (<=700px) overrides to a bottom
+	 * sheet. */
+	top: 50%;
+	left: 50%;
 	width: min(380px, calc(100vw - 32px));
 	z-index: 220;
 	border: 1px solid rgba(255,255,255,.72);
@@ -2170,10 +2219,10 @@ button.name:focus-visible{
 		0 8px 22px rgba(11,60,96,.08);
 	backdrop-filter: blur(18px) saturate(150%);
 	-webkit-backdrop-filter: blur(18px) saturate(150%);
-	transform-origin: bottom right;
+	transform-origin: center;
 	opacity: 0;
 	pointer-events: none;
-	transform: translateY(12px) scale(.98);
+	transform: translate(-50%, -50%) translateY(12px) scale(.98);
 	transition:
 		opacity .24s ease,
 		transform .28s var(--ease);
@@ -2181,7 +2230,7 @@ button.name:focus-visible{
 .profile-card.open{
 	opacity: 1;
 	pointer-events: auto;
-	transform: translateY(0) scale(1);
+	transform: translate(-50%, -50%) translateY(0) scale(1);
 }
 .profile-card::before{
 	content: "";
@@ -2356,6 +2405,7 @@ button.name:focus-visible{
 	.profile-card{
 		--banner-h: 120px;
 		--avatar-size: 80px;
+		top: auto;
 		left: 0;
 		right: 0;
 		bottom: 0;
@@ -2994,6 +3044,7 @@ button.name:focus-visible{
 	}
 	.admin-layout{
 		grid-template-columns: 1fr;
+		grid-template-rows: auto 1fr;
 	}
 	.admin-nav{
 		display: flex;
@@ -3070,4 +3121,29 @@ button.name:focus-visible{
 }
 [data-theme="dark"] .emoji-cell{
 	background: rgba(119,194,235,.06);
+}
+[data-theme="dark"] .admin-back:hover{
+	background: rgba(119,194,235,.085);
+	border-color: rgba(174,221,248,.10);
+}
+[data-theme="dark"] .admin-nav .dash-tab:hover{
+	background: rgba(119,194,235,.085);
+}
+[data-theme="dark"] .admin-row:hover{
+	background: rgba(119,194,235,.085);
+}
+[data-theme="dark"] .admin-stat + .admin-stat{
+	border-top-color: rgba(186,226,251,.14);
+}
+[data-theme="dark"] .admin-btn.ghost{
+	border-color: rgba(185,224,250,.14);
+}
+[data-theme="dark"] .admin-btn.ghost:hover{
+	background: rgba(119,194,235,.085);
+}
+[data-theme="dark"] .emoji-cell{
+	border-color: rgba(185,224,250,.14);
+}
+[data-theme="dark"] .emoji-cell:hover{
+	box-shadow: 0 8px 18px rgba(0,0,0,.22);
 }
