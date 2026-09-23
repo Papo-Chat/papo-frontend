@@ -1,0 +1,168 @@
+/* ───────────────────────────────────────────────────────
+   Papo — Design tokens
+   Light mode is the default (:root). Dark mode switches
+   via [data-theme="dark"] on <html> (set by the theme store).
+   ─────────────────────────────────────────────────────── */
+
+:root {
+	/* motion + typography */
+	--ease: cubic-bezier(.2,.8,.2,1);
+	--font: "Segoe UI", Inter, system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+
+	/* accents */
+	--blue: #0a84ff;
+	--blue-2: #64d2ff;
+	--cyan: #5ac8fa;
+	--green: #30d158;
+	--online: #24c982;
+	--gold: #e7a80b;
+
+	/* text (light) */
+	--text: #12202d;
+	--text-strong: #132b3b;
+	--muted: #6f8190;
+	--muted-soft: #8493a0;
+	--link: #176dcc;
+	--link-muted: #456375;
+
+	/* line + glass (light) */
+	--line: rgba(90,140,175,.18);
+	--line-strong: rgba(255,255,255,.58);
+	--glass: rgba(245,251,255,.60);
+	--glass-strong: rgba(248,252,255,.78);
+	--glass-soft: rgba(225,242,252,.45);
+
+	/* shadows (light) */
+	--shadow-lg: 0 24px 70px rgba(4,40,74,.22), 0 10px 26px rgba(4,65,112,.12);
+	--shadow-md: 0 12px 30px rgba(14,69,108,.14), 0 4px 12px rgba(16,78,118,.08);
+	--shadow-sm: 0 6px 16px rgba(16,72,108,.10);
+
+	/* radius */
+	--radius-xl: 34px;
+	--radius-lg: 24px;
+	--radius-md: 16px;
+	--radius-sm: 12px;
+}
+
+[data-theme="dark"] {
+	/* text (dark) */
+	--text: #edf7ff;
+	--text-strong: #edf7ff;
+	--muted: #98afbf;
+	--muted-soft: #9bb0be;
+	--link: #88d7ff;
+	--link-muted: #99afbd;
+
+	/* line + glass (dark) */
+	--line: rgba(186,226,251,.09);
+	--line-strong: rgba(184,225,252,.18);
+	--glass: rgba(29,55,73,.38);
+	--glass-strong: rgba(20,42,58,.60);
+	--glass-soft: rgba(9,31,47,.24);
+
+	/* shadows (dark) */
+	--shadow-lg: 0 30px 88px rgba(0,0,0,.45), 0 10px 26px rgba(0,0,0,.20);
+	--shadow-md: 0 14px 34px rgba(0,0,0,.30);
+	--shadow-sm: 0 6px 16px rgba(0,0,0,.22);
+}
+
+/* ───────────────────────────────────────────────────────
+   Base
+   ─────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after{
+	box-sizing: border-box;
+}
+
+html,
+body{
+	height: 100%;
+	margin: 0;
+}
+
+body{
+	color: var(--text);
+	font: 14px/1.42 var(--font);
+	overflow: hidden;
+	overscroll-behavior: none;
+	transition: background-color .35s ease;
+}
+
+/* ───────────────────────────────────────────────────────
+   Background — light
+   ─────────────────────────────────────────────────────── */
+
+body{
+	background:
+		radial-gradient(circle at 74% 14%, rgba(88,255,218,.24), transparent 24%),
+		radial-gradient(circle at 12% 78%, rgba(0,132,255,.35), transparent 28%),
+		radial-gradient(circle at 46% 112%, rgba(191,90,242,.18), transparent 34%),
+		linear-gradient(125deg,#062f75 0%,#0080ba 48%,#0a8067 100%);
+}
+
+body::before,
+body::after{
+	content: "";
+	position: fixed;
+	inset: -30%;
+	pointer-events: none;
+	z-index: 0;
+	opacity: .55;
+	filter: blur(18px);
+	animation: ambientFloat 18s ease-in-out infinite alternate;
+}
+
+body::before{
+	background:
+		conic-gradient(from 200deg at 50% 50%,
+			transparent,
+			rgba(255,255,255,.08),
+			transparent 20%,
+			rgba(95,211,255,.14),
+			transparent 45%,
+			rgba(97,255,199,.12),
+			transparent 75%);
+}
+
+body::after{
+	background:
+		repeating-linear-gradient(115deg,
+			transparent 0 64px,
+			rgba(255,255,255,.045) 68px 76px,
+			transparent 80px 140px);
+	transform: rotate(180deg);
+	animation-duration: 26s;
+}
+
+@keyframes ambientFloat{
+	from{ transform: translate3d(-1.5%,0,0) scale(1.02); }
+	to{   transform: translate3d(1.5%,-1%,0) scale(1.05); }
+}
+
+/* ───────────────────────────────────────────────────────
+   Background — dark
+   ─────────────────────────────────────────────────────── */
+
+[data-theme="dark"] body{
+	background:
+		radial-gradient(circle at 76% 12%, rgba(0,235,198,.14), transparent 25%),
+		radial-gradient(circle at 10% 82%, rgba(0,120,255,.28), transparent 31%),
+		radial-gradient(circle at 49% 112%, rgba(165,82,255,.12), transparent 34%),
+		linear-gradient(130deg,#020b16 0%,#061d32 48%,#073228 100%);
+}
+
+/* ───────────────────────────────────────────────────────
+   Reduced motion
+   ─────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce){
+	*,
+	*::before,
+	*::after{
+		animation: none !important;
+		transition: none !important;
+		scroll-behavior: auto !important;
+	}
+}

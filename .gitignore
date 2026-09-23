@@ -9,3 +9,4 @@ node_modules
 vite.config.ts.timestamp-*
 opencode.json
 AGENTS.md
+.playwright-mcp
