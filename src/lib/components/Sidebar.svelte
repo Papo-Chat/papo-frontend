@@ -4,6 +4,7 @@
 	import { state } from '$lib/store/ui.svelte';
 	import { sampleChannels, sampleServer, sampleUsers } from '$lib/sample';
 	import Icon from './Icon.svelte';
+	import ServerIcon from './ServerIcon.svelte';
 	import ChannelItem from './ChannelItem.svelte';
 	import MobilePanelHead from './MobilePanelHead.svelte';
 
@@ -47,7 +48,7 @@
 	// Atalhos: only route-related shortcuts are kept (channels are sample
 	// data, so the mockup channel/mockup buttons were dropped).
 	const shortcuts = [
-		{ to: '/admin', icon: 'shield-check', variant: 'light' as const, label: 'Administração' },
+		{ to: '/admin/server', icon: 'shield-check', variant: 'light' as const, label: 'Administração' },
 		{ to: '/user/settings', icon: 'gear', variant: 'light' as const, label: 'Ajustes' }
 	];
 
@@ -65,8 +66,13 @@
 	/>
 
 	<div class="community">
-		<div class="community-logo">
-			<Icon name="users-three" variant="duotone" />
+		<div class="community-logo" aria-hidden="true">
+			<ServerIcon
+				iconBlob={sampleServer.icon_blob}
+				iconFormat={sampleServer.icon_format}
+				name={sampleServer.name}
+				size={54}
+			/>
 		</div>
 		<div>
 			<h1>{sampleServer.name}</h1>

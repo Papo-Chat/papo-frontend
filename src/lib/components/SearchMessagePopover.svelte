@@ -82,7 +82,7 @@
 
 		<div class="popover-body">
 			<input
-				class="search-input"
+				class="admin-input"
 				type="text"
 				placeholder="Pesquisar mensagens…"
 				bind:this={inputEl}

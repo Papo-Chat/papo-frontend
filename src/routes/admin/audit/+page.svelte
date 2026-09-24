@@ -1,22 +1,26 @@
 <script lang="ts">
-	// Audit log + filters. Demo only — no API wiring.
+	// Audit log. Demo only — no API wiring.
+	// A auditoria é uma busca (não um filtro): os primeiros 50 registros
+	// vêm direto; a pesquisa, no futuro, acionará um endpoint.
 	import { sampleAuditLogs } from '$lib/sample';
 	import type { AuditLogEntry } from '$lib/types';
 	import Icon from '$lib/components/Icon.svelte';
 
-	const ACTIONS = [
-		{ value: '', label: 'Todas' },
-		{ value: 'channel_create', label: 'Canal criado' },
-		{ value: 'role_create', label: 'Papel criado' },
-		{ value: 'user_ban', label: 'Usuário banido' },
-		{ value: 'emoji_create', label: 'Emoji criado' }
-	];
+	let search = $state('');
 
-	let filter = $state('');
+	function computeFiltered(): AuditLogEntry[] {
+		if (!search) {
+			return sampleAuditLogs.slice(0, 50);
+		}
+		const q = search.toLowerCase();
+		return sampleAuditLogs.filter((l) =>
+			[l.actor_username, l.action, l.entity_type, l.target_user_id ?? ''].some(
+				(v) => v.toLowerCase().includes(q)
+			)
+		);
+	}
 
-	const filtered = $derived(
-		filter ? sampleAuditLogs.filter((l) => l.action === filter) : [...sampleAuditLogs]
-	);
+	const filtered = $derived(computeFiltered());
 
 	function timeAgo(iso: string): string {
 		const diff = Date.now() - new Date(iso).getTime();
@@ -34,16 +38,12 @@
 	<header class="audit-head">
 		<h2>Auditoria</h2>
 		<div class="audit-filters">
-			<select
-				class="audit-filter"
-				value={filter}
-				aria-label="Filtrar por ação"
-				onchange={(e) => (filter = (e.target as HTMLSelectElement).value)}
-			>
-				{#each ACTIONS as a (a.value)}
-					<option value={a.value}>{a.label}</option>
-				{/each}
-			</select>
+			<input
+				class="admin-input filter-input"
+				placeholder="Pesquisar…"
+				bind:value={search}
+				aria-label="Pesquisar auditoria"
+			/>
 		</div>
 	</header>
 
@@ -94,6 +94,19 @@
 <style>
 	.audit-page {
 		padding: 4px 0 8px;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+	}
+	.audit-page > .admin-card {
+		flex: 1 1 auto;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+	}
+	.audit-page > .admin-card .admin-card-body {
+		flex: 1;
+		min-height: 0;
 	}
 	.audit-head {
 		display: flex;
@@ -107,6 +120,14 @@
 		margin: 0;
 		font-size: 20px;
 	}
+	.audit-filters {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.audit-filters .filter-input {
+		width: 160px;
+	}
 	.audit-filter {
 		height: 40px;
 		border-radius: 12px;
@@ -117,7 +138,7 @@
 		font: inherit;
 		cursor: pointer;
 	}
-	[data-theme="dark"] .audit-filter {
+	:global([data-theme="dark"]) .audit-filter {
 		border-color: rgba(185,224,250,.14);
 		background: rgba(25,51,68,.6);
 	}
@@ -146,17 +167,18 @@
 		background: rgba(239, 248, 252, 0.5);
 		color: var(--muted);
 	}
-	[data-theme="dark"] .action-badge {
+	:global([data-theme="dark"]) .action-badge {
 		background: rgba(119,194,235,.14);
 	}
-	[data-theme="dark"] .action-badge.channel {
+	:global([data-theme="dark"]) .action-badge.channel {
 		color: #88d7ff;
 	}
-	[data-theme="dark"] .action-badge.role {
+	:global([data-theme="dark"]) .action-badge.role {
 		color: #5fe08f;
 	}
-	[data-theme="dark"] .action-badge.emoji {
+	:global([data-theme="dark"]) .action-badge.emoji {
 		background: rgba(119,194,235,.14);
+		color: #c9d9e8;
 	}
 	.empty {
 		color: var(--muted-soft);

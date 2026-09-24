@@ -9,6 +9,11 @@
 	--ease: cubic-bezier(.2,.8,.2,1);
 	--font: "Segoe UI", Inter, system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
 
+	/* Native controls (select dropdowns, scrollbars, form widgets) follow
+	 * the app theme instead of the OS, so the expanded dropdowns stay
+	 * legible and consistent in dark mode. */
+	color-scheme: light;
+
 	/* accents */
 	--blue: #0a84ff;
 	--blue-2: #64d2ff;
@@ -47,6 +52,7 @@
 [data-theme="dark"] {
 	/* text (dark) */
 	--text: #edf7ff;
+	color-scheme: dark;
 	--text-strong: #edf7ff;
 	--muted: #98afbf;
 	--muted-soft: #9bb0be;
@@ -88,6 +94,14 @@ body{
 	overflow: hidden;
 	overscroll-behavior: none;
 	transition: background-color .35s ease;
+	/* Center the shell vertically so it stays anchored to top AND bottom
+	 * (same 18px margin) when the viewport is taller than it (e.g. F11 full
+	 * screen). The .theme-global wrapper is empty (its child is fixed), so it
+	 * doesn't affect the layout. */
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
 }
 
 /* ───────────────────────────────────────────────────────

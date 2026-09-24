@@ -34,7 +34,7 @@
 	const PERMS = [
 		{ key: 'manage_server' as const, label: 'Gerenciar servidor' },
 		{ key: 'manage_channels' as const, label: 'Gerenciar canais' },
-		{ key: 'manage_roles' as const, label: 'Gerenciar papéis' },
+		{ key: 'manage_roles' as const, label: 'Gerenciar Roles' },
 		{ key: 'ban_members' as const, label: 'Expulsar membros' },
 		{ key: 'pin_message' as const, label: 'Fixar mensagens' },
 		{ key: 'everyone_message' as const, label: 'Mensagem para todos' },
@@ -49,7 +49,7 @@
 <div class="role-edit-page">
 	{#if role}
 		<header class="role-head">
-			<a class="admin-back" href="/admin/roles" aria-label="Voltar aos papéis">
+			<a class="admin-back" href="/admin/roles" aria-label="Voltar aos Roles">
 				<Icon name="arrow-left" variant="light" />
 				Voltar
 			</a>
@@ -118,7 +118,7 @@
 		</div>
 	{:else}
 		<div class="empty">
-			Papel não encontrado. <a href="/admin/roles">Voltar aos papéis</a>
+			Role não encontrado. <a href="/admin/roles">Voltar aos Roles</a>
 		</div>
 	{/if}
 </div>

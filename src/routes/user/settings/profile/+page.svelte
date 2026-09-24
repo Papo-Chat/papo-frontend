@@ -106,7 +106,7 @@
 					id="pf-desc"
 					class="admin-textarea"
 					bind:value={description}
-					placeholder="Sobre você, seus interesses, seu papel no AeroClub…"
+					placeholder="Sobre você, seus interesses, seu Role no AeroClub…"
 				></textarea>
 			</div>
 			<div class="admin-field">
@@ -246,6 +246,22 @@
 		font-weight: 700;
 		color: #24c982;
 	}
+	:global([data-theme="dark"]) .profile-edit-card {
+		background:
+			radial-gradient(circle at 12% -18%, rgba(116, 207, 255, .10), transparent 40%),
+			linear-gradient(145deg, rgba(25, 51, 68, .86), rgba(12, 33, 48, .80));
+		border-color: rgba(182, 224, 250, .14);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, .10),
+			0 10px 22px rgba(0, 0, 0, .24);
+	}
+	:global([data-theme="dark"]) .banner-reset {
+		color: var(--text);
+		background: rgba(69, 91, 105, .48);
+		border-color: rgba(185, 225, 249, .14);
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
+	}
+
 	@media (max-width: 640px) {
 		.profile-edit-card {
 			grid-template-columns: 1fr;

@@ -1,11 +1,37 @@
 <script lang="ts">
 	// Server creation / edit. Demo only — no API wiring.
 	import { sampleServer } from '$lib/sample';
+	import { blobToUrl } from '$lib/utils/media';
 	import Icon from '$lib/components/Icon.svelte';
+	import ServerIcon from '$lib/components/ServerIcon.svelte';
 
 	let name = $state(sampleServer.name);
 	let public_ = $state(sampleServer.public);
+	let password = $state('');
+	let iconBlob = $state('');
+	let iconFormat = $state('');
 	let saved = $state(false);
+
+	function onIconSelect(e: Event): void {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		const reader = new FileReader();
+		reader.onload = () => {
+			const dataUrl = reader.result;
+			if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/')) {
+				const idx = dataUrl.indexOf(',');
+				iconBlob = idx >= 0 ? dataUrl.slice(idx + 1) : '';
+				iconFormat = file.type.split('/')[1]?.toUpperCase() ?? 'PNG';
+			}
+		};
+		reader.readAsDataURL(file);
+	}
+
+	function resetIcon(): void {
+		iconBlob = '';
+		iconFormat = '';
+	}
 
 	function save(): void {
 		// Demo: no API.
@@ -17,7 +43,13 @@
 	<div class="server-card">
 		<div class="server-card-head">
 			<div class="server-icon" aria-hidden="true">
-				<Icon name="server" variant="duotone" size={26} />
+				<ServerIcon
+					iconBlob={iconBlob}
+					iconFormat={iconFormat}
+					name={name}
+					size={44}
+					dark
+				/>
 			</div>
 			<h2>{name || 'Novo servidor'}</h2>
 		</div>
@@ -32,7 +64,7 @@
 				<strong>{sampleServer.channel_count}</strong>
 			</div>
 			<div class="stat">
-				<span>Papéis</span>
+				<span>Roles</span>
 				<strong>{sampleServer.role_count}</strong>
 			</div>
 		</div>
@@ -60,6 +92,42 @@
 						value={sampleServer.owner_username ?? ''}
 						disabled
 					/>
+				</div>
+				<div class="admin-field">
+					<label for="sv-password">Senha</label>
+					<input
+						id="sv-password"
+						class="admin-input"
+						type="password"
+						bind:value={password}
+						placeholder="Senha do servidor"
+					/>
+					<span class="hint">Mín. 8 caracteres, 1 maiúscula + 1 especial</span>
+				</div>
+				<div class="admin-field">
+					<label for="sv-icon">Ícone</label>
+					<div class="icon-field-row">
+						<input
+							id="sv-icon"
+							class="admin-input icon-file"
+							type="file"
+							accept="image/*"
+							onchange={onIconSelect}
+						/>
+						<button class="icon-reset" onclick={resetIcon} aria-label="Remover ícone">
+							<Icon name="x" variant="light" size={14} />
+						</button>
+					</div>
+					{#if iconBlob}
+						<div class="icon-preview">
+							<img src={blobToUrl(iconBlob, iconFormat)} alt="Pré-visualização do ícone" />
+						</div>
+					{:else}
+						<div class="icon-preview empty">
+							<Icon name="image" variant="duotone" size={20} />
+							Sem ícone
+						</div>
+					{/if}
 				</div>
 				<label class="admin-checkbox">
 					<input type="checkbox" bind:checked={public_} />
@@ -108,6 +176,7 @@
 		border-radius: 12px;
 		display: grid;
 		place-items: center;
+		overflow: hidden;
 		background: linear-gradient(145deg, #51a8f0, #0b71d3);
 		box-shadow: 0 8px 18px rgba(11,113,211,.25);
 	}
@@ -126,7 +195,7 @@
 		background: rgba(255, 255, 255, 0.32);
 		border: 1px solid rgba(255, 255, 255, 0.5);
 	}
-	[data-theme="dark"] .stat{
+	:global([data-theme="dark"]) .stat{
 		background: rgba(25,51,68,.6);
 		border-color: rgba(185,224,250,.14);
 	}

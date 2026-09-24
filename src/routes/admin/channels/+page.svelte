@@ -17,9 +17,16 @@
 	let creating = $state(false);
 	let newName = $state('');
 	let newType = $state<ChannelType>('text');
+	let filter = $state('');
 
 	const selected = $derived(
 		channels.find((c) => c.id === selectedId) ?? null
+	);
+
+	const visibleChannels = $derived(
+		filter
+			? channels.filter((c) => c.name.toLowerCase().includes(filter.toLowerCase()))
+			: channels
 	);
 
 	function select(c: Channel): void {
@@ -73,10 +80,18 @@
 <div class="channels-page">
 	<header class="channels-head">
 		<h2>Canais</h2>
-		<button class="admin-btn ghost" onclick={() => (creating = !creating)}>
-			<Icon name="plus" variant="light" />
-			Novo canal
-		</button>
+		<div class="channels-actions">
+			<input
+				class="admin-input filter-input"
+				placeholder="Filtrar canais…"
+				bind:value={filter}
+				aria-label="Filtrar canais"
+			/>
+			<button class="admin-btn" onclick={() => (creating = !creating)}>
+				<Icon name="plus" variant="light" />
+				Novo canal
+			</button>
+		</div>
 	</header>
 
 	{#if creating}
@@ -105,19 +120,19 @@
 				Lista
 			</div>
 			<div class="admin-card-body channels-list">
-				{#each channels as c (c.id)}
-					<button
-						class="channel-row {selectedId === c.id ? 'selected' : ''}"
-						aria-current={selectedId === c.id ? 'page' : undefined}
-						onclick={() => select(c)}
-					>
-						<div class="channel-row-name">
-							<span class="type-badge {c.type}">{typeLabel[c.type]}</span>
-							{c.name}
-						</div>
-						<span class="channel-row-type">{c.type}</span>
-					</button>
-					{#if c.type !== 'category'}
+				{#each visibleChannels as c (c.id)}
+					<div class="channel-row-wrap">
+						<button
+							class="channel-row {selectedId === c.id ? 'selected' : ''}"
+							aria-current={selectedId === c.id ? 'page' : undefined}
+							onclick={() => select(c)}
+						>
+							<div class="channel-row-name">
+								<span class="type-badge {c.type}">{typeLabel[c.type]}</span>
+								{c.name}
+							</div>
+							<span class="channel-row-type">{c.type}</span>
+						</button>
 						<button
 							class="channel-row-del"
 							aria-label={`Remover canal ${c.name}`}
@@ -125,7 +140,7 @@
 						>
 							<Icon name="trash" variant="light" size={14} />
 						</button>
-					{/if}
+					</div>
 				{/each}
 			</div>
 		</div>
@@ -167,7 +182,7 @@
 					{/if}
 					{#if selected.type !== 'category'}
 						<div class="admin-field permissions-block">
-							<label>Permissões por papel</label>
+							<label>Permissões por Role</label>
 							<PermissionTable perms={channelPerms} />
 						</div>
 					{/if}
@@ -193,11 +208,21 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 10px;
 		margin-bottom: 12px;
 	}
 	.channels-head h2{
 		margin: 0;
 		font-size: 20px;
+	}
+	.channels-actions{
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.channels-actions .filter-input{
+		width: 160px;
 	}
 	.new-channel{
 		display: flex;
@@ -217,9 +242,28 @@
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
+		max-height: 440px;
+		overflow-y: auto;
+		scroll-behavior: smooth;
+		scrollbar-width: thin;
+		scrollbar-color: rgba(72,130,170,.28) transparent;
+	}
+	.channels-list::-webkit-scrollbar{ width: 10px; }
+	.channels-list::-webkit-scrollbar-thumb{
+		background: rgba(72,130,170,.22);
+		border-radius: 999px;
+		border: 3px solid transparent;
+		background-clip: padding-box;
+	}
+	.channel-row-wrap{
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		width: 100%;
 	}
 	.channel-row{
-		width: 100%;
+		flex: 1;
+		min-width: 0;
 		display: grid;
 		grid-template-columns: 1fr auto;
 		align-items: center;
@@ -237,7 +281,7 @@
 	.channel-row:hover{
 		background: rgba(255, 255, 255, 0.3);
 	}
-	[data-theme="dark"] .channel-row:hover{
+	:global([data-theme="dark"]) .channel-row:hover{
 		background: rgba(119,194,235,.085);
 	}
 	.channel-row.selected{
@@ -268,10 +312,10 @@
 	.type-badge.category{
 		background: rgba(239, 248, 252, 0.5);
 	}
-	[data-theme="dark"] .type-badge{
+	:global([data-theme="dark"]) .type-badge{
 		background: rgba(119,194,235,.14);
 	}
-	[data-theme="dark"] .type-badge.category{
+	:global([data-theme="dark"]) .type-badge.category{
 		background: rgba(119,194,235,.18);
 	}
 	.channel-row-type{

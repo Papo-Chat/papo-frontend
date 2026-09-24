@@ -2,7 +2,9 @@
 	// Shared shell for admin + settings back-office pages: top bar
 	// (back + brand) + left nav + content slot.
 	import { page } from '$app/state';
+	import type { Server } from '$lib/types';
 	import Icon from '$lib/components/Icon.svelte';
+	import ServerIcon from '$lib/components/ServerIcon.svelte';
 
 	type NavItem = { to: string; label: string; icon: string };
 
@@ -12,7 +14,8 @@
 		brandIcon = 'server',
 		brandName = 'AeroClub',
 		brandSub = 'Administração',
-		nav = [] as NavItem[]
+		nav = [] as NavItem[],
+		server
 	} = $props<{
 		backUrl?: string | null;
 		backLabel?: string;
@@ -20,6 +23,7 @@
 		brandName?: string;
 		brandSub?: string;
 		nav: NavItem[];
+		server?: Server;
 	}>();
 
 	// Exact match first, then prefix (with trailing slash) so the first
@@ -42,7 +46,17 @@
 
 		<div class="admin-brand">
 			<div class="admin-brand-mark" aria-hidden="true">
-				<Icon name={brandIcon} variant="duotone" size={18} />
+				{#if server}
+					<ServerIcon
+						iconBlob={server.icon_blob}
+						iconFormat={server.icon_format}
+						name={server.name}
+						size={34}
+						dark
+					/>
+				{:else}
+					<Icon name={brandIcon} variant="duotone" size={18} />
+				{/if}
 			</div>
 			<div>
 				<span class="admin-brand-name">{brandName}</span>
@@ -61,7 +75,19 @@
 					href={item.to}
 					aria-current={item.to === current ? 'page' : undefined}
 				>
-					<Icon name={item.icon} variant="light" size={15} />
+					{#if item.icon === 'server' && server}
+						<span class="dash-tab-server-icon">
+							<ServerIcon
+								iconBlob={server.icon_blob}
+								iconFormat={server.icon_format}
+								name={server.name}
+								size={15}
+								dark={item.to === current}
+							/>
+						</span>
+					{:else}
+						<Icon name={item.icon} variant="light" size={15} />
+					{/if}
 					<span>{item.label}</span>
 				</a>
 			{/each}

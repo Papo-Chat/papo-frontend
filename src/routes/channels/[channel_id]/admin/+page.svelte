@@ -104,12 +104,12 @@
 		</div>
 	</div>
 
-	<div class="admin-card">
+	<div class="admin-card member-card">
 		<div class="admin-card-head">
 			<Icon name="users-three" variant="duotone" size={16} />
 			Membros ({sampleUsers.length})
 		</div>
-		<div class="admin-card-body">
+		<div class="admin-card-body member-list">
 			{#each sampleUsers as u (u.id)}
 				<button
 					class="admin-row member-row"
@@ -141,10 +141,24 @@
 		flex-direction: column;
 		gap: 16px;
 		padding: 4px 0 12px;
+		overflow-x: hidden;
+		overflow-y: auto;
+		scrollbar-width: thin;
+		scrollbar-color: rgba(72, 130, 170, .28) transparent;
+	}
+	.channel-admin::-webkit-scrollbar {
+		width: 10px;
+	}
+	.channel-admin::-webkit-scrollbar-thumb {
+		background: rgba(72, 130, 170, .22);
+		border-radius: 999px;
+		border: 3px solid transparent;
+		background-clip: padding-box;
 	}
 	.channel-admin-head {
 		display: flex;
 		align-items: center;
+		flex-wrap: wrap;
 		gap: 14px;
 	}
 	.channel-admin-head h1 {
@@ -161,5 +175,32 @@
 	}
 	.member-row .avatar {
 		border-width: 1.5px;
+	}
+	.channel-admin > .channel-admin-head,
+	.channel-admin > .admin-grid-2 {
+		flex-shrink: 0;
+	}
+	.channel-admin > .admin-card.member-card {
+		flex: 1 1 0;
+		min-height: 180px;
+		display: flex;
+		flex-direction: column;
+	}
+	.member-list {
+		flex: 1;
+		min-height: 0;
+		max-height: none;
+		overflow-y: auto;
+		scrollbar-width: thin;
+		scrollbar-color: rgba(72, 130, 170, .28) transparent;
+	}
+	.member-list::-webkit-scrollbar {
+		width: 10px;
+	}
+	.member-list::-webkit-scrollbar-thumb {
+		background: rgba(72, 130, 170, .22);
+		border-radius: 999px;
+		border: 3px solid transparent;
+		background-clip: padding-box;
 	}
 </style>

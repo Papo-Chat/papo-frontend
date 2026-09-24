@@ -518,10 +518,22 @@ export const sampleMessages: MessageWithAttachment[] = [
 			}
 		],
 		reactions: [
+			{ emoji_id: 'rx-grin', unicode: '😀', count: 4 },
+			{ emoji_id: 'rx-grin-2', unicode: '😄', count: 2 },
+			{ emoji_id: 'rx-smile', unicode: '😊', count: 5 },
+			{ emoji_id: 'rx-smile-2', unicode: '🙂', count: 3 },
+			{ emoji_id: 'rx-cool', unicode: '😎', count: 2 },
+			{ emoji_id: 'rx-laugh', unicode: '🤣', count: 4 },
+			{ emoji_id: 'rx-laugh-2', unicode: '😂', count: 6 },
+			{ emoji_id: 'rx-heart-eyes', unicode: '🥰', count: 3 },
+			{ emoji_id: 'rx-heart-eyes-2', unicode: '😍', count: 5 },
+			{ emoji_id: 'rx-kiss', unicode: '😘', count: 2 },
+			{ emoji_id: 'rx-party', unicode: '🥳', count: 4 },
+			{ emoji_id: 'rx-party-2', unicode: '🎉', count: 6 },
+			{ emoji_id: 'rx-rocket', unicode: '🚀', count: 3 },
 			{ emoji_id: 'rx-star', unicode: '⭐', count: 5 },
-			{ emoji_id: 'rx-heart', unicode: '❤️', count: 3 },
-			{ emoji_id: 'rx-rocket', unicode: '🚀', count: 2 },
-			{ emoji_id: 'rx-smile', unicode: '😊', count: 1 }
+			{ emoji_id: 'rx-sparkle', unicode: '✨', count: 4 },
+			{ emoji_id: 'rx-fire', unicode: '🔥', count: 7 }
 		],
 		user_reactions: []
 	},

@@ -8,6 +8,17 @@
 	// Local editable copy so the demo can ban / unban users.
 	let users = $state<UserSummary[]>([...sampleUsers]);
 	let bannedIds = $state<string[]>([]);
+	let filter = $state('');
+
+	const visibleUsers = $derived(
+		filter
+			? users.filter(
+				(u) =>
+					u.username.toLowerCase().includes(filter.toLowerCase()) ||
+					(u.nickname || '').toLowerCase().includes(filter.toLowerCase())
+			)
+			: users
+	);
 
 	function isBanned(id: string): boolean {
 		return bannedIds.includes(id);
@@ -42,16 +53,24 @@
 <div class="users-page">
 	<header class="users-head">
 		<h2>Usuários</h2>
-		<div class="users-stats">
-			<span>Ativos: <strong>{total}</strong></span>
-			<span class="banned-count">Banidos: <strong>{banned.length}</strong></span>
+		<div class="users-head-actions">
+			<input
+				class="admin-input filter-input"
+				placeholder="Filtrar usuários…"
+				bind:value={filter}
+				aria-label="Filtrar usuários"
+			/>
+			<div class="users-stats">
+				<span>Ativos: <strong>{total}</strong></span>
+				<span class="banned-count">Banidos: <strong>{banned.length}</strong></span>
+			</div>
 		</div>
 	</header>
 
 	{#if banned.length}
 		<div class="banned-card">
 			<div class="banned-card-head">
-				<Icon name="slash-circle" variant="duotone" size={14} />
+				<Icon name="x-circle" variant="duotone" size={14} />
 				Banidos ({banned.length})
 			</div>
 			<div class="banned-list">
@@ -62,7 +81,7 @@
 						onclick={() => toggleBan(u.id)}
 					>
 						${u.nickname || u.username}
-						<Icon name="undo" variant="light" size={14} />
+						<Icon name="arrow-clockwise" variant="light" size={14} />
 					</button>
 				{/each}
 			</div>
@@ -75,7 +94,8 @@
 			Membros
 		</div>
 		<div class="admin-card-body">
-			{#each users as u (u.id)}
+			<div class="users-list">
+			{#each visibleUsers as u (u.id)}
 				{#if !isBanned(u.id)}
 					<div class="user-row">
 						<Avatar username={u.username} nickname={u.nickname} size={34} />
@@ -91,13 +111,13 @@
 						<div class="role-select">
 							<select
 								class="user-role-select"
-								aria-label={`Atribuir papel a ${u.nickname || u.username}`}
+								aria-label={`Atribuir Role a ${u.nickname || u.username}`}
 								onchange={(e) => {
 									(e.target as HTMLSelectElement).selectedIndex = 0;
 									const val = (e.target as HTMLSelectElement).value;
 									if (val) assignRole(u.id, val);
 								}}>
-								<option value="">Atribuir papel…</option>
+								<option value="">Atribuir Role…</option>
 								{#each sampleRoles as r (r.id)}
 									<option value={r.id}>{r.name}</option>
 								{/each}
@@ -107,7 +127,7 @@
 							{#each u.roles as r (r.id)}
 								<span class="chip" style="color:{r.color}">
 									{r.name}
-									<button class="chip-x" aria-label={`Remover papel ${r.name}`}>
+									<button class="chip-x" aria-label={`Remover Role ${r.name}`}>
 										×
 									</button>
 								</span>
@@ -118,11 +138,13 @@
 							aria-label={`Banir ${u.nickname || u.username}`}
 							onclick={() => toggleBan(u.id)}
 						>
-							<Icon name="slash-circle" variant="light" size={14} />
+							<Icon name="x-circle" variant="light" size={14} />
+							Banir
 						</button>
 					</div>
 				{/if}
 			{/each}
+			</div>
 		</div>
 	</div>
 </div>
@@ -130,11 +152,26 @@
 <style>
 	.users-page {
 		padding: 4px 0 8px;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+	}
+	.users-page > .admin-card {
+		flex: 1 1 auto;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+	}
+	.users-page > .admin-card .admin-card-body {
+		flex: 1;
+		min-height: 0;
 	}
 	.users-head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 12px;
 		margin-bottom: 12px;
 	}
 	.users-head h2 {
@@ -146,6 +183,14 @@
 		gap: 14px;
 		font-size: 13px;
 		color: var(--muted);
+	}
+	.users-head-actions{
+		display: flex;
+		align-items: center;
+		gap: 12px;
+	}
+	.users-head-actions .filter-input{
+		width: 160px;
 	}
 	.users-stats strong {
 		color: var(--text);
@@ -187,6 +232,24 @@
 		font-size: 13px;
 		cursor: pointer;
 	}
+	.users-list {
+		flex: 1;
+		min-height: 0;
+		max-height: none;
+		overflow-y: auto;
+		scroll-behavior: smooth;
+		scrollbar-width: thin;
+		scrollbar-color: rgba(72, 130, 170, .28) transparent;
+	}
+	.users-list::-webkit-scrollbar {
+		width: 10px;
+	}
+	.users-list::-webkit-scrollbar-thumb {
+		background: rgba(72, 130, 170, .22);
+		border-radius: 999px;
+		border: 3px solid transparent;
+		background-clip: padding-box;
+	}
 	.user-row {
 		display: grid;
 		grid-template-columns: auto 1fr auto auto 1fr auto;
@@ -199,7 +262,7 @@
 	.user-row:hover {
 		background: rgba(255, 255, 255, 0.32);
 	}
-	[data-theme="dark"] .user-row:hover {
+	:global([data-theme="dark"]) .user-row:hover {
 		background: rgba(119,194,235,.085);
 	}
 	.user-info {
@@ -226,7 +289,7 @@
 		font-size: 12px;
 		cursor: pointer;
 	}
-	[data-theme="dark"] .user-role-select {
+	:global([data-theme="dark"]) .user-role-select {
 		border-color: rgba(185,224,250,.14);
 		background: rgba(25,51,68,.6);
 	}
@@ -237,11 +300,12 @@
 	}
 	.chip {
 		position: relative;
+		padding-right: 20px; /* espaço pro X */
 	}
 	.chip-x {
 		position: absolute;
 		top: 50%;
-		right: -2px;
+		right: 4px;
 		transform: translateY(-50%);
 		width: 16px;
 		height: 16px;

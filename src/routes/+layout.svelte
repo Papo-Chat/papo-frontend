@@ -27,7 +27,7 @@
 		right: 16px;
 		z-index: 999;
 	}
-	@media (max-width: 940px){
+	@media (max-width: 1600px){
 		.theme-global :global(.theme-switch){
 			display: none;
 		}

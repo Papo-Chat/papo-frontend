@@ -1,15 +1,22 @@
 <script lang="ts">
 	// Shared auth shell: brand panel + auth card (from LOGIN_PURO.html / auth.css).
+	import { sampleServer } from '$lib/sample';
+	import ServerIcon from '$lib/components/ServerIcon.svelte';
 </script>
 
 <div class="auth-shell">
 	<section class="brand-panel">
 		<div class="brand">
-			<div class="brand-mark">
-				<i class="ph-duotone ph-users-three" aria-hidden="true"></i>
+			<div class="brand-mark" aria-hidden="true">
+				<ServerIcon
+					iconBlob={sampleServer.icon_blob}
+					iconFormat={sampleServer.icon_format}
+					name={sampleServer.name}
+					size={62}
+				/>
 			</div>
 			<div class="brand-copy">
-				<h1>AeroClub</h1>
+				<h1>{sampleServer.name}</h1>
 				<p>Comunidade de amigos e criadores</p>
 			</div>
 		</div>

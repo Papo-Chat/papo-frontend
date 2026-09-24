@@ -7,8 +7,15 @@
 	let creating = $state(false);
 	let name = $state('');
 	let color = $state('#9b5de5');
+	let filter = $state('');
 
 	const palette = ['#e7a80b', '#30d158', '#0a84ff', '#9b5de5', '#ff5d63', '#5ac8fa'];
+
+	const visibleRoles = $derived(
+		filter
+			? sampleRoles.filter((r) => r.name.toLowerCase().includes(filter.toLowerCase()))
+			: sampleRoles
+	);
 
 	function memberCount(roleId: string): number {
 		return sampleUsers.filter((u) => u.roles.some((r) => r.id === roleId)).length;
@@ -32,25 +39,34 @@
 
 <div class="roles-page">
 	<header class="roles-head">
-		<h2>Papéis</h2>
-		<button class="admin-btn" onclick={openCreate}>
-			<Icon name="plus" variant="light" />
-			Novo papel
-		</button>
+		<h2>Roles</h2>
+		<div class="roles-actions">
+			<input
+				class="admin-input filter-input"
+				placeholder="Filtrar Roles…"
+				bind:value={filter}
+				aria-label="Filtrar Roles"
+			/>
+			<button class="admin-btn" onclick={openCreate}>
+				<Icon name="plus" variant="light" />
+				Novo Role
+			</button>
+		</div>
 	</header>
 
 	{#if creating}
 		<div class="new-role">
 			<input
 				class="admin-input"
-				placeholder="Nome do papel"
+				placeholder="Nome do Role"
 				bind:value={name}
-				aria-label="Nome do papel"
+				aria-label="Nome do Role"
 			/>
 			<div class="color-pick">
 				{#each palette as c (c)}
 					<button
 						class="swatch {color === c ? 'active' : ''}"
+						style:background-color={c}
 						aria-label={`Cor ${c}`}
 						onclick={() => (color = c)}
 					></button>
@@ -70,17 +86,17 @@
 			<table class="admin-table">
 				<thead>
 					<tr>
-						<th>Papel</th>
+						<th>Role</th>
 						<th>Cor</th>
 						<th>Membros</th>
 						<th>Ações</th>
 					</tr>
 				</thead>
 				<tbody>
-					{#each sampleRoles as r (r.id)}
+					{#each visibleRoles as r (r.id)}
 						<tr>
 							<td>
-								<a class="role-link" href={`/admin/roles/${r.id}`} title="Editar papel">
+								<a class="role-link" href={`/admin/roles/${r.id}`} title="Editar Role">
 									<span class="chip" style="color:{r.color}">{r.name}</span>
 								</a>
 							</td>
@@ -108,16 +124,39 @@
 <style>
 	.roles-page{
 		padding: 4px 0 8px;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+	}
+	.roles-page > .admin-card{
+		flex: 1 1 auto;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+	}
+	.roles-page > .admin-card .admin-card-body{
+		flex: 1;
+		min-height: 0;
 	}
 	.roles-head{
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		flex-wrap: wrap;
+		gap: 10px;
 		margin-bottom: 12px;
 	}
 	.roles-head h2{
 		margin: 0;
 		font-size: 20px;
+	}
+	.roles-actions{
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.roles-actions .filter-input{
+		width: 150px;
 	}
 	.new-role{
 		display: flex;

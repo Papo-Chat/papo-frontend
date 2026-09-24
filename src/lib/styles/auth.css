@@ -76,6 +76,7 @@
 	display: grid;
 	place-items: center;
 	border-radius: 20px;
+	overflow: hidden;
 	color: #0875c4;
 	font-size: 31px;
 	background:

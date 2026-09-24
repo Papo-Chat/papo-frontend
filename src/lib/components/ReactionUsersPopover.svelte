@@ -30,33 +30,70 @@
 		`${users.length} ${users.length === 1 ? 'pessoa reagiu' : 'pessoas reagiram'}`
 	);
 
-	function computeFlip(): 'below' | 'above' {
+	// Decide above/below and horizontal offset so the card stays inside the
+	// chat's visible bounds. The vertical flip avoids inflating scrollHeight;
+	// the horizontal clamp avoids inflating scrollWidth (a popover that extends
+	// past the chat's right edge makes the chat show a horizontal scrollbar).
+	// Always applied, not just when open, so the scroll area never inflates.
+	function computeLayout(): { flip: 'below' | 'above'; leftPx: number; widthPx: number | null } {
 		const chat = cardEl?.closest('.chat');
 		const group = cardEl?.closest('.reaction-group');
 		const pill = group?.querySelector('button.react');
-		if (!cardEl || !pill || !chat) return 'below';
+		if (!cardEl || !pill || !chat || !group) return { flip: 'below', leftPx: 0, widthPx: null };
 		const chatRect = chat.getBoundingClientRect();
+		const groupRect = group.getBoundingClientRect();
 		const pillRect = pill.getBoundingClientRect();
+		const w = cardEl.offsetWidth;
 		const h = cardEl.offsetHeight;
-		const pad = 6;
+		// Extra margin so subpixel rounding can't push the card past the edge.
+		const pad = 8;
 		const belowSpace = chatRect.bottom - pillRect.bottom - pad;
 		const aboveSpace = pillRect.top - chatRect.top - pad;
-		if (h <= belowSpace) return 'below';
-		if (h <= aboveSpace) return 'above';
-		return belowSpace >= aboveSpace ? 'below' : 'above';
+		let flip: 'below' | 'above';
+		if (h <= belowSpace) flip = 'below';
+		else if (h <= aboveSpace) flip = 'above';
+		else flip = belowSpace >= aboveSpace ? 'below' : 'above';
+		// `left: 0` is relative to the .reaction-group (the containing block),
+		// so the horizontal reference must be the group, not the pill.
+		// The usable horizontal band is the client area (border-box minus the
+		// vertical scrollbar gutter), so clamp to `clientWidth`, not `right`.
+		const clientLeft = chatRect.left;
+		const clientRight = clientLeft + chat.clientWidth;
+		const leftMin = clientLeft + pad - groupRect.left;
+		const leftMax = clientRight - pad - groupRect.left - w;
+		let leftPx = Math.min(0, leftMax);
+		if (leftPx < leftMin) leftPx = leftMin;
+		// Floor so a fractional offset can't overshoot the edge by <1px.
+		leftPx = Math.floor(leftPx);
+		// If the card is wider than the client area, no offset can keep it
+		// inside — shrink it to fit (avoids a guaranteed overflow).
+		let widthPx: number | null = null;
+		const availableWidth = chat.clientWidth - pad * 2;
+		if (w > availableWidth) {
+			widthPx = Math.max(Math.floor(availableWidth), 120);
+		}
+		return { flip, leftPx, widthPx };
 	}
 
-	// Compute the flip whenever the popover is mounted and on every chat
+	function applyLayout(): void {
+		if (!cardEl) return;
+		const { flip: f, leftPx, widthPx } = computeLayout();
+		flip = f;
+		cardEl.style.left = leftPx ? `${leftPx}px` : '';
+		cardEl.style.width = widthPx ? `${widthPx}px` : '';
+	}
+
+	// Compute the layout whenever the popover is mounted and on every chat
 	// scroll (the pill moves relative to the chat's visible bounds).
 	$effect(() => {
 		if (!cardEl) return;
-		flip = computeFlip();
+		applyLayout();
 		const chat = cardEl.closest('.chat');
 		if (!chat) return;
 		const handler = (e: Event) => {
 			// Throttle: only recompute when the scroll position actually
 			// changes the available space.
-			flip = computeFlip();
+			applyLayout();
 		};
 		chat.addEventListener('scroll', handler, { passive: true });
 		return () => {

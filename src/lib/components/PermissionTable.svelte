@@ -16,7 +16,7 @@
 <table class="admin-table">
 	<thead>
 		<tr>
-			<th>Papel</th>
+			<th>Role</th>
 			{#each PERMS as p (p.key)}
 				<th>{p.label}</th>
 			{/each}

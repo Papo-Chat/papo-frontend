@@ -61,32 +61,51 @@
 		if (open) filter = '';
 	});
 
-	// Decide above/below so the card stays inside the chat's visible bounds
-	// (avoids inflating scrollHeight). Always open above when there's no `.chat`
-	// container (the composer sits below it). Recompute on chat scroll.
-	function computeFlip(): 'above' | 'below' {
-		if (!cardEl) return 'above';
-		const chat = cardEl.closest('.chat');
+	// Decide above/below and horizontal offset so the card stays inside the
+	// visible column (avoids inflating scrollHeight and horizontal overflow).
+	// Horizontal reference: the nearest `.chat` (reaction picker) or the main
+	// column (composer, which sits outside `.chat`). Always open above when
+	// neither is found. Recompute on chat scroll.
+	function computeLayout(): { flip: 'above' | 'below'; leftPx: number } {
+		if (!cardEl) return { flip: 'above', leftPx: 0 };
+		const container = cardEl.closest('.chat') ?? cardEl.closest('main.main');
 		const trigger = cardEl.parentElement;
-		if (!chat || !trigger) return 'above';
-		const chatRect = chat.getBoundingClientRect();
+		const w = cardEl.offsetWidth;
+		if (!container || !trigger) return { flip: 'above', leftPx: 0 };
+		const containerRect = container.getBoundingClientRect();
 		const triggerRect = trigger.getBoundingClientRect();
 		const h = cardEl.offsetHeight;
 		const pad = 8;
-		const belowSpace = chatRect.bottom - triggerRect.bottom - pad;
-		const aboveSpace = triggerRect.top - chatRect.top - pad;
-		if (h <= aboveSpace) return 'above';
-		if (h <= belowSpace) return 'below';
-		return aboveSpace >= belowSpace ? 'above' : 'below';
+		const belowSpace = containerRect.bottom - triggerRect.bottom - pad;
+		const aboveSpace = triggerRect.top - containerRect.top - pad;
+		let flip: 'above' | 'below';
+		if (h <= aboveSpace) flip = 'above';
+		else if (h <= belowSpace) flip = 'below';
+		else flip = aboveSpace >= belowSpace ? 'above' : 'below';
+		// 0 (CSS default `left: 0`) when the card fits to the right of the
+		// trigger; otherwise shift it left so it stays within the column.
+		const leftMin = containerRect.left + pad - triggerRect.left;
+		const leftMax = containerRect.right - pad - triggerRect.left - w;
+		let leftPx = 0;
+		if (leftPx > leftMax) leftPx = leftMax;
+		if (leftPx < leftMin) leftPx = leftMin;
+		return { flip, leftPx };
+	}
+
+	function applyLayout(): void {
+		if (!cardEl) return;
+		const { flip: f, leftPx } = computeLayout();
+		flip = f;
+		cardEl.style.left = leftPx ? `${leftPx}px` : '';
 	}
 
 	$effect(() => {
 		if (!cardEl) return;
-		flip = computeFlip();
+		applyLayout();
 		const chat = cardEl.closest('.chat');
 		if (!chat) return;
 		const handler = (e: Event) => {
-			flip = computeFlip();
+			applyLayout();
 		};
 		chat.addEventListener('scroll', handler, { passive: true });
 		return () => {
@@ -143,23 +162,6 @@
 	</div>
 
 	<div class="emoji-picker-body">
-		{#if unicode.length}
-			<div class="emoji-section">
-				<span class="emoji-section-label">Comuns</span>
-				<div class="emoji-grid">
-					{#each unicode as opt (opt.char)}
-						<button
-							class="emoji unicode"
-							title={opt.label}
-							onclick={() => pick(opt)}
-						>
-							{opt.char}
-						</button>
-					{/each}
-				</div>
-			</div>
-		{/if}
-
 		{#if custom.length}
 			<div class="emoji-section">
 				<span class="emoji-section-label">Personalizados</span>
@@ -181,6 +183,23 @@
 			</div>
 		{/if}
 
+		{#if unicode.length}
+			<div class="emoji-section">
+				<span class="emoji-section-label">Comuns</span>
+				<div class="emoji-grid">
+					{#each unicode as opt (opt.char)}
+						<button
+							class="emoji unicode"
+							title={opt.label}
+							onclick={() => pick(opt)}
+						>
+							{opt.char}
+						</button>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
 		{#if !unicode.length && !custom.length}
 			<div class="emoji-empty">Nada encontrado.</div>
 		{/if}
@@ -192,8 +211,7 @@
 		position: absolute;
 		bottom: calc(100% + 8px);
 		left: 0;
-		width: 320px;
-		max-width: calc(100vw - 24px);
+		width: min(320px, calc(100vw - 24px));
 		z-index: 320;
 		border-radius: 18px;
 		border: 1px solid rgba(255,255,255,.55);
@@ -274,8 +292,9 @@
 		transform: scale(.95);
 	}
 	.emoji-picker-body{
-		max-height: 260px;
+		max-height: 320px;
 		overflow-y: auto;
+		overflow-x: hidden;
 		padding: 8px;
 	}
 	.emoji-section{
@@ -292,7 +311,7 @@
 	}
 	.emoji-grid{
 		display: grid;
-		grid-template-columns: repeat(8, 1fr);
+		grid-template-columns: repeat(auto-fill, 54px);
 		gap: 4px;
 	}
 	.emoji{
@@ -343,5 +362,44 @@
 		padding: 20px 0;
 		color: var(--muted-soft);
 		font-size: 13px;
+	}
+
+	/* dark mode — :global() so Svelte doesn't strip the [data-theme] part
+	 * (it lives on <html>, outside this component's DOM). */
+	:global([data-theme="dark"]) .emoji-picker{
+		background:
+			radial-gradient(circle at 15% -18%, rgba(116,207,255,.14), transparent 34%),
+			linear-gradient(145deg, rgba(25,51,68,.90), rgba(10,33,48,.82));
+		border-color: rgba(182,224,250,.18);
+		box-shadow:
+			inset 0 1px 0 rgba(255,255,255,.12),
+			0 26px 56px rgba(0,0,0,.32),
+			0 8px 22px rgba(0,0,0,.16);
+	}
+	:global([data-theme="dark"]) .emoji-picker-head{
+		border-bottom-color: rgba(179,223,248,.12);
+		background: linear-gradient(180deg, rgba(125,203,247,.05), rgba(255,255,255,.012));
+	}
+	:global([data-theme="dark"]) .emoji-filter{
+		background:
+			linear-gradient(145deg, rgba(25,51,68,.82), rgba(15,38,52,.72));
+		border-color: rgba(182,224,250,.18);
+		box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+	}
+	:global([data-theme="dark"]) .emoji-picker-close{
+		background: rgba(83,111,129,.28);
+		border-color: rgba(182,224,250,.12);
+		color: var(--text);
+		box-shadow: inset 0 1px 0 rgba(255,255,255,.10);
+	}
+	:global([data-theme="dark"]) .emoji{
+		background:
+			linear-gradient(145deg, rgba(25,51,68,.72), rgba(15,38,52,.62));
+		border-color: rgba(182,224,250,.14);
+	}
+	:global([data-theme="dark"]) .emoji:hover{
+		background:
+			linear-gradient(145deg, rgba(45,79,100,.72), rgba(25,51,68,.62));
+		box-shadow: 0 6px 14px rgba(0,0,0,.24);
 	}
 </style>
