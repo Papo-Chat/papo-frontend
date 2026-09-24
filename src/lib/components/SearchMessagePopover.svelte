@@ -92,18 +92,15 @@
 
 			{#if searchQuery.trim()}
 				<div class="search-count">
-					{results.length} {results.length === 1 ? 'resultado' : 'resultados'}
+					{results.length}
+					{results.length === 1 ? 'resultado' : 'resultados'}
 				</div>
 				{#if results.length}
 					{#each results as m (m.id)}
 						{@const author = userById(m.author_id)}
 						{#if author}
 							<div class="popover-item">
-								<Avatar
-									username={author.username}
-									nickname={author.nickname}
-									size={34}
-								/>
+								<Avatar username={author.username} nickname={author.nickname} size={34} />
 								<div>
 									<div class="meta">
 										<span class="name">{author.nickname || author.username}</span>
@@ -139,33 +136,34 @@
 {/if}
 
 <style>
-	.search-input{
+	.search-input {
 		width: 100%;
 		height: 42px;
 		padding: 0 14px;
 		border-radius: 12px;
-		border: 1px solid rgba(76,132,170,.22);
-		background:
-			linear-gradient(145deg, rgba(255,255,255,.72), rgba(238,248,253,.62));
-		box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+		border: 1px solid rgba(76, 132, 170, 0.22);
+		background: linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(238, 248, 253, 0.62));
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 		font: inherit;
 		color: var(--text);
 		outline: 0;
-		transition: box-shadow .18s ease, border-color .18s ease;
+		transition:
+			box-shadow 0.18s ease,
+			border-color 0.18s ease;
 	}
-	.search-input:focus{
-		box-shadow: 0 0 0 3px rgba(56,167,235,.18);
-		border-color: rgba(100,196,250,.6);
+	.search-input:focus {
+		box-shadow: 0 0 0 3px rgba(56, 167, 235, 0.18);
+		border-color: rgba(100, 196, 250, 0.6);
 	}
-	.search-input::placeholder{
+	.search-input::placeholder {
 		color: var(--muted-soft);
 	}
-	.search-count{
+	.search-count {
 		display: block;
 		margin: 10px 2px 8px;
 		font-size: 11px;
 		font-weight: 700;
-		letter-spacing: .04em;
+		letter-spacing: 0.04em;
 		text-transform: uppercase;
 		color: var(--muted);
 	}

@@ -101,11 +101,7 @@
 								</a>
 							</td>
 							<td>
-								<span
-									class="swatch"
-									style="background:{r.color}"
-									aria-hidden="true"
-								></span>
+								<span class="swatch" style="background:{r.color}" aria-hidden="true"></span>
 							</td>
 							<td>{memberCount(r.id)}</td>
 							<td>
@@ -122,23 +118,23 @@
 </div>
 
 <style>
-	.roles-page{
+	.roles-page {
 		padding: 4px 0 8px;
 		display: flex;
 		flex-direction: column;
 		height: 100%;
 	}
-	.roles-page > .admin-card{
+	.roles-page > .admin-card {
 		flex: 1 1 auto;
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
 	}
-	.roles-page > .admin-card .admin-card-body{
+	.roles-page > .admin-card .admin-card-body {
 		flex: 1;
 		min-height: 0;
 	}
-	.roles-head{
+	.roles-head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -146,34 +142,34 @@
 		gap: 10px;
 		margin-bottom: 12px;
 	}
-	.roles-head h2{
+	.roles-head h2 {
 		margin: 0;
 		font-size: 20px;
 	}
-	.roles-actions{
+	.roles-actions {
 		display: flex;
 		align-items: center;
 		gap: 10px;
 	}
-	.roles-actions .filter-input{
+	.roles-actions .filter-input {
 		width: 150px;
 	}
-	.new-role{
+	.new-role {
 		display: flex;
 		align-items: center;
 		gap: 10px;
 		margin-bottom: 12px;
 		flex-wrap: wrap;
 	}
-	.new-role .admin-input{
+	.new-role .admin-input {
 		flex: 1;
 		min-width: 180px;
 	}
-	.color-pick{
+	.color-pick {
 		display: flex;
 		gap: 6px;
 	}
-	.swatch{
+	.swatch {
 		width: 22px;
 		height: 22px;
 		border-radius: 7px;
@@ -181,23 +177,23 @@
 		cursor: pointer;
 		background: transparent;
 	}
-	.color-pick .swatch{
+	.color-pick .swatch {
 		border-color: rgba(255, 255, 255, 0.5);
 	}
-	.swatch.active{
+	.swatch.active {
 		border-color: #fff;
 		box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
 	}
-	.role-link{
+	.role-link {
 		display: inline-block;
 	}
-	.role-link:hover .chip{
+	.role-link:hover .chip {
 		transform: translateY(-1px);
 	}
-	.chip{
+	.chip {
 		transition: transform 0.14s var(--ease);
 	}
-	.admin-btn.ghost.small{
+	.admin-btn.ghost.small {
 		height: 32px;
 		padding: 0 10px;
 		font-size: 12px;

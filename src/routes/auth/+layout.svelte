@@ -29,8 +29,8 @@
 
 			<h2>Entre no seu espaço.</h2>
 			<p>
-				Uma experiência inspirada no Aero clássico, reinterpretada com vidro
-				líquido, profundidade, transparência e uma interface moderna.
+				Uma experiência inspirada no Aero clássico, reinterpretada com vidro líquido, profundidade,
+				transparência e uma interface moderna.
 			</p>
 		</div>
 

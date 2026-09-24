@@ -101,6 +101,13 @@
 		};
 	});
 
+	// Re-layout when the popover opens: the anchor (reaction group) may have
+	// moved since the last computation — a new reaction pill shifts it to the
+	// right — so the stored leftPx/flip would be stale.
+	$effect(() => {
+		if (open) applyLayout();
+	});
+
 	// Close on outside click + Escape. Listeners only exist while open.
 	$effect(() => {
 		if (!open) return;
@@ -154,14 +161,14 @@
 	/* .above flips the popover above the pill so it never extends past the
 	 * chat's content (which would inflate scrollHeight and cause the gap).
 	 * The ::before sheen covers the 10px gap so the mouse can cross. */
-	.reaction-users.above{
+	.reaction-users.above {
 		top: auto;
 		bottom: calc(100% + 10px);
 		transform-origin: bottom left;
-		transform: translateY(6px) scale(.97);
+		transform: translateY(6px) scale(0.97);
 	}
-	.reaction-users.above.open{
+	.reaction-users.above.open {
 		transform: translateY(0) scale(1);
-		animation: popoverPopUp .3s var(--ease);
+		animation: popoverPopUp 0.3s var(--ease);
 	}
 </style>

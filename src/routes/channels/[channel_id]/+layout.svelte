@@ -40,23 +40,20 @@
 		<button
 			class="mobile-overlay"
 			aria-hidden="true"
-			on:click={() => state.channelsDrawerOpen = false}
+			on:click={() => (state.channelsDrawerOpen = false)}
 		></button>
 	{/if}
 	{#if state.membersDrawerOpen}
 		<button
 			class="mobile-overlay"
 			aria-hidden="true"
-			on:click={() => state.membersDrawerOpen = false}
+			on:click={() => (state.membersDrawerOpen = false)}
 		></button>
 	{/if}
 
 	<Rail />
 
-	<Sidebar
-		openChannelId={channel.id}
-		onSelectChannel={selectChannel}
-	/>
+	<Sidebar openChannelId={channel.id} onSelectChannel={selectChannel} />
 
 	<main class="main">
 		<slot />
@@ -67,6 +64,8 @@
 	<ProfileCard
 		user={profileProfile}
 		bind:open={state.profileOpen}
-		onOpenChange={(o) => { if (!o) closeProfile(); }}
+		onOpenChange={(o) => {
+			if (!o) closeProfile();
+		}}
 	/>
 </div>

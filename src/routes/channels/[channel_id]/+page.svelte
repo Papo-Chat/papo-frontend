@@ -62,9 +62,7 @@
 		const msg = messages[idx];
 		const already = msg.reactions.find((r) => r.unicode === emoji);
 		const nextReactions = already
-			? msg.reactions.map((r) =>
-					r.unicode === emoji ? { ...r, count: r.count + 1 } : r
-				)
+			? msg.reactions.map((r) => (r.unicode === emoji ? { ...r, count: r.count + 1 } : r))
 			: [...msg.reactions, { emoji_id: '', unicode: emoji, count: 1 }];
 		const alreadyUser = msg.user_reactions.find((ur) => ur.unicode === emoji);
 		const nextUserReactions = alreadyUser
@@ -81,13 +79,7 @@
 	}
 </script>
 
-<Topbar
-	channel={channel}
-	searchQuery={searchQuery}
-	searchOpen={searchOpen}
-	onSearchQueryChange={onSearchQueryChange}
-	onSearchOpenChange={onSearchOpenChange}
-/>
+<Topbar {channel} {searchQuery} {searchOpen} {onSearchQueryChange} {onSearchOpenChange} />
 <Chat
 	messages={filteredMessages}
 	searchActive={searchQuery.trim() !== ''}

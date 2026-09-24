@@ -43,12 +43,7 @@
 </script>
 
 <header class="topbar">
-	<button
-		class="chat-icon"
-		on:click={openSidebar}
-		aria-label="Abrir canais"
-		title="Abrir canais"
-	>
+	<button class="chat-icon" on:click={openSidebar} aria-label="Abrir canais" title="Abrir canais">
 		<Icon name="list" variant="light" />
 	</button>
 
@@ -109,21 +104,17 @@
 	<NotificationsPopover />
 	<PinsPopover />
 	{#if onSearchOpenChange}
-		<SearchMessagePopover
-			searchQuery={searchQuery}
-			open={searchOpen}
-			onOpenChange={onSearchOpenChange}
-		/>
+		<SearchMessagePopover {searchQuery} open={searchOpen} onOpenChange={onSearchOpenChange} />
 	{/if}
 </header>
 
 <style>
-	button.chat-icon{
+	button.chat-icon {
 		font: inherit;
 		-webkit-appearance: none;
 		appearance: none;
 	}
-	button.pill{
+	button.pill {
 		font: inherit;
 		-webkit-appearance: none;
 		appearance: none;

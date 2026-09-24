@@ -48,11 +48,7 @@
 					{@const author = userById(m.author_id)}
 					{#if author}
 						<div class="popover-item">
-							<Avatar
-								username={author.username}
-								nickname={author.nickname}
-								size={34}
-							/>
+							<Avatar username={author.username} nickname={author.nickname} size={34} />
 							<div>
 								<div class="meta">
 									<span class="name">{author.nickname || author.username}</span>
@@ -75,8 +71,8 @@
 				</div>
 				<strong>Mensagens fixadas</strong>
 				<p>
-					Base pronta para listar mensagens, arquivos e links importantes
-					do canal atual com o mesmo visual Liquid Glass.
+					Base pronta para listar mensagens, arquivos e links importantes do canal atual com o mesmo
+					visual Liquid Glass.
 				</p>
 			{/if}
 		</div>

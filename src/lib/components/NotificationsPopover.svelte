@@ -48,11 +48,7 @@
 					{@const author = userById(n.author_id)}
 					{#if author}
 						<div class="popover-item">
-							<Avatar
-								username={author.username}
-								nickname={author.nickname}
-								size={34}
-							/>
+							<Avatar username={author.username} nickname={author.nickname} size={34} />
 							<div>
 								<div class="meta">
 									<span class="name">{author.nickname || author.username}</span>
@@ -69,8 +65,8 @@
 				</div>
 				<strong>Nada por enquanto</strong>
 				<p>
-					Use este espaço como base para um centro de notificações com
-					menções, reações, avisos e atualizações da comunidade.
+					Use este espaço como base para um centro de notificações com menções, reações, avisos e
+					atualizações da comunidade.
 				</p>
 			{/if}
 		</div>

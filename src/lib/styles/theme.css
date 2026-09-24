@@ -6,8 +6,8 @@
 
 :root {
 	/* motion + typography */
-	--ease: cubic-bezier(.2,.8,.2,1);
-	--font: "Segoe UI", Inter, system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+	--ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+	--font: 'Segoe UI', Inter, system-ui, -apple-system, BlinkMacSystemFont, Arial, sans-serif;
 
 	/* Native controls (select dropdowns, scrollbars, form widgets) follow
 	 * the app theme instead of the OS, so the expanded dropdowns stay
@@ -31,16 +31,16 @@
 	--link-muted: #456375;
 
 	/* line + glass (light) */
-	--line: rgba(90,140,175,.18);
-	--line-strong: rgba(255,255,255,.58);
-	--glass: rgba(245,251,255,.60);
-	--glass-strong: rgba(248,252,255,.78);
-	--glass-soft: rgba(225,242,252,.45);
+	--line: rgba(90, 140, 175, 0.18);
+	--line-strong: rgba(255, 255, 255, 0.58);
+	--glass: rgba(245, 251, 255, 0.6);
+	--glass-strong: rgba(248, 252, 255, 0.78);
+	--glass-soft: rgba(225, 242, 252, 0.45);
 
 	/* shadows (light) */
-	--shadow-lg: 0 24px 70px rgba(4,40,74,.22), 0 10px 26px rgba(4,65,112,.12);
-	--shadow-md: 0 12px 30px rgba(14,69,108,.14), 0 4px 12px rgba(16,78,118,.08);
-	--shadow-sm: 0 6px 16px rgba(16,72,108,.10);
+	--shadow-lg: 0 24px 70px rgba(4, 40, 74, 0.22), 0 10px 26px rgba(4, 65, 112, 0.12);
+	--shadow-md: 0 12px 30px rgba(14, 69, 108, 0.14), 0 4px 12px rgba(16, 78, 118, 0.08);
+	--shadow-sm: 0 6px 16px rgba(16, 72, 108, 0.1);
 
 	/* radius */
 	--radius-xl: 34px;
@@ -49,7 +49,7 @@
 	--radius-sm: 12px;
 }
 
-[data-theme="dark"] {
+[data-theme='dark'] {
 	/* text (dark) */
 	--text: #edf7ff;
 	color-scheme: dark;
@@ -60,16 +60,16 @@
 	--link-muted: #99afbd;
 
 	/* line + glass (dark) */
-	--line: rgba(186,226,251,.09);
-	--line-strong: rgba(184,225,252,.18);
-	--glass: rgba(29,55,73,.38);
-	--glass-strong: rgba(20,42,58,.60);
-	--glass-soft: rgba(9,31,47,.24);
+	--line: rgba(186, 226, 251, 0.09);
+	--line-strong: rgba(184, 225, 252, 0.18);
+	--glass: rgba(29, 55, 73, 0.38);
+	--glass-strong: rgba(20, 42, 58, 0.6);
+	--glass-soft: rgba(9, 31, 47, 0.24);
 
 	/* shadows (dark) */
-	--shadow-lg: 0 30px 88px rgba(0,0,0,.45), 0 10px 26px rgba(0,0,0,.20);
-	--shadow-md: 0 14px 34px rgba(0,0,0,.30);
-	--shadow-sm: 0 6px 16px rgba(0,0,0,.22);
+	--shadow-lg: 0 30px 88px rgba(0, 0, 0, 0.45), 0 10px 26px rgba(0, 0, 0, 0.2);
+	--shadow-md: 0 14px 34px rgba(0, 0, 0, 0.3);
+	--shadow-sm: 0 6px 16px rgba(0, 0, 0, 0.22);
 }
 
 /* ───────────────────────────────────────────────────────
@@ -78,22 +78,22 @@
 
 *,
 *::before,
-*::after{
+*::after {
 	box-sizing: border-box;
 }
 
 html,
-body{
+body {
 	height: 100%;
 	margin: 0;
 }
 
-body{
+body {
 	color: var(--text);
 	font: 14px/1.42 var(--font);
 	overflow: hidden;
 	overscroll-behavior: none;
-	transition: background-color .35s ease;
+	transition: background-color 0.35s ease;
 	/* Center the shell vertically so it stays anchored to top AND bottom
 	 * (same 18px margin) when the viewport is taller than it (e.g. F11 full
 	 * screen). The .theme-global wrapper is empty (its child is fixed), so it
@@ -108,73 +108,79 @@ body{
    Background — light
    ─────────────────────────────────────────────────────── */
 
-body{
+body {
 	background:
-		radial-gradient(circle at 74% 14%, rgba(88,255,218,.24), transparent 24%),
-		radial-gradient(circle at 12% 78%, rgba(0,132,255,.35), transparent 28%),
-		radial-gradient(circle at 46% 112%, rgba(191,90,242,.18), transparent 34%),
-		linear-gradient(125deg,#062f75 0%,#0080ba 48%,#0a8067 100%);
+		radial-gradient(circle at 74% 14%, rgba(88, 255, 218, 0.24), transparent 24%),
+		radial-gradient(circle at 12% 78%, rgba(0, 132, 255, 0.35), transparent 28%),
+		radial-gradient(circle at 46% 112%, rgba(191, 90, 242, 0.18), transparent 34%),
+		linear-gradient(125deg, #062f75 0%, #0080ba 48%, #0a8067 100%);
 }
 
 body::before,
-body::after{
-	content: "";
+body::after {
+	content: '';
 	position: fixed;
 	inset: -30%;
 	pointer-events: none;
 	z-index: 0;
-	opacity: .55;
+	opacity: 0.55;
 	filter: blur(18px);
 	animation: ambientFloat 18s ease-in-out infinite alternate;
 }
 
-body::before{
-	background:
-		conic-gradient(from 200deg at 50% 50%,
-			transparent,
-			rgba(255,255,255,.08),
-			transparent 20%,
-			rgba(95,211,255,.14),
-			transparent 45%,
-			rgba(97,255,199,.12),
-			transparent 75%);
+body::before {
+	background: conic-gradient(
+		from 200deg at 50% 50%,
+		transparent,
+		rgba(255, 255, 255, 0.08),
+		transparent 20%,
+		rgba(95, 211, 255, 0.14),
+		transparent 45%,
+		rgba(97, 255, 199, 0.12),
+		transparent 75%
+	);
 }
 
-body::after{
-	background:
-		repeating-linear-gradient(115deg,
-			transparent 0 64px,
-			rgba(255,255,255,.045) 68px 76px,
-			transparent 80px 140px);
+body::after {
+	background: repeating-linear-gradient(
+		115deg,
+		transparent 0 64px,
+		rgba(255, 255, 255, 0.045) 68px 76px,
+		transparent 80px 140px
+	);
 	transform: rotate(180deg);
 	animation-duration: 26s;
 }
 
-@keyframes ambientFloat{
-	from{ transform: translate3d(-1.5%,0,0) scale(1.02); }
-	to{   transform: translate3d(1.5%,-1%,0) scale(1.05); }
+@keyframes ambientFloat {
+	from {
+		transform: translate3d(-1.5%, 0, 0) scale(1.02);
+	}
+	to {
+		transform: translate3d(1.5%, -1%, 0) scale(1.05);
+	}
 }
 
 /* ───────────────────────────────────────────────────────
    Background — dark
    ─────────────────────────────────────────────────────── */
 
-[data-theme="dark"] body{
+[data-theme='dark'] body {
 	background:
-		radial-gradient(circle at 76% 12%, rgba(0,235,198,.14), transparent 25%),
-		radial-gradient(circle at 10% 82%, rgba(0,120,255,.28), transparent 31%),
-		radial-gradient(circle at 49% 112%, rgba(165,82,255,.12), transparent 34%),
-		linear-gradient(130deg,#020b16 0%,#061d32 48%,#073228 100%);
+		radial-gradient(circle at 76% 12%, rgba(0, 235, 198, 0.14), transparent 25%),
+		radial-gradient(circle at 10% 82%, rgba(0, 120, 255, 0.28), transparent 31%),
+		radial-gradient(circle at 49% 112%, rgba(165, 82, 255, 0.12), transparent 34%),
+		linear-gradient(130deg, #020b16 0%, #061d32 48%, #073228 100%);
 }
 
 /* ───────────────────────────────────────────────────────
    Reduced motion
    ─────────────────────────────────────────────────────── */
 
-@media (prefers-reduced-motion: reduce){
+@media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,
-	*::after{
+	*::after {
 		animation: none !important;
 		transition: none !important;
 		scroll-behavior: auto !important;

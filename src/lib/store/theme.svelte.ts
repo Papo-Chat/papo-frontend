@@ -15,9 +15,7 @@ function read(): ThemeMode {
 	if (stored === 'light' || stored === 'dark') {
 		return stored;
 	}
-	return window.matchMedia('(prefers-color-scheme: dark)').matches
-		? 'dark'
-		: 'light';
+	return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 function applyToDom(mode: ThemeMode): void {

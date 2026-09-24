@@ -74,13 +74,9 @@
 
 		<div class="profile-preview">
 			{#if avatarSrc}
-				<img
-					class="avatar avatar-custom"
-					src={avatarSrc}
-					alt="{nickname || sampleMe.username}"
-				/>
+				<img class="avatar avatar-custom" src={avatarSrc} alt={nickname || sampleMe.username} />
 			{:else}
-				<Avatar username={sampleMe.username} nickname={nickname} size={64} />
+				<Avatar username={sampleMe.username} {nickname} size={64} />
 			{/if}
 			<div class="profile-preview-info">
 				<h3>{nickname || sampleMe.username}</h3>
@@ -94,11 +90,22 @@
 		<div class="profile-form">
 			<div class="admin-field">
 				<label for="pf-name">Nome</label>
-				<input id="pf-name" class="admin-input" bind:value={nickname} placeholder="Como você quer ser chamado" />
+				<input
+					id="pf-name"
+					class="admin-input"
+					bind:value={nickname}
+					placeholder="Como você quer ser chamado"
+				/>
 			</div>
 			<div class="admin-field">
 				<label for="pf-status">Mensagem de status</label>
-				<input id="pf-status" class="admin-input" bind:value={statusMessage} placeholder="ex.: online, ocupado, em férias…" maxlength="80" />
+				<input
+					id="pf-status"
+					class="admin-input"
+					bind:value={statusMessage}
+					placeholder="ex.: online, ocupado, em férias…"
+					maxlength="80"
+				/>
 			</div>
 			<div class="admin-field">
 				<label for="pf-desc">Descrição</label>
@@ -106,8 +113,7 @@
 					id="pf-desc"
 					class="admin-textarea"
 					bind:value={description}
-					placeholder="Sobre você, seus interesses, seu Role no AeroClub…"
-				></textarea>
+					placeholder="Sobre você, seus interesses, seu Role no AeroClub…"></textarea>
 			</div>
 			<div class="admin-field">
 				<label>Avatar</label>
@@ -123,18 +129,18 @@
 			</div>
 			<div class="admin-field">
 				<label>Capa</label>
-				<input
-					type="file"
-					accept="image/*"
-					onchange={onBannerSelect}
-					aria-label="Escolher capa"
-				/>
+				<input type="file" accept="image/*" onchange={onBannerSelect} aria-label="Escolher capa" />
 				{#if bannerError}
 					<span class="field-error">{bannerError}</span>
 				{/if}
 			</div>
 			<div class="profile-actions">
-				<button class="admin-btn" onclick={() => { saved = true; }}>
+				<button
+					class="admin-btn"
+					onclick={() => {
+						saved = true;
+					}}
+				>
 					<Icon name="check" variant="light" />
 					Salvar
 				</button>
@@ -160,7 +166,9 @@
 		border: 1px solid rgba(255, 255, 255, 0.58);
 		border-radius: 14px;
 		padding: 18px;
-		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84), 0 10px 22px rgba(28, 82, 116, 0.08);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.84),
+			0 10px 22px rgba(28, 82, 116, 0.08);
 	}
 	.profile-preview {
 		display: flex;
@@ -246,20 +254,20 @@
 		font-weight: 700;
 		color: #24c982;
 	}
-	:global([data-theme="dark"]) .profile-edit-card {
+	:global([data-theme='dark']) .profile-edit-card {
 		background:
-			radial-gradient(circle at 12% -18%, rgba(116, 207, 255, .10), transparent 40%),
-			linear-gradient(145deg, rgba(25, 51, 68, .86), rgba(12, 33, 48, .80));
-		border-color: rgba(182, 224, 250, .14);
+			radial-gradient(circle at 12% -18%, rgba(116, 207, 255, 0.1), transparent 40%),
+			linear-gradient(145deg, rgba(25, 51, 68, 0.86), rgba(12, 33, 48, 0.8));
+		border-color: rgba(182, 224, 250, 0.14);
 		box-shadow:
-			inset 0 1px 0 rgba(255, 255, 255, .10),
-			0 10px 22px rgba(0, 0, 0, .24);
+			inset 0 1px 0 rgba(255, 255, 255, 0.1),
+			0 10px 22px rgba(0, 0, 0, 0.24);
 	}
-	:global([data-theme="dark"]) .banner-reset {
+	:global([data-theme='dark']) .banner-reset {
 		color: var(--text);
-		background: rgba(69, 91, 105, .48);
-		border-color: rgba(185, 225, 249, .14);
-		box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
+		background: rgba(69, 91, 105, 0.48);
+		border-color: rgba(185, 225, 249, 0.14);
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 	}
 
 	@media (max-width: 640px) {

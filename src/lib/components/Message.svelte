@@ -7,10 +7,7 @@
 	import Reactions from './Reactions.svelte';
 	import PreviewCard from './PreviewCard.svelte';
 
-	let {
-		message,
-		onAddReaction
-	} = $props<{
+	let { message, onAddReaction } = $props<{
 		message: MessageWithAttachment;
 		onAddReaction?: (messageId: string, emoji: string) => void;
 	}>();
@@ -20,38 +17,44 @@
 </script>
 
 <article class="message">
-	<Avatar
-		username={author?.username ?? 'u'}
-		nickname={author?.nickname ?? null}
-		size={39}
-		ariaLabel={author ? `Ver perfil de ${name}` : undefined}
-		onClick={() => { if (author) openProfile(author); }}
-	/>
-	<div class="content">
-		<div class="meta">
-			<button
-				class="name"
-				aria-label={author ? `Ver perfil de ${name}` : undefined}
-				onclick={() => { if (author) openProfile(author); }}
-			>
-				{name}
-			</button>
-			<span class="time">{formatTime(message.created_at)}</span>
-		</div>
-
-		{#if message.content}
-			<div class="bubble"><p>{message.content}</p></div>
-		{:else if message.previews.length}
-			{#each message.previews as p (p.id)}
-				<PreviewCard preview={p} />
-			{/each}
-		{/if}
-
-		<Reactions
-			messageId={message.id}
-			reactions={message.reactions}
-			userReactions={message.user_reactions}
-			onAddReaction={(emoji) => onAddReaction?.(message.id, emoji)}
+	<div class="message-enter">
+		<Avatar
+			username={author?.username ?? 'u'}
+			nickname={author?.nickname ?? null}
+			size={39}
+			ariaLabel={author ? `Ver perfil de ${name}` : undefined}
+			onClick={() => {
+				if (author) openProfile(author);
+			}}
 		/>
+		<div class="content">
+			<div class="meta">
+				<button
+					class="name"
+					aria-label={author ? `Ver perfil de ${name}` : undefined}
+					onclick={() => {
+						if (author) openProfile(author);
+					}}
+				>
+					{name}
+				</button>
+				<span class="time">{formatTime(message.created_at)}</span>
+			</div>
+
+			{#if message.content}
+				<div class="bubble"><p>{message.content}</p></div>
+			{:else if message.previews.length}
+				{#each message.previews as p (p.id)}
+					<PreviewCard preview={p} />
+				{/each}
+			{/if}
+
+			<Reactions
+				messageId={message.id}
+				reactions={message.reactions}
+				userReactions={message.user_reactions}
+				onAddReaction={(emoji) => onAddReaction?.(message.id, emoji)}
+			/>
+		</div>
 	</div>
 </article>

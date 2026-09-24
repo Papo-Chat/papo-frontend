@@ -26,11 +26,7 @@
 		<label>Confirmar senha</label>
 		<div class="input-shell">
 			<div class="input-icon"><Icon name="lock-key" variant="light" /></div>
-			<input
-				type="password"
-				placeholder="Confirme sua senha"
-				aria-label="Confirmar senha"
-			/>
+			<input type="password" placeholder="Confirme sua senha" aria-label="Confirmar senha" />
 		</div>
 	</div>
 

@@ -64,14 +64,12 @@ const COMMON: { char: string; label: string }[] = [
 
 export function allEmojis(): EmojiOption[] {
 	const unicode = COMMON.map(({ char, label }): EmojiOption => ({ kind: 'unicode', char, label }));
-	const custom = sampleEmojis.map(
-		(e): EmojiOption => ({
-			kind: 'custom',
-			name: e.name,
-			label: e.name,
-			image_blob: e.image_blob,
-			format: e.format
-		})
-	);
+	const custom = sampleEmojis.map((e): EmojiOption => ({
+		kind: 'custom',
+		name: e.name,
+		label: e.name,
+		image_blob: e.image_blob,
+		format: e.format
+	}));
 	return [...unicode, ...custom];
 }

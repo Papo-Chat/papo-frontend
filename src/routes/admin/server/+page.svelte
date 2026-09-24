@@ -43,13 +43,7 @@
 	<div class="server-card">
 		<div class="server-card-head">
 			<div class="server-icon" aria-hidden="true">
-				<ServerIcon
-					iconBlob={iconBlob}
-					iconFormat={iconFormat}
-					name={name}
-					size={44}
-					dark
-				/>
+				<ServerIcon {iconBlob} {iconFormat} {name} size={44} dark />
 			</div>
 			<h2>{name || 'Novo servidor'}</h2>
 		</div>
@@ -156,21 +150,21 @@
 </div>
 
 <style>
-	.server-page{
+	.server-page {
 		padding: 4px 0 8px;
 	}
-	.server-card{
+	.server-card {
 		max-width: 560px;
 		display: flex;
 		flex-direction: column;
 		gap: 14px;
 	}
-	.server-card-head{
+	.server-card-head {
 		display: flex;
 		align-items: center;
 		gap: 12px;
 	}
-	.server-icon{
+	.server-icon {
 		width: 44px;
 		height: 44px;
 		border-radius: 12px;
@@ -178,42 +172,42 @@
 		place-items: center;
 		overflow: hidden;
 		background: linear-gradient(145deg, #51a8f0, #0b71d3);
-		box-shadow: 0 8px 18px rgba(11,113,211,.25);
+		box-shadow: 0 8px 18px rgba(11, 113, 211, 0.25);
 	}
-	.server-card-head h2{
+	.server-card-head h2 {
 		margin: 0;
 		font-size: 20px;
 	}
-	.server-stats{
+	.server-stats {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
 		gap: 8px;
 	}
-	.stat{
+	.stat {
 		padding: 10px;
 		border-radius: 12px;
 		background: rgba(255, 255, 255, 0.32);
 		border: 1px solid rgba(255, 255, 255, 0.5);
 	}
-	:global([data-theme="dark"]) .stat{
-		background: rgba(25,51,68,.6);
-		border-color: rgba(185,224,250,.14);
+	:global([data-theme='dark']) .stat {
+		background: rgba(25, 51, 68, 0.6);
+		border-color: rgba(185, 224, 250, 0.14);
 	}
-	.stat span{
+	.stat span {
 		display: block;
 		font-size: 10px;
 		color: var(--muted-soft);
 		margin-bottom: 2px;
 	}
-	.stat strong{
+	.stat strong {
 		font-size: 17px;
 	}
-	.server-actions{
+	.server-actions {
 		display: flex;
 		align-items: center;
 		gap: 12px;
 	}
-	.saved{
+	.saved {
 		font-size: 12px;
 		font-weight: 700;
 		color: #24c982;

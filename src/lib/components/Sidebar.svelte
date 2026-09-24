@@ -8,10 +8,7 @@
 	import ChannelItem from './ChannelItem.svelte';
 	import MobilePanelHead from './MobilePanelHead.svelte';
 
-	let {
-		openChannelId = null,
-		onSelectChannel
-	} = $props<{
+	let { openChannelId = null, onSelectChannel } = $props<{
 		openChannelId?: string | null;
 		onSelectChannel?: (id: string) => void;
 	}>();
@@ -48,7 +45,12 @@
 	// Atalhos: only route-related shortcuts are kept (channels are sample
 	// data, so the mockup channel/mockup buttons were dropped).
 	const shortcuts = [
-		{ to: '/admin/server', icon: 'shield-check', variant: 'light' as const, label: 'Administração' },
+		{
+			to: '/admin/server',
+			icon: 'shield-check',
+			variant: 'light' as const,
+			label: 'Administração'
+		},
 		{ to: '/user/settings', icon: 'gear', variant: 'light' as const, label: 'Ajustes' }
 	];
 
@@ -59,11 +61,7 @@
 </script>
 
 <aside class="sidebar {drawerOpen ? 'open' : ''}">
-	<MobilePanelHead
-		icon="hash"
-		title="Canais"
-		onClose={closeDrawer}
-	/>
+	<MobilePanelHead icon="hash" title="Canais" onClose={closeDrawer} />
 
 	<div class="community">
 		<div class="community-logo" aria-hidden="true">
@@ -76,7 +74,7 @@
 		</div>
 		<div>
 			<h1>{sampleServer.name}</h1>
-			<p>Comunidade de amigos<br>e criadores</p>
+			<p>Comunidade de amigos<br />e criadores</p>
 			<p style="margin-top:7px">
 				<span class="online-dot"></span>{onlineCount} Online
 			</p>
@@ -96,7 +94,7 @@
 		{/if}
 		{#each group.channels as channel (channel.id)}
 			<ChannelItem
-				channel={channel}
+				{channel}
 				active={openChannelId === channel.id}
 				onSelect={() => selectChannel(channel.id)}
 			/>
@@ -123,7 +121,7 @@
 </aside>
 
 <style>
-	button.home-link{
+	button.home-link {
 		font: inherit;
 		text-align: left;
 		-webkit-appearance: none;

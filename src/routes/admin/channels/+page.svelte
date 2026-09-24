@@ -19,14 +19,10 @@
 	let newType = $state<ChannelType>('text');
 	let filter = $state('');
 
-	const selected = $derived(
-		channels.find((c) => c.id === selectedId) ?? null
-	);
+	const selected = $derived(channels.find((c) => c.id === selectedId) ?? null);
 
 	const visibleChannels = $derived(
-		filter
-			? channels.filter((c) => c.name.toLowerCase().includes(filter.toLowerCase()))
-			: channels
+		filter ? channels.filter((c) => c.name.toLowerCase().includes(filter.toLowerCase())) : channels
 	);
 
 	function select(c: Channel): void {
@@ -35,7 +31,10 @@
 	}
 
 	function addChannel(): void {
-		const name = newName.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+		const name = newName
+			.trim()
+			.toLowerCase()
+			.replace(/[^a-z0-9-]/g, '');
 		if (!name) return;
 		const channel: Channel = {
 			id: `chan-${name}`,
@@ -107,9 +106,7 @@
 				<option value="category">Categoria</option>
 				<option value="voice">Voz</option>
 			</select>
-			<button class="admin-btn" onclick={addChannel}>
-				Criar
-			</button>
+			<button class="admin-btn" onclick={addChannel}> Criar </button>
 		</div>
 	{/if}
 
@@ -164,11 +161,7 @@
 						</div>
 						<div class="admin-field">
 							<label for="ch-notif">Notificações</label>
-							<select
-								id="ch-notif"
-								class="admin-select"
-								value={selected.notification_settings}
-							>
+							<select id="ch-notif" class="admin-select" value={selected.notification_settings}>
 								<option value="off">Sem notificações</option>
 								<option value="only_mentions">Somente menções</option>
 								<option value="all">Todas</option>
@@ -201,10 +194,10 @@
 </div>
 
 <style>
-	.channels-page{
+	.channels-page {
 		padding: 4px 0 8px;
 	}
-	.channels-head{
+	.channels-head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -212,33 +205,33 @@
 		gap: 10px;
 		margin-bottom: 12px;
 	}
-	.channels-head h2{
+	.channels-head h2 {
 		margin: 0;
 		font-size: 20px;
 	}
-	.channels-actions{
+	.channels-actions {
 		display: flex;
 		align-items: center;
 		gap: 10px;
 	}
-	.channels-actions .filter-input{
+	.channels-actions .filter-input {
 		width: 160px;
 	}
-	.new-channel{
+	.new-channel {
 		display: flex;
 		align-items: center;
 		gap: 10px;
 		margin-bottom: 12px;
 		flex-wrap: wrap;
 	}
-	.new-channel .admin-input{
+	.new-channel .admin-input {
 		flex: 1;
 		min-width: 180px;
 	}
-	.new-channel .admin-select{
+	.new-channel .admin-select {
 		width: 150px;
 	}
-	.channels-list{
+	.channels-list {
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
@@ -246,22 +239,24 @@
 		overflow-y: auto;
 		scroll-behavior: smooth;
 		scrollbar-width: thin;
-		scrollbar-color: rgba(72,130,170,.28) transparent;
+		scrollbar-color: rgba(72, 130, 170, 0.28) transparent;
 	}
-	.channels-list::-webkit-scrollbar{ width: 10px; }
-	.channels-list::-webkit-scrollbar-thumb{
-		background: rgba(72,130,170,.22);
+	.channels-list::-webkit-scrollbar {
+		width: 10px;
+	}
+	.channels-list::-webkit-scrollbar-thumb {
+		background: rgba(72, 130, 170, 0.22);
 		border-radius: 999px;
 		border: 3px solid transparent;
 		background-clip: padding-box;
 	}
-	.channel-row-wrap{
+	.channel-row-wrap {
 		display: flex;
 		align-items: center;
 		gap: 6px;
 		width: 100%;
 	}
-	.channel-row{
+	.channel-row {
 		flex: 1;
 		min-width: 0;
 		display: grid;
@@ -276,26 +271,26 @@
 		text-align: left;
 		color: var(--text);
 		cursor: pointer;
-		transition: .14s var(--ease);
+		transition: 0.14s var(--ease);
 	}
-	.channel-row:hover{
+	.channel-row:hover {
 		background: rgba(255, 255, 255, 0.3);
 	}
-	:global([data-theme="dark"]) .channel-row:hover{
-		background: rgba(119,194,235,.085);
+	:global([data-theme='dark']) .channel-row:hover {
+		background: rgba(119, 194, 235, 0.085);
 	}
-	.channel-row.selected{
+	.channel-row.selected {
 		background: rgba(100, 196, 250, 0.16);
 		box-shadow: inset 0 0 0 1px rgba(100, 196, 250, 0.4);
 	}
-	.channel-row-name{
+	.channel-row-name {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		font-weight: 700;
 		font-size: 13px;
 	}
-	.type-badge{
+	.type-badge {
 		font-size: 9px;
 		font-weight: 800;
 		text-transform: uppercase;
@@ -305,25 +300,25 @@
 		background: rgba(255, 255, 255, 0.4);
 		color: var(--muted);
 	}
-	.type-badge.voice{
+	.type-badge.voice {
 		background: rgba(240, 61, 94, 0.18);
 		color: #f03d5e;
 	}
-	.type-badge.category{
+	.type-badge.category {
 		background: rgba(239, 248, 252, 0.5);
 	}
-	:global([data-theme="dark"]) .type-badge{
-		background: rgba(119,194,235,.14);
+	:global([data-theme='dark']) .type-badge {
+		background: rgba(119, 194, 235, 0.14);
 	}
-	:global([data-theme="dark"]) .type-badge.category{
-		background: rgba(119,194,235,.18);
+	:global([data-theme='dark']) .type-badge.category {
+		background: rgba(119, 194, 235, 0.18);
 	}
-	.channel-row-type{
+	.channel-row-type {
 		font-size: 10px;
 		color: var(--muted-soft);
 		text-align: right;
 	}
-	.channel-row-del{
+	.channel-row-del {
 		display: grid;
 		place-items: center;
 		width: 28px;
@@ -333,34 +328,34 @@
 		background: transparent;
 		cursor: pointer;
 		opacity: 0.5;
-		transition: .14s var(--ease);
+		transition: 0.14s var(--ease);
 	}
-	.channel-row-del:hover{
+	.channel-row-del:hover {
 		opacity: 1;
 		background: rgba(240, 61, 94, 0.14);
 		color: #f03d5e;
 	}
-	.permissions-block{
+	.permissions-block {
 		margin-top: 4px;
 	}
-	.permissions-block label{
+	.permissions-block label {
 		font-size: 12px;
 		font-weight: 700;
 		color: var(--link-muted);
 		margin-bottom: 8px;
 		display: block;
 	}
-	.empty-edit{
+	.empty-edit {
 		display: grid;
 		place-items: center;
 		min-height: 220px;
 	}
-	.empty{
+	.empty {
 		font-size: 13px;
 		color: var(--muted-soft);
 	}
-	@media (max-width: 900px){
-		.channels-grid{
+	@media (max-width: 900px) {
+		.channels-grid {
 			grid-template-columns: 1fr;
 		}
 	}

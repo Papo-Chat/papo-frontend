@@ -21,14 +21,14 @@
 	/* Fixed window-level theme toggle: glued to the bottom-right corner.
 	 * (aero.css sets .theme-switch to absolute, so we pin it directly.
 	 * :global() because .theme-switch lives in the ThemeSwitch component.) */
-	.theme-global :global(.theme-switch){
+	.theme-global :global(.theme-switch) {
 		position: fixed !important;
 		bottom: 16px;
 		right: 16px;
 		z-index: 999;
 	}
-	@media (max-width: 1600px){
-		.theme-global :global(.theme-switch){
+	@media (max-width: 1600px) {
+		.theme-global :global(.theme-switch) {
 			display: none;
 		}
 	}

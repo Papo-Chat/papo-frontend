@@ -31,11 +31,10 @@
 			const q = filter.trim().toLowerCase();
 			if (!q) return true;
 			return (
-				opt.label.toLowerCase().includes(q) ||
-				(opt.kind === 'unicode' && opt.char.includes(q))
-			)
+				opt.label.toLowerCase().includes(q) || (opt.kind === 'unicode' && opt.char.includes(q))
+			);
 		})
-		);
+	);
 	const unicode = $derived(filtered.filter((o) => o.kind === 'unicode'));
 	const custom = $derived(filtered.filter((o) => o.kind === 'custom'));
 
@@ -63,17 +62,19 @@
 
 	// Decide above/below and horizontal offset so the card stays inside the
 	// visible column (avoids inflating scrollHeight and horizontal overflow).
-	// Horizontal reference: the nearest `.chat` (reaction picker) or the main
-	// column (composer, which sits outside `.chat`). Always open above when
-	// neither is found. Recompute on chat scroll.
-	function computeLayout(): { flip: 'above' | 'below'; leftPx: number } {
-		if (!cardEl) return { flip: 'above', leftPx: 0 };
-		const container = cardEl.closest('.chat') ?? cardEl.closest('main.main');
-		const trigger = cardEl.parentElement;
-		const w = cardEl.offsetWidth;
-		if (!container || !trigger) return { flip: 'above', leftPx: 0 };
+	// Same approach as ReactionUsersPopover: clamp to the container's client
+	// area (border-box minus the vertical scrollbar gutter) and shrink the
+	// card if it's wider than the client area. Horizontal reference: the
+	// nearest `.chat` (reaction picker) or the main column (composer, which
+	// sits outside `.chat`). Always open above when neither is found.
+	// Recompute on chat scroll.
+	function computeLayout(): { flip: 'above' | 'below'; leftPx: number; widthPx: number | null } {
+		const container = cardEl?.closest('.chat') ?? cardEl?.closest('main.main');
+		const trigger = cardEl?.parentElement;
+		if (!cardEl || !container || !trigger) return { flip: 'above', leftPx: 0, widthPx: null };
 		const containerRect = container.getBoundingClientRect();
 		const triggerRect = trigger.getBoundingClientRect();
+		const w = cardEl.offsetWidth;
 		const h = cardEl.offsetHeight;
 		const pad = 8;
 		const belowSpace = containerRect.bottom - triggerRect.bottom - pad;
@@ -82,21 +83,34 @@
 		if (h <= aboveSpace) flip = 'above';
 		else if (h <= belowSpace) flip = 'below';
 		else flip = aboveSpace >= belowSpace ? 'above' : 'below';
-		// 0 (CSS default `left: 0`) when the card fits to the right of the
-		// trigger; otherwise shift it left so it stays within the column.
-		const leftMin = containerRect.left + pad - triggerRect.left;
-		const leftMax = containerRect.right - pad - triggerRect.left - w;
-		let leftPx = 0;
-		if (leftPx > leftMax) leftPx = leftMax;
+		// `left: 0` is the CSS default relative to the trigger, so the
+		// horizontal reference must be the trigger. The usable horizontal
+		// band is the client area (border-box minus the vertical scrollbar
+		// gutter), so clamp to `clientWidth`, not `right`.
+		const clientLeft = containerRect.left;
+		const clientRight = clientLeft + container.clientWidth;
+		const leftMin = clientLeft + pad - triggerRect.left;
+		const leftMax = clientRight - pad - triggerRect.left - w;
+		let leftPx = Math.min(0, leftMax);
 		if (leftPx < leftMin) leftPx = leftMin;
-		return { flip, leftPx };
+		// Floor so a fractional offset can't overshoot the edge by <1px.
+		leftPx = Math.floor(leftPx);
+		// If the card is wider than the client area, no offset can keep it
+		// inside — shrink it to fit (avoids a guaranteed overflow).
+		let widthPx: number | null = null;
+		const availableWidth = container.clientWidth - pad * 2;
+		if (w > availableWidth) {
+			widthPx = Math.max(Math.floor(availableWidth), 120);
+		}
+		return { flip, leftPx, widthPx };
 	}
 
 	function applyLayout(): void {
 		if (!cardEl) return;
-		const { flip: f, leftPx } = computeLayout();
+		const { flip: f, leftPx, widthPx } = computeLayout();
 		flip = f;
 		cardEl.style.left = leftPx ? `${leftPx}px` : '';
+		cardEl.style.width = widthPx ? `${widthPx}px` : '';
 	}
 
 	$effect(() => {
@@ -111,6 +125,13 @@
 		return () => {
 			chat.removeEventListener('scroll', handler);
 		};
+	});
+
+	// Re-layout when the picker opens: the anchor (e.g. the reaction-add wrap
+	// in a message) may have moved since the last computation — a new reaction
+	// pill shifts it to the right — so the stored leftPx/flip would be stale.
+	$effect(() => {
+		if (open) applyLayout();
 	});
 
 	// Close on outside click + Escape. Listeners only exist while open.
@@ -167,11 +188,7 @@
 				<span class="emoji-section-label">Personalizados</span>
 				<div class="emoji-grid">
 					{#each custom as opt (`c-${opt.name}`)}
-						<button
-							class="emoji custom"
-							title={opt.name}
-							onclick={() => pick(opt)}
-						>
+						<button class="emoji custom" title={opt.name} onclick={() => pick(opt)}>
 							{#if opt.image_blob}
 								<img src={blobToUrl(opt.image_blob, opt.format)} alt={opt.name} />
 							{:else}
@@ -188,11 +205,7 @@
 				<span class="emoji-section-label">Comuns</span>
 				<div class="emoji-grid">
 					{#each unicode as opt (opt.char)}
-						<button
-							class="emoji unicode"
-							title={opt.label}
-							onclick={() => pick(opt)}
-						>
+						<button class="emoji unicode" title={opt.label} onclick={() => pick(opt)}>
 							{opt.char}
 						</button>
 					{/each}
@@ -207,156 +220,161 @@
 </div>
 
 <style>
-	.emoji-picker{
+	.emoji-picker {
 		position: absolute;
 		bottom: calc(100% + 8px);
 		left: 0;
 		width: min(320px, calc(100vw - 24px));
 		z-index: 320;
 		border-radius: 18px;
-		border: 1px solid rgba(255,255,255,.55);
-		background:
-			linear-gradient(145deg, rgba(255,255,255,.82), rgba(238,248,253,.74));
+		border: 1px solid rgba(255, 255, 255, 0.55);
+		background: linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(238, 248, 253, 0.74));
 		box-shadow:
-			inset 0 1px 0 rgba(255,255,255,.92),
-			0 18px 44px rgba(20,80,120,.20),
-			0 6px 14px rgba(20,80,120,.10);
+			inset 0 1px 0 rgba(255, 255, 255, 0.92),
+			0 18px 44px rgba(20, 80, 120, 0.2),
+			0 6px 14px rgba(20, 80, 120, 0.1);
 		backdrop-filter: blur(18px);
 		-webkit-backdrop-filter: blur(18px);
 		overflow: hidden;
 		opacity: 0;
-		transform: translateY(8px) scale(.98);
-		transition: opacity .18s var(--ease), transform .18s var(--ease), visibility 0s .18s;
+		transform: translateY(8px) scale(0.98);
+		transition:
+			opacity 0.18s var(--ease),
+			transform 0.18s var(--ease),
+			visibility 0s 0.18s;
 		visibility: hidden;
 		pointer-events: none;
 	}
-	.emoji-picker.below{
+	.emoji-picker.below {
 		bottom: auto;
 		top: calc(100% + 8px);
-		transform: translateY(-8px) scale(.98);
+		transform: translateY(-8px) scale(0.98);
 	}
-	.emoji-picker.open{
+	.emoji-picker.open {
 		opacity: 1;
 		transform: translateY(0) scale(1);
 		visibility: visible;
 		pointer-events: auto;
-		transition: opacity .18s var(--ease), transform .18s var(--ease), visibility 0s;
+		transition:
+			opacity 0.18s var(--ease),
+			transform 0.18s var(--ease),
+			visibility 0s;
 	}
-	.emoji-picker-head{
+	.emoji-picker-head {
 		display: flex;
 		align-items: center;
 		gap: 8px;
 		padding: 10px 12px;
-		border-bottom: 1px solid rgba(76,132,170,.16);
+		border-bottom: 1px solid rgba(76, 132, 170, 0.16);
 	}
-	.emoji-filter{
+	.emoji-filter {
 		flex: 1;
 		min-width: 0;
 		height: 38px;
 		padding: 0 12px;
 		border-radius: 12px;
-		border: 1px solid rgba(76,132,170,.22);
-		background:
-			linear-gradient(145deg, rgba(255,255,255,.72), rgba(238,248,253,.62));
-		box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+		border: 1px solid rgba(76, 132, 170, 0.22);
+		background: linear-gradient(145deg, rgba(255, 255, 255, 0.72), rgba(238, 248, 253, 0.62));
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 		font: inherit;
 		color: var(--text);
 		outline: 0;
-		transition: box-shadow .18s ease, border-color .18s ease;
+		transition:
+			box-shadow 0.18s ease,
+			border-color 0.18s ease;
 	}
-	.emoji-filter:focus{
-		box-shadow: 0 0 0 3px rgba(56,167,235,.18);
-		border-color: rgba(100,196,250,.6);
+	.emoji-filter:focus {
+		box-shadow: 0 0 0 3px rgba(56, 167, 235, 0.18);
+		border-color: rgba(100, 196, 250, 0.6);
 	}
-	.emoji-filter::placeholder{
+	.emoji-filter::placeholder {
 		color: var(--muted-soft);
 	}
-	.emoji-picker-close{
+	.emoji-picker-close {
 		width: 30px;
 		height: 30px;
 		border-radius: 50%;
-		border: 1px solid rgba(255,255,255,.6);
-		background:
-			linear-gradient(180deg, rgba(255,255,255,.7), rgba(213,235,248,.55));
+		border: 1px solid rgba(255, 255, 255, 0.6);
+		background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(213, 235, 248, 0.55));
 		color: var(--text);
 		cursor: pointer;
 		display: grid;
 		place-items: center;
 		flex: none;
-		transition: transform .18s var(--ease), box-shadow .18s ease;
+		transition:
+			transform 0.18s var(--ease),
+			box-shadow 0.18s ease;
 	}
-	.emoji-picker-close:hover{
+	.emoji-picker-close:hover {
 		transform: translateY(-1px);
 	}
-	.emoji-picker-close:active{
-		transform: scale(.95);
+	.emoji-picker-close:active {
+		transform: scale(0.95);
 	}
-	.emoji-picker-body{
+	.emoji-picker-body {
 		max-height: 320px;
 		overflow-y: auto;
 		overflow-x: hidden;
 		padding: 8px;
 	}
-	.emoji-section{
+	.emoji-section {
 		margin-bottom: 4px;
 	}
-	.emoji-section-label{
+	.emoji-section-label {
 		display: block;
 		margin: 6px 8px 4px;
 		font-size: 10px;
 		font-weight: 800;
-		letter-spacing: .06em;
+		letter-spacing: 0.06em;
 		text-transform: uppercase;
 		color: var(--muted);
 	}
-	.emoji-grid{
+	.emoji-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, 54px);
 		gap: 4px;
 	}
-	.emoji{
+	.emoji {
 		aspect-ratio: 1;
 		display: grid;
 		place-items: center;
-		border: 1px solid rgba(76,132,170,.18);
+		border: 1px solid rgba(76, 132, 170, 0.18);
 		border-radius: 10px;
-		background:
-			linear-gradient(145deg, rgba(255,255,255,.6), rgba(238,248,253,.5));
+		background: linear-gradient(145deg, rgba(255, 255, 255, 0.6), rgba(238, 248, 253, 0.5));
 		cursor: pointer;
 		transition:
-			transform .16s var(--ease),
-			box-shadow .16s ease,
-			background .16s ease;
+			transform 0.16s var(--ease),
+			box-shadow 0.16s ease,
+			background 0.16s ease;
 	}
-	.emoji:hover{
+	.emoji:hover {
 		transform: translateY(-2px) scale(1.06);
-		background:
-			linear-gradient(145deg, rgba(255,255,255,.82), rgba(238,248,253,.72));
-		box-shadow: 0 6px 14px rgba(20,80,120,.16);
+		background: linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(238, 248, 253, 0.72));
+		box-shadow: 0 6px 14px rgba(20, 80, 120, 0.16);
 	}
-	.emoji:active{
-		transform: scale(.92);
+	.emoji:active {
+		transform: scale(0.92);
 	}
-	.emoji.unicode{
+	.emoji.unicode {
 		font-size: 20px;
 		line-height: 1;
 	}
-	.emoji.custom{
+	.emoji.custom {
 		font-size: 11px;
 	}
-	.emoji.custom img{
+	.emoji.custom img {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
 	}
-	.emoji.custom .custom-name{
+	.emoji.custom .custom-name {
 		font-size: 11px;
 		font-weight: 700;
 		color: var(--text);
 		line-height: 1.2;
 		padding: 0 2px;
 	}
-	.emoji-empty{
+	.emoji-empty {
 		grid-column: 1 / -1;
 		text-align: center;
 		padding: 20px 0;
@@ -366,40 +384,37 @@
 
 	/* dark mode — :global() so Svelte doesn't strip the [data-theme] part
 	 * (it lives on <html>, outside this component's DOM). */
-	:global([data-theme="dark"]) .emoji-picker{
+	:global([data-theme='dark']) .emoji-picker {
 		background:
-			radial-gradient(circle at 15% -18%, rgba(116,207,255,.14), transparent 34%),
-			linear-gradient(145deg, rgba(25,51,68,.90), rgba(10,33,48,.82));
-		border-color: rgba(182,224,250,.18);
+			radial-gradient(circle at 15% -18%, rgba(116, 207, 255, 0.14), transparent 34%),
+			linear-gradient(145deg, rgba(25, 51, 68, 0.9), rgba(10, 33, 48, 0.82));
+		border-color: rgba(182, 224, 250, 0.18);
 		box-shadow:
-			inset 0 1px 0 rgba(255,255,255,.12),
-			0 26px 56px rgba(0,0,0,.32),
-			0 8px 22px rgba(0,0,0,.16);
+			inset 0 1px 0 rgba(255, 255, 255, 0.12),
+			0 26px 56px rgba(0, 0, 0, 0.32),
+			0 8px 22px rgba(0, 0, 0, 0.16);
 	}
-	:global([data-theme="dark"]) .emoji-picker-head{
-		border-bottom-color: rgba(179,223,248,.12);
-		background: linear-gradient(180deg, rgba(125,203,247,.05), rgba(255,255,255,.012));
+	:global([data-theme='dark']) .emoji-picker-head {
+		border-bottom-color: rgba(179, 223, 248, 0.12);
+		background: linear-gradient(180deg, rgba(125, 203, 247, 0.05), rgba(255, 255, 255, 0.012));
 	}
-	:global([data-theme="dark"]) .emoji-filter{
-		background:
-			linear-gradient(145deg, rgba(25,51,68,.82), rgba(15,38,52,.72));
-		border-color: rgba(182,224,250,.18);
-		box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+	:global([data-theme='dark']) .emoji-filter {
+		background: linear-gradient(145deg, rgba(25, 51, 68, 0.82), rgba(15, 38, 52, 0.72));
+		border-color: rgba(182, 224, 250, 0.18);
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 	}
-	:global([data-theme="dark"]) .emoji-picker-close{
-		background: rgba(83,111,129,.28);
-		border-color: rgba(182,224,250,.12);
+	:global([data-theme='dark']) .emoji-picker-close {
+		background: rgba(83, 111, 129, 0.28);
+		border-color: rgba(182, 224, 250, 0.12);
 		color: var(--text);
-		box-shadow: inset 0 1px 0 rgba(255,255,255,.10);
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 	}
-	:global([data-theme="dark"]) .emoji{
-		background:
-			linear-gradient(145deg, rgba(25,51,68,.72), rgba(15,38,52,.62));
-		border-color: rgba(182,224,250,.14);
+	:global([data-theme='dark']) .emoji {
+		background: linear-gradient(145deg, rgba(25, 51, 68, 0.72), rgba(15, 38, 52, 0.62));
+		border-color: rgba(182, 224, 250, 0.14);
 	}
-	:global([data-theme="dark"]) .emoji:hover{
-		background:
-			linear-gradient(145deg, rgba(45,79,100,.72), rgba(25,51,68,.62));
-		box-shadow: 0 6px 14px rgba(0,0,0,.24);
+	:global([data-theme='dark']) .emoji:hover {
+		background: linear-gradient(145deg, rgba(45, 79, 100, 0.72), rgba(25, 51, 68, 0.62));
+		box-shadow: 0 6px 14px rgba(0, 0, 0, 0.24);
 	}
 </style>

@@ -20,7 +20,7 @@
 	server={sampleServer}
 	backUrl="/channels/geral"
 	backLabel="Voltar ao chat"
-	nav={nav}
+	{nav}
 >
 	<slot />
 </Shell>

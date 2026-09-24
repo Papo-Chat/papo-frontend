@@ -1,9 +1,5 @@
 <script lang="ts">
-	import type {
-		MessageUserReaction,
-		MessageReactionSummary,
-		UserSummary
-	} from '$lib/types';
+	import type { MessageUserReaction, MessageReactionSummary, UserSummary } from '$lib/types';
 	import { reactionUsers } from '$lib/sample';
 	import type { EmojiOption } from '$lib/utils/emojis';
 	import Avatar from './Avatar.svelte';
@@ -11,21 +7,14 @@
 	import EmojiPicker from './EmojiPicker.svelte';
 	import ReactionUsersPopover from './ReactionUsersPopover.svelte';
 
-	let {
-		reactions,
-		userReactions,
-		messageId,
-		onAddReaction
-	} = $props<{
+	let { reactions, userReactions, messageId, onAddReaction } = $props<{
 		reactions: MessageReactionSummary[];
 		userReactions: MessageUserReaction[];
 		messageId: string;
 		onAddReaction?: (emoji: string) => void;
 	}>();
 
-	const myReactions = $derived(
-		new Set(userReactions.map((r: MessageUserReaction) => r.unicode))
-	);
+	const myReactions = $derived(new Set(userReactions.map((r: MessageUserReaction) => r.unicode)));
 
 	// One reaction-user popover at a time (hover or click to open).
 	let openEmoji = $state<string | null>(null);
@@ -51,9 +40,11 @@
 	{#each reactions as r (r.unicode)}
 		<span
 			class="reaction-group"
-			onmouseenter={() => openEmoji = r.unicode}
+			onmouseenter={() => (openEmoji = r.unicode)}
 			onmouseleave={close}
-			onkeydown={(e) => { if (e.key === 'Escape') close(); }}
+			onkeydown={(e) => {
+				if (e.key === 'Escape') close();
+			}}
 		>
 			<button
 				class="react"
@@ -86,22 +77,22 @@
 </div>
 
 <style>
-	button.react{
+	button.react {
 		font: inherit;
 		-webkit-appearance: none;
 		appearance: none;
 	}
-	button.react i{
+	button.react i {
 		font-size: 16px;
 		line-height: 1;
 	}
-	.reaction-add-wrap{
+	.reaction-add-wrap {
 		position: relative;
 		display: inline-flex;
 		align-items: center;
 		margin-left: 2px;
 	}
-	.add-react{
+	.add-react {
 		width: 32px;
 		height: 27px;
 		padding: 0;

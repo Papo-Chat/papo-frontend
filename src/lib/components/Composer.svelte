@@ -59,7 +59,7 @@
 		class="composer-tool emoji-btn"
 		title="Emojis"
 		aria-label="Emojis"
-		onclick={()=>toggleEmoji()}
+		onclick={() => toggleEmoji()}
 	>
 		<Icon name="smiley" variant="light" />
 		<EmojiPicker open={emojiOpen} onPick={onPickEmoji} />
@@ -81,16 +81,16 @@
 </footer>
 
 <style>
-	button.composer-tool{
+	button.composer-tool {
 		font: inherit;
 		-webkit-appearance: none;
 		appearance: none;
 	}
-	button.composer-tool i{
+	button.composer-tool i {
 		font-size: 18px;
 		line-height: 1;
 	}
-	.composer-tool.emoji-btn{
+	.composer-tool.emoji-btn {
 		position: relative;
 	}
 </style>

@@ -34,19 +34,11 @@
 	const name = $derived(user.nickname || user.username || 'Usuário');
 	const initial = $derived(avatarInitial(user.username, user.nickname));
 	const avatarSrc = $derived(
-		user.avatar_blob
-			? blobToUrl(user.avatar_blob, user.avatar_format)
-			: ''
+		user.avatar_blob ? blobToUrl(user.avatar_blob, user.avatar_format) : ''
 	);
-	const bannerSrc = $derived(
-		user.banner_media
-			? mediaUrl(user.banner_media)
-			: ''
-	);
+	const bannerSrc = $derived(user.banner_media ? mediaUrl(user.banner_media) : '');
 	const avatarGradient = $derived(utilAvatarGradient(user.username));
-	const bannerGradient = $derived(
-		bannerGradients[hash(name) % bannerGradients.length]
-	);
+	const bannerGradient = $derived(bannerGradients[hash(name) % bannerGradients.length]);
 	const statusClass = $derived<'online' | 'away' | 'busy'>(
 		user.status === null ? 'online' : user.status
 	);
@@ -85,17 +77,8 @@
 
 {#if open}
 	<div class="profile-overlay open" role="presentation">
-		<div
-			class="profile-card open"
-			role="dialog"
-			aria-label="Perfil de {name}"
-			bind:this={cardEl}
-		>
-			<button
-				class="profile-close"
-				onclick={close}
-				aria-label="Fechar perfil"
-			>
+		<div class="profile-card open" role="dialog" aria-label="Perfil de {name}" bind:this={cardEl}>
+			<button class="profile-close" onclick={close} aria-label="Fechar perfil">
 				<i class="ph-light ph-x" aria-hidden="true"></i>
 			</button>
 
@@ -107,18 +90,11 @@
 
 			<div class="profile-avatar" style="background: {avatarGradient}">
 				{#if avatarSrc}
-					<img
-						class="profile-avatar-img"
-						src={avatarSrc}
-						alt={name}
-					/>
+					<img class="profile-avatar-img" src={avatarSrc} alt={name} />
 				{:else}
 					<span class="profile-avatar-initial">{initial}</span>
 				{/if}
-				<span
-					class="profile-status-dot {statusClass}"
-					aria-label="Status: {statusLabel}"
-				></span>
+				<span class="profile-status-dot {statusClass}" aria-label="Status: {statusLabel}"></span>
 			</div>
 
 			<div class="profile-name-block">
@@ -126,9 +102,7 @@
 					<strong class="profile-name">{name}</strong>
 					<span class="profile-username">@{user.username}</span>
 					{#if user.status_message}
-						<span
-							class="profile-status-text {statusClass}"
-						>{user.status_message}</span>
+						<span class="profile-status-text {statusClass}">{user.status_message}</span>
 					{/if}
 				</div>
 			</div>

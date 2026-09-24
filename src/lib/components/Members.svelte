@@ -23,9 +23,7 @@
 	function computeMatches(): UserSummary[] | null {
 		const q = searchQuery.trim().toLowerCase();
 		if (!q) return null;
-		return sampleUsers.filter((u) =>
-			(u.nickname || u.username).toLowerCase().includes(q)
-		);
+		return sampleUsers.filter((u) => (u.nickname || u.username).toLowerCase().includes(q));
 	}
 	const matches = $derived(computeMatches());
 

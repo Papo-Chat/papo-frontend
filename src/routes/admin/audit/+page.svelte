@@ -14,8 +14,8 @@
 		}
 		const q = search.toLowerCase();
 		return sampleAuditLogs.filter((l) =>
-			[l.actor_username, l.action, l.entity_type, l.target_user_id ?? ''].some(
-				(v) => v.toLowerCase().includes(q)
+			[l.actor_username, l.action, l.entity_type, l.target_user_id ?? ''].some((v) =>
+				v.toLowerCase().includes(q)
 			)
 		);
 	}
@@ -138,9 +138,9 @@
 		font: inherit;
 		cursor: pointer;
 	}
-	:global([data-theme="dark"]) .audit-filter {
-		border-color: rgba(185,224,250,.14);
-		background: rgba(25,51,68,.6);
+	:global([data-theme='dark']) .audit-filter {
+		border-color: rgba(185, 224, 250, 0.14);
+		background: rgba(25, 51, 68, 0.6);
 	}
 	.action-badge {
 		font-size: 11px;
@@ -167,17 +167,17 @@
 		background: rgba(239, 248, 252, 0.5);
 		color: var(--muted);
 	}
-	:global([data-theme="dark"]) .action-badge {
-		background: rgba(119,194,235,.14);
+	:global([data-theme='dark']) .action-badge {
+		background: rgba(119, 194, 235, 0.14);
 	}
-	:global([data-theme="dark"]) .action-badge.channel {
+	:global([data-theme='dark']) .action-badge.channel {
 		color: #88d7ff;
 	}
-	:global([data-theme="dark"]) .action-badge.role {
+	:global([data-theme='dark']) .action-badge.role {
 		color: #5fe08f;
 	}
-	:global([data-theme="dark"]) .action-badge.emoji {
-		background: rgba(119,194,235,.14);
+	:global([data-theme='dark']) .action-badge.emoji {
+		background: rgba(119, 194, 235, 0.14);
 		color: #c9d9e8;
 	}
 	.empty {

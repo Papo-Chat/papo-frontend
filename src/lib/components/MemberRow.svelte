@@ -54,17 +54,14 @@
 		<div class="status">
 			{user.status_message || defaultStatus(user.status)}
 			{#if statusIcon}
-				<i
-					class="ph-light ph-{statusIcon} status-icon"
-					aria-hidden="true"
-				></i>
+				<i class="ph-light ph-{statusIcon} status-icon" aria-hidden="true"></i>
 			{/if}
 		</div>
 	</div>
 </button>
 
 <style>
-	.member .avatar i{
+	.member .avatar i {
 		font-size: 16px;
 		line-height: 1;
 	}

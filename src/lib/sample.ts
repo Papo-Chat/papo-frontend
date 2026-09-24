@@ -808,10 +808,38 @@ export const sampleRoles: Role[] = [
 
 // Emojis (empty image_blob — no real binary assets shipped).
 export const sampleEmojis: Emoji[] = [
-	{ id: 'emoji-luna', name: 'luna', image_blob: '', format: 'png', created_by: 'user-luna', created_at: '2025-03-10T00:00:00Z' },
-	{ id: 'emoji-kael', name: 'kael', image_blob: '', format: 'png', created_by: 'user-kael', created_at: '2025-03-11T00:00:00Z' },
-	{ id: 'emoji-orion', name: 'orion', image_blob: '', format: 'png', created_by: 'user-orion', created_at: '2025-03-12T00:00:00Z' },
-	{ id: 'emoji-nyx', name: 'nyx', image_blob: '', format: 'png', created_by: 'user-nyx', created_at: '2025-03-13T00:00:00Z' }
+	{
+		id: 'emoji-luna',
+		name: 'luna',
+		image_blob: '',
+		format: 'png',
+		created_by: 'user-luna',
+		created_at: '2025-03-10T00:00:00Z'
+	},
+	{
+		id: 'emoji-kael',
+		name: 'kael',
+		image_blob: '',
+		format: 'png',
+		created_by: 'user-kael',
+		created_at: '2025-03-11T00:00:00Z'
+	},
+	{
+		id: 'emoji-orion',
+		name: 'orion',
+		image_blob: '',
+		format: 'png',
+		created_by: 'user-orion',
+		created_at: '2025-03-12T00:00:00Z'
+	},
+	{
+		id: 'emoji-nyx',
+		name: 'nyx',
+		image_blob: '',
+		format: 'png',
+		created_by: 'user-nyx',
+		created_at: '2025-03-13T00:00:00Z'
+	}
 ];
 
 // Audit log entries.

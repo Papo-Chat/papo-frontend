@@ -28,12 +28,6 @@
 	{/if}
 	<div class="input-shell">
 		<div class="input-icon"><Icon name={icon} variant="light" /></div>
-		<input
-			type={type}
-			placeholder={placeholder}
-			aria-label={label}
-			{value}
-			on:input={onInput}
-		/>
+		<input {type} {placeholder} aria-label={label} {value} on:input={onInput} />
 	</div>
 </div>

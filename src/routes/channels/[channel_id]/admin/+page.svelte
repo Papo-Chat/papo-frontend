@@ -38,7 +38,7 @@
 	}
 </script>
 
-<Topbar channel={channel} />
+<Topbar {channel} />
 
 <div class="channel-admin">
 	<header class="channel-admin-head">
@@ -144,13 +144,13 @@
 		overflow-x: hidden;
 		overflow-y: auto;
 		scrollbar-width: thin;
-		scrollbar-color: rgba(72, 130, 170, .28) transparent;
+		scrollbar-color: rgba(72, 130, 170, 0.28) transparent;
 	}
 	.channel-admin::-webkit-scrollbar {
 		width: 10px;
 	}
 	.channel-admin::-webkit-scrollbar-thumb {
-		background: rgba(72, 130, 170, .22);
+		background: rgba(72, 130, 170, 0.22);
 		border-radius: 999px;
 		border: 3px solid transparent;
 		background-clip: padding-box;
@@ -172,6 +172,11 @@
 	}
 	.member-row {
 		cursor: pointer;
+		background: rgba(197, 239, 255, 0.507);
+	}
+	:global([data-theme='dark']) .member-row {
+		cursor: pointer;
+		background: rgba(62, 130, 170, 0.3);
 	}
 	.member-row .avatar {
 		border-width: 1.5px;
@@ -192,13 +197,13 @@
 		max-height: none;
 		overflow-y: auto;
 		scrollbar-width: thin;
-		scrollbar-color: rgba(72, 130, 170, .28) transparent;
+		scrollbar-color: rgba(72, 130, 170, 0.28) transparent;
 	}
 	.member-list::-webkit-scrollbar {
 		width: 10px;
 	}
 	.member-list::-webkit-scrollbar-thumb {
-		background: rgba(72, 130, 170, .22);
+		background: rgba(72, 130, 170, 0.22);
 		border-radius: 999px;
 		border: 3px solid transparent;
 		background-clip: padding-box;

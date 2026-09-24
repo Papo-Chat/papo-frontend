@@ -17,10 +17,7 @@ export function hash(str: string): number {
 	return Math.abs(h);
 }
 
-export function avatarInitial(
-	username: string,
-	nickname: string | null
-): string {
+export function avatarInitial(username: string, nickname: string | null): string {
 	return (nickname || username || 'U').charAt(0).toUpperCase();
 }
 

@@ -20,12 +20,7 @@
 		<strong>{title}</strong>
 	</div>
 	{#if onClose}
-		<button
-			class="mobile-panel-close"
-			onclick={onClose}
-			aria-label="Fechar"
-			title="Fechar"
-		>
+		<button class="mobile-panel-close" onclick={onClose} aria-label="Fechar" title="Fechar">
 			<Icon name="x" variant="light" />
 		</button>
 	{/if}

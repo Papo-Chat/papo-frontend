@@ -9,7 +9,7 @@
 </script>
 
 <aside class="rail">
-	<div class="brand-orb" title="{sampleServer.name}" aria-hidden="true">
+	<div class="brand-orb" title={sampleServer.name} aria-hidden="true">
 		<ServerIcon
 			iconBlob={sampleServer.icon_blob}
 			iconFormat={sampleServer.icon_format}

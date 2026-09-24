@@ -15,18 +15,18 @@
 
 	// Per-channel glyph (matches the mockup).
 	const iconMap: Record<string, string> = {
-		'geral': 'chats-circle',
-		'design': 'paint-brush',
-		'anúncios': 'megaphone',
-		'feedback': 'heart',
-		'ideias': 'lightbulb',
-		'projetos': 'folder',
-		'eventos': 'calendar-dots',
-		'Lounge': 'speaker-high',
-		'Reunião': 'users-three',
-		'Música': 'music-notes',
-		'Mensagens': 'envelope-simple',
-		'Favoritos': 'star'
+		geral: 'chats-circle',
+		design: 'paint-brush',
+		anúncios: 'megaphone',
+		feedback: 'heart',
+		ideias: 'lightbulb',
+		projetos: 'folder',
+		eventos: 'calendar-dots',
+		Lounge: 'speaker-high',
+		Reunião: 'users-three',
+		Música: 'music-notes',
+		Mensagens: 'envelope-simple',
+		Favoritos: 'star'
 	};
 
 	const icon = $derived(iconMap[channel.name] ?? 'channel');
@@ -49,13 +49,13 @@
 
 <style>
 	/* Reset default button styling so the .nav-item glass style applies. */
-	button.nav-item{
+	button.nav-item {
 		font: inherit;
 		text-align: left;
 		-webkit-appearance: none;
 		appearance: none;
 	}
-	button.nav-item strong{
+	button.nav-item strong {
 		font-size: 14px;
 		margin-left: 0;
 	}

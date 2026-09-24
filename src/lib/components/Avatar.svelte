@@ -42,21 +42,23 @@
 {/if}
 
 <style>
-	button.avatar{
-		border: 2px solid rgba(255,255,255,.84);
+	button.avatar {
+		border: 2px solid rgba(255, 255, 255, 0.84);
 		cursor: pointer;
 		margin: 0;
 		padding: 0;
-		transition: transform .18s var(--ease), box-shadow .18s var(--ease);
+		transition:
+			transform 0.18s var(--ease),
+			box-shadow 0.18s var(--ease);
 	}
-	button.avatar:hover{
+	button.avatar:hover {
 		transform: translateY(-2px);
-		box-shadow: 0 8px 18px rgba(17,58,86,.22);
+		box-shadow: 0 8px 18px rgba(17, 58, 86, 0.22);
 	}
-	button.avatar:active{
-		transform: scale(.96);
+	button.avatar:active {
+		transform: scale(0.96);
 	}
-	.avatar i{
+	.avatar i {
 		line-height: 1;
 	}
 </style>

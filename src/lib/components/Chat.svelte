@@ -20,8 +20,7 @@
 		// Only auto-scroll when already near the bottom (or when the list
 		// first appears), so we don't yank the user up when they are reading
 		// older messages.
-		const nearBottom =
-			listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 120;
+		const nearBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight < 120;
 		if (nearBottom) {
 			listEl.scrollTop = listEl.scrollHeight;
 		}
@@ -35,13 +34,13 @@
 		</div>
 	{:else}
 		{#each messages as m (m.id)}
-			<Message message={m} onAddReaction={onAddReaction} />
+			<Message message={m} {onAddReaction} />
 		{/each}
 	{/if}
 </div>
 
 <style>
-	.chat-empty{
+	.chat-empty {
 		display: flex;
 		flex-direction: column;
 		align-items: center;

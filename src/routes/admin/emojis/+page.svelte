@@ -11,9 +11,7 @@
 	let filter = $state('');
 
 	const visibleEmojis = $derived(
-		filter
-			? emojis.filter((e) => e.name.toLowerCase().includes(filter.toLowerCase()))
-			: emojis
+		filter ? emojis.filter((e) => e.name.toLowerCase().includes(filter.toLowerCase())) : emojis
 	);
 
 	function add(): void {
@@ -70,9 +68,7 @@
 				placeholder="🙂"
 			/>
 			<button class="admin-btn" onclick={add}>Criar</button>
-			<button class="admin-btn ghost" onclick={() => (creating = false)}>
-				Cancelar
-			</button>
+			<button class="admin-btn ghost" onclick={() => (creating = false)}> Cancelar </button>
 		</div>
 	{/if}
 
@@ -111,10 +107,10 @@
 </div>
 
 <style>
-	.emojis-page{
+	.emojis-page {
 		padding: 4px 0 8px;
 	}
-	.emojis-head{
+	.emojis-head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
@@ -122,51 +118,51 @@
 		gap: 10px;
 		margin-bottom: 12px;
 	}
-	.emojis-head h2{
+	.emojis-head h2 {
 		margin: 0;
 		font-size: 20px;
 	}
-	.emojis-actions{
+	.emojis-actions {
 		display: flex;
 		align-items: center;
 		gap: 10px;
 	}
-	.emojis-actions .filter-input{
+	.emojis-actions .filter-input {
 		width: 150px;
 	}
-	.new-emoji{
+	.new-emoji {
 		display: flex;
 		align-items: center;
 		gap: 10px;
 		margin-bottom: 12px;
 		flex-wrap: wrap;
 	}
-	.new-emoji .admin-input{
+	.new-emoji .admin-input {
 		flex: 1;
 		min-width: 160px;
 	}
-	.emoji-emoji{
+	.emoji-emoji {
 		flex: none;
 		width: 70px;
 		font-size: 18px;
 		text-align: center;
 	}
-	.emoji-info{
+	.emoji-info {
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
 		min-width: 0;
 	}
-	.emoji-meta{
+	.emoji-meta {
 		font-size: 10px;
 		color: var(--muted-soft);
 	}
-	.emoji-grid{
+	.emoji-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
 		gap: 12px;
 	}
-	.emoji-cell{
+	.emoji-cell {
 		display: flex;
 		align-items: center;
 		gap: 10px;
@@ -176,11 +172,11 @@
 		border: 1px solid rgba(255, 255, 255, 0.42);
 		backdrop-filter: blur(14px);
 	}
-	:global([data-theme="dark"]) .emoji-cell{
-		background: linear-gradient(145deg, rgba(25,51,68,.72), rgba(12,33,48,.62));
-		border-color: rgba(182,224,250,.14);
+	:global([data-theme='dark']) .emoji-cell {
+		background: linear-gradient(145deg, rgba(25, 51, 68, 0.72), rgba(12, 33, 48, 0.62));
+		border-color: rgba(182, 224, 250, 0.14);
 	}
-	.emoji-swatch{
+	.emoji-swatch {
 		flex: none;
 		width: 40px;
 		height: 40px;
@@ -191,14 +187,14 @@
 		font-weight: 800;
 		color: #fff;
 		background: linear-gradient(135deg, #7a28ce, #3a86ff);
-		box-shadow: inset 0 0 0 1px rgba(255,255,255,.25);
+		box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
 	}
-	.emoji-name{
+	.emoji-name {
 		font-size: 13px;
 		font-weight: 700;
 		color: var(--text);
 	}
-	.emoji-remove{
+	.emoji-remove {
 		flex: none;
 		display: grid;
 		place-items: center;
@@ -210,14 +206,14 @@
 		color: var(--text);
 		cursor: pointer;
 		opacity: 0.5;
-		transition: .14s var(--ease);
+		transition: 0.14s var(--ease);
 	}
-	.emoji-remove:hover{
+	.emoji-remove:hover {
 		opacity: 1;
 		background: rgba(240, 61, 94, 0.14);
 		color: #f03d5e;
 	}
-	.empty{
+	.empty {
 		font-size: 13px;
 		color: var(--muted-soft);
 	}

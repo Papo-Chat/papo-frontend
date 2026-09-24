@@ -13,10 +13,10 @@
 	const visibleUsers = $derived(
 		filter
 			? users.filter(
-				(u) =>
-					u.username.toLowerCase().includes(filter.toLowerCase()) ||
-					(u.nickname || '').toLowerCase().includes(filter.toLowerCase())
-			)
+					(u) =>
+						u.username.toLowerCase().includes(filter.toLowerCase()) ||
+						(u.nickname || '').toLowerCase().includes(filter.toLowerCase())
+				)
 			: users
 	);
 
@@ -25,9 +25,7 @@
 	}
 
 	function toggleBan(id: string): void {
-		bannedIds = bannedIds.includes(id)
-			? bannedIds.filter((b) => b !== id)
-			: [...bannedIds, id];
+		bannedIds = bannedIds.includes(id) ? bannedIds.filter((b) => b !== id) : [...bannedIds, id];
 	}
 
 	function assignRole(userId: string, role: string): void {
@@ -95,55 +93,54 @@
 		</div>
 		<div class="admin-card-body">
 			<div class="users-list">
-			{#each visibleUsers as u (u.id)}
-				{#if !isBanned(u.id)}
-					<div class="user-row">
-						<Avatar username={u.username} nickname={u.nickname} size={34} />
-						<div class="user-info">
-							<strong>{u.nickname || u.username}</strong>
-							<span class="user-user">@{u.username}</span>
-						</div>
-						{#if u.status === null}
-							<span class="status-dot"></span>
-						{:else}
-							<span class="status-dot {u.status}"></span>
-						{/if}
-						<div class="role-select">
-							<select
-								class="user-role-select"
-								aria-label={`Atribuir Role a ${u.nickname || u.username}`}
-								onchange={(e) => {
-									(e.target as HTMLSelectElement).selectedIndex = 0;
-									const val = (e.target as HTMLSelectElement).value;
-									if (val) assignRole(u.id, val);
-								}}>
-								<option value="">Atribuir Role…</option>
-								{#each sampleRoles as r (r.id)}
-									<option value={r.id}>{r.name}</option>
+				{#each visibleUsers as u (u.id)}
+					{#if !isBanned(u.id)}
+						<div class="user-row">
+							<Avatar username={u.username} nickname={u.nickname} size={34} />
+							<div class="user-info">
+								<strong>{u.nickname || u.username}</strong>
+								<span class="user-user">@{u.username}</span>
+							</div>
+							{#if u.status === null}
+								<span class="status-dot"></span>
+							{:else}
+								<span class="status-dot {u.status}"></span>
+							{/if}
+							<div class="role-select">
+								<select
+									class="user-role-select"
+									aria-label={`Atribuir Role a ${u.nickname || u.username}`}
+									onchange={(e) => {
+										(e.target as HTMLSelectElement).selectedIndex = 0;
+										const val = (e.target as HTMLSelectElement).value;
+										if (val) assignRole(u.id, val);
+									}}
+								>
+									<option value="">Atribuir Role…</option>
+									{#each sampleRoles as r (r.id)}
+										<option value={r.id}>{r.name}</option>
+									{/each}
+								</select>
+							</div>
+							<div class="role-chips">
+								{#each u.roles as r (r.id)}
+									<span class="chip" style="color:{r.color}">
+										{r.name}
+										<button class="chip-x" aria-label={`Remover Role ${r.name}`}> × </button>
+									</span>
 								{/each}
-							</select>
+							</div>
+							<button
+								class="admin-btn ghost small"
+								aria-label={`Banir ${u.nickname || u.username}`}
+								onclick={() => toggleBan(u.id)}
+							>
+								<Icon name="x-circle" variant="light" size={14} />
+								Banir
+							</button>
 						</div>
-						<div class="role-chips">
-							{#each u.roles as r (r.id)}
-								<span class="chip" style="color:{r.color}">
-									{r.name}
-									<button class="chip-x" aria-label={`Remover Role ${r.name}`}>
-										×
-									</button>
-								</span>
-							{/each}
-						</div>
-						<button
-							class="admin-btn ghost small"
-							aria-label={`Banir ${u.nickname || u.username}`}
-							onclick={() => toggleBan(u.id)}
-						>
-							<Icon name="x-circle" variant="light" size={14} />
-							Banir
-						</button>
-					</div>
-				{/if}
-			{/each}
+					{/if}
+				{/each}
 			</div>
 		</div>
 	</div>
@@ -184,12 +181,12 @@
 		font-size: 13px;
 		color: var(--muted);
 	}
-	.users-head-actions{
+	.users-head-actions {
 		display: flex;
 		align-items: center;
 		gap: 12px;
 	}
-	.users-head-actions .filter-input{
+	.users-head-actions .filter-input {
 		width: 160px;
 	}
 	.users-stats strong {
@@ -239,13 +236,13 @@
 		overflow-y: auto;
 		scroll-behavior: smooth;
 		scrollbar-width: thin;
-		scrollbar-color: rgba(72, 130, 170, .28) transparent;
+		scrollbar-color: rgba(72, 130, 170, 0.28) transparent;
 	}
 	.users-list::-webkit-scrollbar {
 		width: 10px;
 	}
 	.users-list::-webkit-scrollbar-thumb {
-		background: rgba(72, 130, 170, .22);
+		background: rgba(72, 130, 170, 0.22);
 		border-radius: 999px;
 		border: 3px solid transparent;
 		background-clip: padding-box;
@@ -262,8 +259,8 @@
 	.user-row:hover {
 		background: rgba(255, 255, 255, 0.32);
 	}
-	:global([data-theme="dark"]) .user-row:hover {
-		background: rgba(119,194,235,.085);
+	:global([data-theme='dark']) .user-row:hover {
+		background: rgba(119, 194, 235, 0.085);
 	}
 	.user-info {
 		display: flex;
@@ -289,9 +286,9 @@
 		font-size: 12px;
 		cursor: pointer;
 	}
-	:global([data-theme="dark"]) .user-role-select {
-		border-color: rgba(185,224,250,.14);
-		background: rgba(25,51,68,.6);
+	:global([data-theme='dark']) .user-role-select {
+		border-color: rgba(185, 224, 250, 0.14);
+		background: rgba(25, 51, 68, 0.6);
 	}
 	.role-chips {
 		display: flex;

@@ -32,25 +32,25 @@
 		<span
 			class="server-icon-fallback"
 			style="font-size:{size * 0.5}px; color:{fallbackColor}"
-			aria-hidden="true"
-		>{initial}</span>
+			aria-hidden="true">{initial}</span
+		>
 	{/if}
 </div>
 
 <style>
-	.server-icon{
+	.server-icon {
 		width: 100%;
 		height: 100%;
 		display: grid;
 		place-items: center;
 	}
-	.server-icon img{
+	.server-icon img {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
 		display: block;
 	}
-	.server-icon-fallback{
+	.server-icon-fallback {
 		font-weight: 800;
 		line-height: 1;
 		display: block;

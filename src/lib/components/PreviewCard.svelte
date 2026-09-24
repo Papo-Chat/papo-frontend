@@ -31,8 +31,8 @@
 							<svg viewBox="0 0 300 60" preserveAspectRatio="none" aria-hidden="true">
 								<defs>
 									<linearGradient id="pc-line" x1="0" y1="0" x2="1" y2="1">
-										<stop offset="0" stop-color="#49a0e7" stop-opacity="0.9"/>
-										<stop offset="1" stop-color="#0a84ff" stop-opacity="0.9"/>
+										<stop offset="0" stop-color="#49a0e7" stop-opacity="0.9" />
+										<stop offset="1" stop-color="#0a84ff" stop-opacity="0.9" />
 									</linearGradient>
 								</defs>
 								<path
@@ -68,15 +68,15 @@
 </div>
 
 <style>
-	.preview-body{
+	.preview-body {
 		padding: 12px 14px;
 	}
-	.preview-body p{
+	.preview-body p {
 		margin: 0;
 		color: var(--text-strong);
 		font-size: 13px;
 	}
-	.preview-provider{
+	.preview-provider {
 		display: block;
 		margin-top: 6px;
 		font-size: 11px;

@@ -95,11 +95,7 @@
 				<div class="admin-card-body">
 					{#each PERMS as p (p.key)}
 						<label class="admin-checkbox">
-							<input
-								type="checkbox"
-								bind:checked={perms[p.key]}
-								aria-label={p.label}
-							/>
+							<input type="checkbox" bind:checked={perms[p.key]} aria-label={p.label} />
 							<div>
 								<strong>{p.label}</strong>
 							</div>
@@ -124,37 +120,37 @@
 </div>
 
 <style>
-	.role-edit-page{
+	.role-edit-page {
 		padding: 4px 0 8px;
 	}
-	.role-head{
+	.role-head {
 		display: flex;
 		align-items: center;
 		gap: 14px;
 		margin-bottom: 14px;
 	}
-	.role-head h2{
+	.role-head h2 {
 		margin: 0;
 		font-size: 20px;
 	}
-	.role-actions{
+	.role-actions {
 		display: flex;
 		align-items: center;
 		gap: 10px;
 		margin-top: 14px;
 	}
-	.color-pick{
+	.color-pick {
 		display: flex;
 		gap: 6px;
 	}
-	.color-pick .swatch{
+	.color-pick .swatch {
 		border: 2px solid rgba(255, 255, 255, 0.5);
 	}
-	.swatch.active{
+	.swatch.active {
 		border-color: #fff;
 		box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
 	}
-	.empty{
+	.empty {
 		font-size: 14px;
 		color: var(--muted);
 	}
