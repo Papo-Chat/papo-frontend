@@ -177,7 +177,7 @@
 			aria-label="Filtrar emojis"
 			oninput={onFilterInput}
 		/>
-		<button class="emoji-picker-close" onclick={close} aria-label="Fechar">
+		<button class="popover-close" onclick={close} aria-label="Fechar">
 			<Icon name="x" variant="light" />
 		</button>
 	</div>
