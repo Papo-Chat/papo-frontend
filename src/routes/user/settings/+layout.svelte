@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Settings shell: same back-office chrome as admin, with its own
 	// nav (Configurações / Perfil).
+	import { sampleServer } from '$lib/sample';
 	import Shell from '$lib/components/Shell.svelte';
 
 	const nav = [
@@ -12,6 +13,7 @@
 <Shell
 	brandIcon="gear"
 	brandSub="Configurações"
+	server={sampleServer}
 	backUrl="/channels/geral"
 	backLabel="Voltar ao chat"
 	nav={nav}
