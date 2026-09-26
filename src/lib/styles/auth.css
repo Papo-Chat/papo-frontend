@@ -274,6 +274,9 @@
 	color: var(--text);
 	background: transparent;
 	font: inherit;
+	/* Base font-size is 14px (body). iOS Safari auto-zooms form controls
+	 * whose computed font-size is < 16px on focus, so pin it at 16px. */
+	font-size: 16px;
 }
 .input-shell input::placeholder {
 	color: #8b9ba6;

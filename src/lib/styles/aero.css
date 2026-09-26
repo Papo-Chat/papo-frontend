@@ -1080,6 +1080,9 @@ button.name:focus-visible {
 	background: transparent;
 	color: var(--text);
 	font: inherit;
+	/* Base font-size is 14px (body). iOS Safari auto-zooms form controls
+	 * whose computed font-size is < 16px on focus, so pin it at 16px. */
+	font-size: 16px;
 }
 .input input::placeholder {
 	color: var(--muted-soft);
@@ -1159,6 +1162,9 @@ button.name:focus-visible {
 	background: transparent;
 	color: var(--text);
 	font: inherit;
+	/* Base font-size is 14px (body). iOS Safari auto-zooms form controls
+	 * whose computed font-size is < 16px on focus, so pin it at 16px. */
+	font-size: 16px;
 }
 .search input::placeholder {
 	color: var(--muted-soft);
@@ -3040,6 +3046,9 @@ button.name:focus-visible {
 	background: linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(236, 248, 253, 0.48));
 	color: var(--text);
 	font: inherit;
+	/* Base font-size is 14px (body). iOS Safari auto-zooms form controls
+	 * whose computed font-size is < 16px on focus, so pin it at 16px. */
+	font-size: 16px;
 	transition: 0.18s var(--ease);
 }
 .admin-input:focus {
@@ -3048,6 +3057,7 @@ button.name:focus-visible {
 	box-shadow: 0 0 0 3px rgba(100, 196, 250, 0.18);
 }
 .admin-textarea {
+	font-size: 16px;
 	resize: vertical;
 	min-height: 70px;
 	padding: 10px 12px;
@@ -3067,6 +3077,7 @@ button.name:focus-visible {
 .admin-select {
 	height: 46px;
 	border-radius: 13px;
+	font-size: 16px;
 	padding: 0 12px;
 	border: 1px solid rgba(255, 255, 255, 0.8);
 	background: linear-gradient(145deg, rgba(255, 255, 255, 0.62), rgba(236, 248, 253, 0.48));

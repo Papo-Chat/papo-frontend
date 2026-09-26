@@ -180,61 +180,61 @@
 </script>
 
 {#if open}
-<div
-	class="emoji-picker {shown ? 'open' : ''} {flip}"
-	role="dialog"
-	aria-label="Emojis"
-	bind:this={cardEl}
->
-	<div class="emoji-picker-head">
-		<input
-			type="text"
-			class="emoji-filter"
-			placeholder="Filtrar emojis…"
-			aria-label="Filtrar emojis"
-			oninput={onFilterInput}
-		/>
-		<button class="popover-close" onclick={close} aria-label="Fechar">
-			<Icon name="x" variant="light" />
-		</button>
-	</div>
+	<div
+		class="emoji-picker {shown ? 'open' : ''} {flip}"
+		role="dialog"
+		aria-label="Emojis"
+		bind:this={cardEl}
+	>
+		<div class="emoji-picker-head">
+			<input
+				type="text"
+				class="emoji-filter"
+				placeholder="Filtrar emojis…"
+				aria-label="Filtrar emojis"
+				oninput={onFilterInput}
+			/>
+			<button class="popover-close" onclick={close} aria-label="Fechar">
+				<Icon name="x" variant="light" />
+			</button>
+		</div>
 
-	<div class="emoji-picker-body">
-		{#if custom.length}
-			<div class="emoji-section">
-				<span class="emoji-section-label">Personalizados</span>
-				<div class="emoji-grid">
-					{#each custom as opt (`c-${opt.name}`)}
-						<button class="emoji custom" title={opt.name} onclick={() => pick(opt)}>
-							{#if opt.image_blob}
-								<img src={blobToUrl(opt.image_blob, opt.format)} alt={opt.name} />
-							{:else}
-								<span class="custom-name">{opt.name}</span>
-							{/if}
-						</button>
-					{/each}
+		<div class="emoji-picker-body">
+			{#if custom.length}
+				<div class="emoji-section">
+					<span class="emoji-section-label">Personalizados</span>
+					<div class="emoji-grid">
+						{#each custom as opt (`c-${opt.name}`)}
+							<button class="emoji custom" title={opt.name} onclick={() => pick(opt)}>
+								{#if opt.image_blob}
+									<img src={blobToUrl(opt.image_blob, opt.format)} alt={opt.name} />
+								{:else}
+									<span class="custom-name">{opt.name}</span>
+								{/if}
+							</button>
+						{/each}
+					</div>
 				</div>
-			</div>
-		{/if}
+			{/if}
 
-		{#if unicode.length}
-			<div class="emoji-section">
-				<span class="emoji-section-label">Comuns</span>
-				<div class="emoji-grid">
-					{#each unicode as opt (opt.char)}
-						<button class="emoji unicode" title={opt.label} onclick={() => pick(opt)}>
-							{opt.char}
-						</button>
-					{/each}
+			{#if unicode.length}
+				<div class="emoji-section">
+					<span class="emoji-section-label">Comuns</span>
+					<div class="emoji-grid">
+						{#each unicode as opt (opt.char)}
+							<button class="emoji unicode" title={opt.label} onclick={() => pick(opt)}>
+								{opt.char}
+							</button>
+						{/each}
+					</div>
 				</div>
-			</div>
-		{/if}
+			{/if}
 
-		{#if !unicode.length && !custom.length}
-			<div class="emoji-empty">Nada encontrado.</div>
-		{/if}
+			{#if !unicode.length && !custom.length}
+				<div class="emoji-empty">Nada encontrado.</div>
+			{/if}
+		</div>
 	</div>
-</div>
 {/if}
 
 <style>
@@ -296,6 +296,9 @@
 		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 		font: inherit;
 		color: var(--text);
+		/* Base font-size is 14px (body). iOS Safari auto-zooms form controls
+		 * whose computed font-size is < 16px on focus, so pin it at 16px. */
+		font-size: 16px;
 		outline: 0;
 		transition:
 			box-shadow 0.18s ease,
