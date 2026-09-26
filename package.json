@@ -10,12 +10,14 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "vitest run",
+		"test:webkit": "docker run --rm --network=host -v \"$PWD:/app\" -w /app mcr.microsoft.com/playwright:v1.63.0-noble sh -lc 'npm ci && npx playwright test --project=webkit'",
 		"test:watch": "vitest",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write ."
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
+		"@playwright/test": "^1.63.0",
 		"@sveltejs/adapter-auto": "^7.0.1",
 		"@sveltejs/kit": "^2.70.3",
 		"@sveltejs/vite-plugin-svelte": "^7.3.0",

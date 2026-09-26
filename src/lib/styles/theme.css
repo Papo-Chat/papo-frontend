@@ -47,6 +47,10 @@
 	--radius-lg: 24px;
 	--radius-md: 16px;
 	--radius-sm: 12px;
+
+	/* base background gradient (user can override via inline
+	 * --user-background set by the background picker) */
+	--user-background: linear-gradient(125deg, #062f75 0%, #0080ba 48%, #0a8067 100%);
 }
 
 [data-theme='dark'] {
@@ -70,6 +74,8 @@
 	--shadow-lg: 0 30px 88px rgba(0, 0, 0, 0.45), 0 10px 26px rgba(0, 0, 0, 0.2);
 	--shadow-md: 0 14px 34px rgba(0, 0, 0, 0.3);
 	--shadow-sm: 0 6px 16px rgba(0, 0, 0, 0.22);
+
+	--user-background: linear-gradient(130deg, #020b16 0%, #061d32 48%, #073228 100%);
 }
 
 /* ───────────────────────────────────────────────────────
@@ -113,7 +119,7 @@ body {
 		radial-gradient(circle at 74% 14%, rgba(88, 255, 218, 0.24), transparent 24%),
 		radial-gradient(circle at 12% 78%, rgba(0, 132, 255, 0.35), transparent 28%),
 		radial-gradient(circle at 46% 112%, rgba(191, 90, 242, 0.18), transparent 34%),
-		linear-gradient(125deg, #062f75 0%, #0080ba 48%, #0a8067 100%);
+		var(--user-background);
 }
 
 body::before,
@@ -170,7 +176,7 @@ body::after {
 		radial-gradient(circle at 76% 12%, rgba(0, 235, 198, 0.14), transparent 25%),
 		radial-gradient(circle at 10% 82%, rgba(0, 120, 255, 0.28), transparent 31%),
 		radial-gradient(circle at 49% 112%, rgba(165, 82, 255, 0.12), transparent 34%),
-		linear-gradient(130deg, #020b16 0%, #061d32 48%, #073228 100%);
+		var(--user-background);
 }
 
 /* ───────────────────────────────────────────────────────

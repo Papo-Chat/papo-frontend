@@ -7,6 +7,7 @@
 	import '@phosphor-icons/web/light';
 	import '@phosphor-icons/web/duotone';
 	import ThemeSwitch from '$lib/components/ThemeSwitch.svelte';
+	import BackgroundPicker from '$lib/components/BackgroundPicker.svelte';
 </script>
 
 <slot />
@@ -16,6 +17,9 @@
 <div class="theme-global">
 	<ThemeSwitch />
 </div>
+
+<!-- Background picker: fixed bottom-right tip, outside the shell. -->
+<BackgroundPicker />
 
 <style>
 	/* Fixed window-level theme toggle: glued to the bottom-right corner.

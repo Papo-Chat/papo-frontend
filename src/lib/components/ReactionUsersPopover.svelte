@@ -3,11 +3,13 @@
 	// Glass language matches the header popovers (aero.css).
 	//
 	// Positioning: the popover is `position: absolute` inside the `.chat`
-	// scroll container. If it extends past the chat's content it inflates
-	// `scrollHeight`, which makes the chat's auto-scroll jump the last
-	// message up (the "gap" regression). So we flip it above/below the pill
-	// to keep it inside the chat's visible bounds — always, not just when
-	// open — so it never inflates the scroll area.
+	// scroll container. It is only mounted while `open` ({#if open}), so a
+	// closed popover never inflates the chat's scrollWidth/Height (which would
+	// make the chat horizontally scrollable on WebKit and jump the last message
+	// up, the "gap" regression). After mount we `tick()` once, then compute the
+	// layout — flipping above/below the pill and clamping/shrinking so the card
+	// stays inside the chat's visible bounds.
+	import { tick } from 'svelte';
 	import type { UserSummary } from '$lib/types';
 	import Avatar from './Avatar.svelte';
 
@@ -25,6 +27,9 @@
 
 	let cardEl: HTMLElement | null = null;
 	let flip = $state<'below' | 'above'>('below');
+	// Revealed one tick after mount so the CSS pop animation plays without a
+	// flash. The element only exists while `open` ({#if open}).
+	let shown = $state(false);
 
 	const countText = $derived(
 		`${users.length} ${users.length === 1 ? 'pessoa reagiu' : 'pessoas reagiram'}`
@@ -83,29 +88,38 @@
 		cardEl.style.width = widthPx ? `${widthPx}px` : '';
 	}
 
-	// Compute the layout whenever the popover is mounted and on every chat
-	// scroll (the pill moves relative to the chat's visible bounds).
+	// Compute the layout on mount (clamped before the first paint) and on every
+	// chat scroll (the pill moves relative to the chat's visible bounds). The
+	// element only exists while `open`, so this single effect is where the
+	// layout is computed.
 	$effect(() => {
-		if (!cardEl) return;
+		if (!open) {
+			shown = false;
+			return;
+		}
+		shown = false;
 		applyLayout();
-		const chat = cardEl.closest('.chat');
-		if (!chat) return;
-		const handler = (e: Event) => {
-			// Throttle: only recompute when the scroll position actually
-			// changes the available space.
-			applyLayout();
+		// Reveal one tick after mount so the CSS pop animation plays without a
+		// flash. Called in both branches (with/without a `.chat` anchor).
+		const reveal = () => {
+			tick().then(() => {
+				if (open) shown = true;
+			});
 		};
-		chat.addEventListener('scroll', handler, { passive: true });
-		return () => {
-			chat.removeEventListener('scroll', handler);
-		};
-	});
-
-	// Re-layout when the popover opens: the anchor (reaction group) may have
-	// moved since the last computation — a new reaction pill shifts it to the
-	// right — so the stored leftPx/flip would be stale.
-	$effect(() => {
-		if (open) applyLayout();
+		const chat = cardEl?.closest('.chat');
+		if (chat) {
+			const handler = (e: Event) => {
+				// Throttle: only recompute when the scroll position actually
+				// changes the available space.
+				applyLayout();
+			};
+			chat.addEventListener('scroll', handler, { passive: true });
+			reveal();
+			return () => {
+				chat.removeEventListener('scroll', handler);
+			};
+		}
+		reveal();
 	});
 
 	// Close on outside click + Escape. Listeners only exist while open.
@@ -136,8 +150,9 @@
 	});
 </script>
 
+{#if open}
 <div
-	class="reaction-users {open ? 'open' : ''} {flip}"
+	class="reaction-users {shown ? 'open' : ''} {flip}"
 	role="dialog"
 	aria-label={`Usuários que reagiram com ${emoji}`}
 	bind:this={cardEl}
@@ -156,6 +171,7 @@
 		{/each}
 	</ul>
 </div>
+{/if}
 
 <style>
 	/* .above flips the popover above the pill so it never extends past the

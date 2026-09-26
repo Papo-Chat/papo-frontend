@@ -498,6 +498,13 @@
 	background: radial-gradient(circle at 82% 14%, rgba(109, 220, 255, 0.055), transparent 25%);
 	/* small margin before the in-flow composer */
 	padding-bottom: 14px;
+	/* anchor messages to the bottom when they don't fill the chat;
+	 * "safe" keeps top overflow scrollable (plain flex-end on a scroll
+	 * container clips top overflow / hides the vertical scrollbar in
+	 * Chromium, so scrollHeight collapses to clientHeight) */
+	display: flex;
+	flex-direction: column;
+	justify-content: safe flex-end;
 }
 .chat::-webkit-scrollbar {
 	width: 10px;
@@ -1877,23 +1884,31 @@ button.name:focus-visible {
 			0 28px 70px rgba(2, 31, 57, 0.3),
 			0 8px 22px rgba(7, 64, 103, 0.12);
 		opacity: 0;
+		/* Closed drawers must stay inside the shell: WebKit counts the
+		 * transformed box in the scrollable overflow, so pushing them
+		 * fully off-screen inflates .app-shell scrollWidth (horizontal
+		 * scroll on 380px). A small offset keeps the slide while staying
+		 * within bounds; pointer-events:none prevents the invisible panel
+		 * from covering the content beneath. */
+		pointer-events: none;
 	}
 	.sidebar {
 		left: 8px;
 		right: auto;
 		border-radius: 24px;
-		transform: translate3d(calc(-100% - 22px), 0, 0) scale(0.985);
+		transform: translate3d(-8px, 0, 0) scale(0.985);
 	}
 	.members {
 		right: 8px;
 		left: auto;
 		border-radius: 24px;
-		transform: translate3d(calc(100% + 22px), 0, 0) scale(0.985);
+		transform: translate3d(8px, 0, 0) scale(0.985);
 	}
 	.sidebar.open,
 	.members.open {
 		transform: translate3d(0, 0, 0) scale(1);
 		opacity: 1;
+		pointer-events: auto;
 	}
 	.sidebar.open {
 		animation: drawerLeftFinal 0.34s var(--ease);

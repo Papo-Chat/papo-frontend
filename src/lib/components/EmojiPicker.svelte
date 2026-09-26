@@ -2,11 +2,13 @@
 	// Shared emoji picker used by the composer emoji button and the message
 	// reaction button. Glass language matches the header popovers (aero.css).
 	//
-	// Positioning: rendered always (not conditionally on `open`) so the card
-	// exists to measure bounds. It flips above/below the trigger to stay inside
-	// the chat's visible area (like ReactionUsersPopover), so it never inflates
-	// the chat's scrollHeight. Outside the `.chat` container (composer, at the
-	// bottom) it always opens above.
+	// Positioning: the card is only mounted while `open` ({#if open}), so a
+	// closed picker never inflates the scroll container's scrollWidth/Height.
+	// After mount we `tick()` once, then compute the layout (flip above/below
+	// the trigger to stay inside the chat's visible area, like
+	// ReactionUsersPopover, and shrink if wider than the container). Outside
+	// the `.chat` container (composer, at the bottom) it always opens above.
+	import { tick } from 'svelte';
 	import { allEmojis, type EmojiOption } from '$lib/utils/emojis';
 	import { blobToUrl } from '$lib/utils/media';
 	import Icon from './Icon.svelte';
@@ -24,6 +26,9 @@
 	let cardEl: HTMLElement | null = null;
 	let filter = $state('');
 	let flip = $state<'above' | 'below'>('above');
+	// Revealed one tick after mount so the CSS fade-in plays without a flash.
+	// The element only exists while `open` ({#if open}).
+	let shown = $state(false);
 	const all = allEmojis();
 
 	const filtered = $derived(
@@ -113,25 +118,37 @@
 		cardEl.style.width = widthPx ? `${widthPx}px` : '';
 	}
 
+	// Mount → clamp before the first paint, then reveal (fade-in). The card
+	// only exists while `open`, so this single effect is where the layout is
+	// computed. Re-layout on chat scroll: the anchor (e.g. the reaction-add
+	// wrap in a message) may have moved — a new reaction pill shifts it to
+	// the right — so the stored leftPx/flip would be stale.
 	$effect(() => {
-		if (!cardEl) return;
+		if (!open) {
+			shown = false;
+			return;
+		}
+		shown = false;
 		applyLayout();
-		const chat = cardEl.closest('.chat');
-		if (!chat) return;
-		const handler = (e: Event) => {
-			applyLayout();
+		// Reveal one tick after mount so the CSS fade-in plays without a flash.
+		// Called in both branches (with/without a `.chat` anchor).
+		const reveal = () => {
+			tick().then(() => {
+				if (open) shown = true;
+			});
 		};
-		chat.addEventListener('scroll', handler, { passive: true });
-		return () => {
-			chat.removeEventListener('scroll', handler);
-		};
-	});
-
-	// Re-layout when the picker opens: the anchor (e.g. the reaction-add wrap
-	// in a message) may have moved since the last computation — a new reaction
-	// pill shifts it to the right — so the stored leftPx/flip would be stale.
-	$effect(() => {
-		if (open) applyLayout();
+		const chat = cardEl?.closest('.chat');
+		if (chat) {
+			const handler = (e: Event) => {
+				applyLayout();
+			};
+			chat.addEventListener('scroll', handler, { passive: true });
+			reveal();
+			return () => {
+				chat.removeEventListener('scroll', handler);
+			};
+		}
+		reveal();
 	});
 
 	// Close on outside click + Escape. Listeners only exist while open.
@@ -162,11 +179,11 @@
 	});
 </script>
 
+{#if open}
 <div
-	class="emoji-picker {open ? 'open' : ''} {flip}"
+	class="emoji-picker {shown ? 'open' : ''} {flip}"
 	role="dialog"
 	aria-label="Emojis"
-	aria-hidden={!open}
 	bind:this={cardEl}
 >
 	<div class="emoji-picker-head">
@@ -218,6 +235,7 @@
 		{/if}
 	</div>
 </div>
+{/if}
 
 <style>
 	.emoji-picker {
