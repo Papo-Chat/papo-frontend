@@ -1,13 +1,41 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import Icon from '$lib/components/Icon.svelte';
 	import {
 		backgroundId,
 		setBackground,
 		deviceImages,
-		defaultBackground
+		defaultBackground,
+		CUSTOM_BG_ID,
+		userImageUrl,
+		setUserBackground
 	} from '$lib/store/background.svelte';
 
 	let open = false;
+	let customInput: HTMLInputElement | null = null;
+	let customError = '';
+
+	function pickUserImage(): void {
+		customError = '';
+		customInput?.click();
+	}
+
+	async function onCustomSelect(e: Event): Promise<void> {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) {
+			return;
+		}
+		const err = await setUserBackground(file);
+		// Reset after the read starts so the same file can be re-picked.
+		input.value = '';
+		if (err) {
+			customError = err;
+			return;
+		}
+		close();
+	}
+
 
 	function toggleOpen() {
 		open = !open;
@@ -58,7 +86,34 @@
 					<span class="bg-option-label">{img.label}</span>
 				</button>
 			{/each}
+			<button
+				class="bg-option bg-custom {$backgroundId === CUSTOM_BG_ID ? 'selected' : ''}"
+				on:click={pickUserImage}
+				title="Enviar imagem de fundo (PNG/JPEG, até 2MB)"
+				aria-label="Enviar imagem de fundo"
+			>
+				{#if $userImageUrl}
+					<img class="bg-option-img" src={$userImageUrl} alt="" />
+				{:else}
+					<span class="bg-custom-icon">
+						<Icon name="gear" variant="light" size={18} />
+					</span>
+				{/if}
+				<span class="bg-option-label">Imagem</span>
+			</button>
 		</div>
+		<div class="bg-picker-footer">
+			<span class="bg-hint">PNG/JPEG · até 2MB · 720p recomendado</span>
+			{#if customError}<span class="bg-error">{customError}</span>{/if}
+		</div>
+		<input
+			type="file"
+			accept="image/png,image/jpeg"
+			bind:this={customInput}
+			on:change={onCustomSelect}
+			aria-label="Escolher imagem de fundo"
+			hidden
+		/>
 	</div>
 {/if}
 
@@ -147,6 +202,26 @@
 		border-radius: 10px;
 		border: 2px solid transparent;
 		cursor: pointer;
+		overflow: hidden;
+	}
+
+	.bg-custom {
+		background: #3d4759;
+	}
+	.bg-custom-icon {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #fff;
+	}
+	.bg-option-img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
 	}
 	.bg-option.selected {
 		border-color: var(--blue);
@@ -162,5 +237,22 @@
 		font-weight: 600;
 		color: white;
 		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+	}
+
+	.bg-picker-footer {
+		padding: 8px 14px;
+		border-top: 1px solid var(--line);
+		font-size: 10px;
+		color: var(--muted-soft);
+	}
+	.bg-hint {
+		display: block;
+		line-height: 1.5;
+	}
+	.bg-error {
+		display: block;
+		margin-top: 2px;
+		font-size: 11px;
+		color: #e74c5f;
 	}
 </style>

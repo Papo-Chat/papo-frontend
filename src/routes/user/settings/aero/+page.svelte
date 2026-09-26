@@ -4,9 +4,35 @@
 		backgroundId,
 		setBackground,
 		deviceImages,
-		defaultBackground
+		defaultBackground,
+		CUSTOM_BG_ID,
+		userImageUrl,
+		setUserBackground
 	} from '$lib/store/background.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+
+	let customInput: HTMLInputElement | null = null;
+	let customError = '';
+
+	function pickUserImage(): void {
+		customError = '';
+		customInput?.click();
+	}
+
+	async function onCustomSelect(e: Event): Promise<void> {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) {
+			return;
+		}
+		const err = await setUserBackground(file);
+		// Reset after the read starts so the same file can be re-picked.
+		input.value = '';
+		if (err) {
+			customError = err;
+			return;
+		}
+	}
 </script>
 
 <div class="aero-page">
@@ -50,7 +76,32 @@
 						<span>{img.label}</span>
 					</button>
 				{/each}
+				<button
+					class="bg-card bg-custom { $backgroundId === CUSTOM_BG_ID ? 'selected' : '' }"
+					on:click={pickUserImage}
+					title="Enviar imagem de fundo (PNG/JPEG, até 2MB)"
+					aria-label="Enviar imagem de fundo"
+				>
+					{#if $userImageUrl}
+						<img class="bg-card-img" src={$userImageUrl} alt="" />
+					{:else}
+						<span class="bg-custom-icon">
+							<Icon name="gear" variant="light" size={20} />
+						</span>
+					{/if}
+					<span>Imagem</span>
+				</button>
 			</div>
+			<p class="bg-hint">PNG, JPEG ou JPG · até 2MB · 720p recomendado</p>
+			{#if customError}<span class="bg-error">{customError}</span>{/if}
+			<input
+				type="file"
+				accept="image/png,image/jpeg"
+				bind:this={customInput}
+				on:change={onCustomSelect}
+				aria-label="Escolher imagem de fundo"
+				hidden
+			/>
 		</div>
 	</div>
 </div>
@@ -114,6 +165,26 @@
 		border-radius: var(--radius-sm);
 		border: 2px solid transparent;
 		cursor: pointer;
+		overflow: hidden;
+	}
+
+	.bg-custom {
+		background: #3d4759;
+	}
+	.bg-card-img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.bg-custom-icon {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: #fff;
 	}
 
 	.bg-card:hover {
@@ -153,5 +224,17 @@
 
 	:global([data-theme='dark']) .aero-label {
 		color: var(--muted-soft);
+	}
+
+	.bg-hint {
+		margin: 8px 2px 0;
+		font-size: 11px;
+		color: var(--muted-soft);
+	}
+	.bg-error {
+		display: block;
+		margin-top: 4px;
+		font-size: 12px;
+		color: #e74c5f;
 	}
 </style>

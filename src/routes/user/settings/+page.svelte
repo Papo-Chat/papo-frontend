@@ -72,17 +72,17 @@
 			<div class="admin-field">
 				<label for="set-font">Tamanho da fonte</label>
 				<select id="set-font" class="admin-select" bind:value={display.fontSize}>
-					<option value="small">Pequena</option>
-					<option value="normal">Normal</option>
-					<option value="large">Grande</option>
+					<option class="admin-option" value="small">Pequena</option>
+					<option class="admin-option" value="normal">Normal</option>
+					<option class="admin-option" value="large">Grande</option>
 				</select>
 			</div>
 			<div class="admin-field">
 				<label for="set-density">Densidade</label>
 				<select id="set-density" class="admin-select" bind:value={display.messageDensity}>
-					<option value="compact">Compacta</option>
-					<option value="comfortable">Confortável</option>
-					<option value="spacious">Espaça</option>
+					<option class="admin-option" value="compact">Compacta</option>
+					<option class="admin-option" value="comfortable">Confortável</option>
+					<option class="admin-option" value="spacious">Espaça</option>
 				</select>
 			</div>
 			<label class="admin-checkbox">

@@ -15,6 +15,11 @@ export const defaultBackground =
 	'linear-gradient(125deg, #062f75 0%, #0080ba 48%, #0a8067 100%)';
 
 const KEY = 'papo:background';
+const IMAGE_KEY = 'papo:user-image';
+
+// Custom (user-uploaded) background id. The image itself is stored as a data
+// URL in localStorage, separate from the preset list below.
+export const CUSTOM_BG_ID = 'custom';
 
 export const deviceImages: DeviceImage[] = [
 	{ id: 'default', label: 'Padrão', background: '' },
@@ -50,6 +55,23 @@ export const deviceImages: DeviceImage[] = [
 	}
 ];
 
+// User-uploaded background limits (PNG/JPEG only — user requirement).
+const MAX_USER_BG_BYTES = 2 * 1024 * 1024;
+const ALLOWED_USER_BG_MIMES = ['image/png', 'image/jpeg'] as const;
+
+// Pure (node-testable): validates a user-uploaded background image.
+// Returns '' when valid or a pt-BR error message to display.
+export function validateUserBgFile(file: { size: number; type: string }): string {
+	let err = '';
+	if (!(ALLOWED_USER_BG_MIMES as readonly string[]).includes(file.type)) {
+		err += 'tipo inválido; use PNG, JPEG ou JPG';
+	}
+	if (file.size > MAX_USER_BG_BYTES) {
+		err += `${err ? '; ' : ''}excede o tamanho máximo de 2MB`;
+	}
+	return err;
+}
+
 function read(): string {
 	if (typeof window === 'undefined') {
 		return 'default';
@@ -58,23 +80,47 @@ function read(): string {
 	return stored ? stored : 'default';
 }
 
+function readUserImage(): string {
+	if (typeof window === 'undefined') {
+		return '';
+	}
+	return window.localStorage.getItem(IMAGE_KEY) ?? '';
+}
+
+// Applies the selected background to <html>: presets via --user-background,
+// custom images as a data-URL image. The .has-user-image class makes CSS
+// stretch+fill the image (see theme.css).
 function applyToDom(id: string): void {
 	if (typeof window === 'undefined') {
 		return;
 	}
-	const img = deviceImages.find((d) => d.id === id);
 	const el = document.documentElement;
+	if (id === CUSTOM_BG_ID) {
+		const url = readUserImage();
+		el.classList.toggle('has-user-image', Boolean(url));
+		if (url) {
+			el.style.setProperty('--user-background', `url("${url}")`);
+		} else {
+			el.style.removeProperty('--user-background');
+		}
+		return;
+	}
+	const img = deviceImages.find((d) => d.id === id);
 	if (img?.background) {
 		el.style.setProperty('--user-background', img.background);
 	} else {
 		el.style.removeProperty('--user-background');
 	}
+	el.classList.remove('has-user-image');
 }
 
 const initial = read();
 applyToDom(initial);
 
 export const backgroundId = writable<string>(initial);
+export const userImageUrl = writable<string>(
+	initial === CUSTOM_BG_ID ? readUserImage() : ''
+);
 
 export function setBackground(next: string): void {
 	backgroundId.set(next);
@@ -82,4 +128,46 @@ export function setBackground(next: string): void {
 	if (typeof window !== 'undefined') {
 		window.localStorage.setItem(KEY, next);
 	}
+}
+
+// Validates + reads a user-uploaded image, persists it to localStorage as a
+// data URL and selects it. Returns '' on success or an error message.
+export async function setUserBackground(file: File): Promise<string> {
+	const err = validateUserBgFile(file);
+	if (err) {
+		return err;
+	}
+	if (typeof window === 'undefined') {
+		return 'ambiente sem navegador';
+	}
+
+	let dataUrl = '';
+	try {
+		await new Promise<void>((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => {
+				dataUrl = String(reader.result ?? '');
+				resolve();
+			};
+			reader.onerror = () => reject(new Error('falha ao ler a imagem'));
+			reader.readAsDataURL(file);
+		});
+	} catch (e) {
+		return e instanceof Error ? e.message : 'falha ao ler a imagem';
+	}
+
+	if (!dataUrl) {
+		return 'falha ao ler a imagem';
+	}
+
+	try {
+		window.localStorage.setItem(IMAGE_KEY, dataUrl);
+	} catch {
+		console.error('papo: failed to persist user background image');
+		return 'falha ao salvar a imagem no armazenamento local';
+	}
+
+	userImageUrl.set(dataUrl);
+	setBackground(CUSTOM_BG_ID);
+	return '';
 }

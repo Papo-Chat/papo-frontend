@@ -3086,6 +3086,15 @@ button.name:focus-visible {
 	cursor: pointer;
 	transition: 0.18s var(--ease);
 }
+
+.admin-select select{
+	font-size: 16px;
+}
+
+.admin-option{
+	font-size: 16px;
+}
+
 [data-theme='dark'] .admin-select {
 	border-color: rgba(185, 224, 250, 0.14);
 	background: rgba(25, 51, 68, 0.6);

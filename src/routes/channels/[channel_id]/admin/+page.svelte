@@ -81,9 +81,9 @@
 				<div class="admin-field">
 					<label for="ca-notif">Notificações</label>
 					<select id="ca-notif" class="admin-select" bind:value={notif}>
-						<option value="off">Sem notificações</option>
-						<option value="only_mentions">Somente menções</option>
-						<option value="all">Todas</option>
+						<option class="admin-option" value="off">Sem notificações</option>
+						<option class="admin-option" value="only_mentions">Somente menções</option>
+						<option class="admin-option" value="all">Todas</option>
 					</select>
 				</div>
 				<div class="admin-stat">

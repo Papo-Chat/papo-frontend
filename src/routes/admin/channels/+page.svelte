@@ -102,9 +102,9 @@
 				aria-label="Nome do canal"
 			/>
 			<select class="admin-select" bind:value={newType} aria-label="Tipo do canal">
-				<option value="text">Texto</option>
-				<option value="category">Categoria</option>
-				<option value="voice">Voz</option>
+				<option class="admin-option" value="text">Texto</option>
+				<option class="admin-option" value="category">Categoria</option>
+				<option class="admin-option" value="voice">Voz</option>
 			</select>
 			<button class="admin-btn" onclick={addChannel}> Criar </button>
 		</div>
@@ -162,9 +162,9 @@
 						<div class="admin-field">
 							<label for="ch-notif">Notificações</label>
 							<select id="ch-notif" class="admin-select" value={selected.notification_settings}>
-								<option value="off">Sem notificações</option>
-								<option value="only_mentions">Somente menções</option>
-								<option value="all">Todas</option>
+								<option class="admin-option" value="off">Sem notificações</option>
+								<option class="admin-option" value="only_mentions">Somente menções</option>
+								<option class="admin-option" value="all">Todas</option>
 							</select>
 						</div>
 					{:else}

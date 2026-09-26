@@ -179,6 +179,12 @@ body::after {
 		var(--user-background);
 }
 
+/* User-uploaded image background: stretch + fill the app area. Equivalent to
+ * auto for the gradient layers, so presets are unaffected. */
+html.has-user-image body {
+	background-size: 100% 100%;
+}
+
 /* ───────────────────────────────────────────────────────
    Reduced motion
    ─────────────────────────────────────────────────────── */

@@ -116,9 +116,9 @@
 										if (val) assignRole(u.id, val);
 									}}
 								>
-									<option value="">Atribuir Role…</option>
+									<option class="admin-option" value="">Atribuir Role…</option>
 									{#each sampleRoles as r (r.id)}
-										<option value={r.id}>{r.name}</option>
+										<option class="admin-option" value={r.id}>{r.name}</option>
 									{/each}
 								</select>
 							</div>
