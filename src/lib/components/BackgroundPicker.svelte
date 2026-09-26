@@ -1,62 +1,13 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import {
+		backgroundId,
+		setBackground,
+		deviceImages,
+		defaultBackground
+	} from '$lib/store/background.svelte';
 
-	const STORAGE_KEY = 'papo:background';
-
-	type DeviceImage = {
-		id: string;
-		label: string;
-		background: string;
-	};
-
-	const deviceImages: DeviceImage[] = [
-		{ id: 'default', label: 'Padrão', background: '' },
-		{
-			id: 'midnight-rose',
-			label: 'Rosa Noturna',
-			background: 'linear-gradient(135deg, #1f1638 0%, #6d2e5b 48%, #d9778a 100%)'
-		},
-		{
-			id: 'forest',
-			label: 'Floresta',
-			background: 'linear-gradient(135deg, #1b4332 0%, #2d6a4f 48%, #40916c 100%)'
-		},
-		{
-			id: 'sunset',
-			label: 'Pôr do Sol',
-			background: 'linear-gradient(135deg, #ff9a6d 0%, #ff6b6b 48%, #c44569 100%)'
-		},
-		{
-			id: 'space',
-			label: 'Espaço',
-			background: 'linear-gradient(135deg, #0f2027 0%, #203a43 48%, #2c5364 100%)'
-		},
-		{
-			id: 'desert',
-			label: 'Deserto',
-			background: 'linear-gradient(135deg, #e9c46a 0%, #f4a261 48%, #e76f51 100%)'
-		},
-		{
-			id: 'aurora',
-			label: 'Aurora',
-			background: 'linear-gradient(135deg, #7209b7 0%, #3a0ca3 48%, #4cc9f0 100%)'
-		}
-	];
-
-	let selectedId = 'default';
 	let open = false;
-
-	function applyBackground(img: DeviceImage): void {
-		selectedId = img.id;
-		const el = document.documentElement;
-		if (img.background) {
-			el.style.setProperty('--user-background', img.background);
-			localStorage.setItem(STORAGE_KEY, img.id);
-		} else {
-			el.style.removeProperty('--user-background');
-			localStorage.removeItem(STORAGE_KEY);
-		}
-	}
 
 	function toggleOpen() {
 		open = !open;
@@ -75,13 +26,6 @@
 
 	onMount(() => {
 		document.addEventListener('click', onDocumentClick);
-
-		const saved = localStorage.getItem(STORAGE_KEY);
-		const img = saved ? deviceImages.find((d) => d.id === saved) : undefined;
-		if (img) {
-			selectedId = img.id;
-			applyBackground(img);
-		}
 	});
 
 	onDestroy(() => {
@@ -106,9 +50,9 @@
 		<div class="bg-picker-grid">
 			{#each deviceImages as img (img.id)}
 				<button
-					class="bg-option {selectedId === img.id ? 'selected' : ''}"
-					on:click={() => { applyBackground(img); close(); }}
-					style="background: {img.background || `linear-gradient(125deg, #062f75 0%, #0080ba 48%, #0a8067 100%)`}"
+					class="bg-option {$backgroundId === img.id ? 'selected' : ''}"
+					on:click={() => { setBackground(img.id); close(); }}
+					style="background: {img.background || defaultBackground}"
 					aria-label={img.label}
 				>
 					<span class="bg-option-label">{img.label}</span>
@@ -145,8 +89,11 @@
 		transition:
 			filter 0.2s var(--ease),
 			transform 0.2s var(--ease);
+	}@media (max-width: 1600px) {
+		:global(.bg-control) {
+			display: none;
+		}
 	}
-
 	.bg-control:hover {
 		filter:
 			brightness(1.8)
