@@ -40,13 +40,22 @@
 	{#each reactions as r (r.unicode)}
 		<span
 			class="reaction-group"
-			onmouseenter={() => (openEmoji = r.unicode)}
-			onmouseleave={close}
+			onpointerenter={(e) => {
+				if (e.pointerType === 'mouse') {
+					openEmoji = r.unicode;
+				}
+			}}
+			onpointerleave={(e) => {
+				if (e.pointerType === 'mouse') {
+					close();
+				}
+			}}
 			onkeydown={(e) => {
 				if (e.key === 'Escape') close();
 			}}
 		>
 			<button
+				type="button"
 				class="react"
 				aria-label={`Usuários que reagiram com ${r.unicode}`}
 				onclick={() => toggle(r.unicode)}
@@ -54,6 +63,7 @@
 				{r.unicode}
 				{r.count}
 			</button>
+
 			<ReactionUsersPopover
 				emoji={r.unicode}
 				users={usersFor(r.unicode, r.count)}
@@ -72,7 +82,7 @@
 		>
 			<Icon name="smiley" variant="light" />
 		</button>
-		<EmojiPicker open={emojiOpen} onPick={onPickEmoji} />
+		<EmojiPicker bind:open={emojiOpen} onPick={onPickEmoji} />
 	</div>
 </div>
 

@@ -12,9 +12,9 @@
 	const deviceImages: DeviceImage[] = [
 		{ id: 'default', label: 'Padrão', background: '' },
 		{
-			id: 'ocean',
-			label: 'Oceano',
-			background: 'linear-gradient(135deg, #0a8067 0%, #0080ba 48%, #062f75 100%)'
+			id: 'midnight-rose',
+			label: 'Rosa Noturna',
+			background: 'linear-gradient(135deg, #1f1638 0%, #6d2e5b 48%, #d9778a 100%)'
 		},
 		{
 			id: 'forest',
@@ -126,20 +126,34 @@
 		bottom: 0;
 		right: 0;
 		z-index: 999;
+
 		width: 34px;
 		height: 34px;
+
 		border: none;
 		cursor: pointer;
+
 		clip-path: polygon(100% 0, 100% 100%, 0 100%);
-		background: linear-gradient(-260deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.1));
-		transition: filter 0.15s var(--ease);
-	}@media (max-width: 1600px) {
-		:global(.bg-control) {
-			display: none;
-		}
+
+		background: radial-gradient(
+			circle at 100% 100%,
+			var(--glass-soft) 80%,
+			transparent 15%,
+			transparent 0%
+		);
+
+		transition:
+			filter 0.2s var(--ease),
+			transform 0.2s var(--ease);
 	}
+
 	.bg-control:hover {
-		filter: brightness(1.25);
+		filter:
+			brightness(1.8)
+			contrast(1.25);
+
+		transform: scale(1.12);
+		transform-origin: bottom right;
 	}
 
 	.bg-picker {
@@ -149,7 +163,7 @@
 		z-index: 1000;
 		width: 240px;
 		border-radius: 16px;
-		background: var(--glass-strong);
+		background: var(--glass-soft);
 		border: 1px solid var(--line-strong);
 		box-shadow: var(--shadow-lg);
 		backdrop-filter: blur(12px);

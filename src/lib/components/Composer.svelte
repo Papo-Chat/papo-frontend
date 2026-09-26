@@ -62,7 +62,7 @@
 		onclick={() => toggleEmoji()}
 	>
 		<Icon name="smiley" variant="light" />
-		<EmojiPicker open={emojiOpen} onPick={onPickEmoji} />
+		<EmojiPicker bind:open={emojiOpen} onPick={onPickEmoji} />
 	</button>
 
 	<div class="input">
