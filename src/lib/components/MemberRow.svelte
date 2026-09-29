@@ -45,14 +45,14 @@
 	onclick={() => openProfile(user)}
 >
 	<div class="member-avatar">
-		<Avatar user={user} size={30} />
+		<Avatar {user} size={30} />
 		<span class="member-status-dot {status}" aria-label="Status: {defaultStatus(status)}"></span>
 	</div>
-			
+
 	<div class="member-info">
 		<div class="member-name">
 			<span class="member-name-text" style={roleColor ? `color:${roleColor}` : undefined}>
-			{user.nickname || user.username}
+				{user.nickname || user.username}
 			</span>
 			{#if roleBadge}
 				<i class="ph-duotone ph-star member-badge-icon" aria-label="Destaque"></i>
@@ -93,5 +93,4 @@
 	.member-status-dot.offline {
 		background: var(--muted);
 	}
-
 </style>

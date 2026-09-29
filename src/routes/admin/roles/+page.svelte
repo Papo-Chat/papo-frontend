@@ -13,49 +13,51 @@
 	const palette = ['#e7a80b', '#30d158', '#0a84ff', '#9b5de5', '#ff5d63', '#5ac8fa'];
 
 	const visibleRoles = $derived(
-        rolesStore.state.list.filter((r) =>
-            !filter || r.name.toLowerCase().includes(filter.toLowerCase())
-        )
-    );
+		rolesStore.state.list.filter(
+			(r) => !filter || r.name.toLowerCase().includes(filter.toLowerCase())
+		)
+	);
 
 	function memberCount(roleId: string): number {
-        let count = 0;
-        for (const u of usersStore.state.byId.values()) {
-            if (u.roles.some((r) => r.id === roleId)) count++;
-        }
-        return count;
-    }
+		let count = 0;
+		for (const u of usersStore.state.byId.values()) {
+			if (u.roles.some((r) => r.id === roleId)) count++;
+		}
+		return count;
+	}
 
 	function openCreate(): void {
-        creating = true;
-        name = '';
-        color = palette[0];
-    }
+		creating = true;
+		name = '';
+		color = palette[0];
+	}
 
 	function closeCreate(): void {
-        creating = false;
-    }
+		creating = false;
+	}
 
 	function create(): void {
-        const n = name.trim();
-        if (!n) return;
-        // New role starts with no permissions; edit them on the role detail page.
-        rolesStore.create({
-            name: n,
-            color,
-            permissions: {
-                manage_server: false,
-                manage_channels: false,
-                manage_roles: false,
-                ban_members: false,
-                pin_message: false,
-                everyone_message: false,
-                send_attachment: false
-            }
-        });
-        closeCreate();
-    }
-</script>>
+		const n = name.trim();
+		if (!n) return;
+		// New role starts with no permissions; edit them on the role detail page.
+		rolesStore.create({
+			name: n,
+			color,
+			permissions: {
+				manage_server: false,
+				manage_channels: false,
+				manage_roles: false,
+				ban_members: false,
+				pin_message: false,
+				everyone_message: false,
+				send_attachment: false
+			}
+		});
+		closeCreate();
+	}
+</script>
+
+>
 
 <div class="roles-page">
 	<header class="roles-head">

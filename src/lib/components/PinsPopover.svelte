@@ -100,7 +100,10 @@
 					<Icon name="push-pin" variant="duotone" />
 				</div>
 				<strong>Fixadas</strong>
-				<p>Nenhuma mensagem fixada neste canal. Passar o mouse sobre uma mensagem e clicar no alfinete para fixá-la.</p>
+				<p>
+					Nenhuma mensagem fixada neste canal. Passar o mouse sobre uma mensagem e clicar no
+					alfinete para fixá-la.
+				</p>
 			{/if}
 		</div>
 	</div>

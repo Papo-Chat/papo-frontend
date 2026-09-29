@@ -12,12 +12,11 @@
 	import Avatar from './Avatar.svelte';
 	import Reactions from './Reactions.svelte';
 	import PreviewCard from './PreviewCard.svelte';
+	import Attachment from './Attachment.svelte';
+	import FormattedMessage from './FormattedMessage.svelte';
 	import Icon from './Icon.svelte';
 
-	let {
-		message,
-		onReply
-	} = $props<{
+	let { message, onReply } = $props<{
 		message: MessageWithAttachment;
 		onReply?: (message: MessageWithAttachment) => void;
 	}>();
@@ -28,7 +27,8 @@
 	const author = $derived(usersStore.state.byId.get(message.author_id ?? ''));
 	const channel = $derived(channelsStore.state.byId.get(message.channel_id));
 	const isOwner = $derived(!!me && serverState.server?.owner_id === me);
-
+  	const isMobile = () =>
+    	window.matchMedia('(pointer: coarse)').matches;
 	// Permissões: SOMENTE as roles do usuário logado. Os ids vêm do whoami
 	// (sessionState.roles); os detalhes de permissão vêm do list do store de
 	// roles. Usar todas as roles do servidor daria permissão que o usuário não tem.
@@ -53,7 +53,7 @@
 	const isPinned = $derived(pinnedIds.has(message.id));
 
 	const name = $derived(author?.nickname || author?.username || 'Usuário');
-	const msgReply = $derived(messagesStore.getMessage(message.channel_id,message.reply_to))
+	const msgReply = $derived(messagesStore.getMessage(message.channel_id, message.reply_to));
 	const replyAuthor = $derived(usersStore.state.byId.get(msgReply?.author_id ?? ''));
 
 	// ── ações: edit/delete/reply/pin ─────────────────────────────────
@@ -70,7 +70,7 @@
 		if (!showActions || !messageEl) return;
 		function onDocDown(e: PointerEvent): void {
 			const el = messageEl;
-			if (!el || !el.contains(e.target as Node) && e.pointerType === 'touch') {
+			if (!el || (!el.contains(e.target as Node) && e.pointerType === 'touch')) {
 				showActions = false;
 			}
 		}
@@ -101,6 +101,18 @@
 		showActions = false;
 	}
 
+	function handleEditKeydown(event) {
+		if (event.key === 'Escape') cancelEdit();
+		if (
+		event.key === 'Enter' &&
+			!event.shiftKey &&
+			!event.isComposing &&
+			!isMobile()
+		) {
+		event.preventDefault();
+		doEdit();
+		}
+	}
 	function cancelEdit(): void {
 		isEditing = false;
 		showActions = false;
@@ -150,104 +162,134 @@
 		/>
 		<div class="content">
 			<div class="meta">
-				<button
-					class="name"
-					style={roleColor ? `color:${roleColor}` : undefined}
-					aria-label={author ? `Ver perfil de ${name}` : undefined}
-					onclick={() => {
-						if (author) openProfile(author);
-					}}
-				>
-					{name}
-				</button>
-				
-				<span class="time">
-					{formatTime(message.created_at)}
-					{#if message.edited_at}
-						<span class="edited">· editado</span>
-					{/if}
-				</span>
-				<!-- reply indicator -->
-				{#if message.reply_to && replyAuthor}
-					<span class="reply-from" aria-label="Resposta para {replyAuthor.nickname || replyAuthor.username}">
+	<button
+		class="name"
+		style={roleColor ? `color:${roleColor}` : undefined}
+		aria-label={author ? `Ver perfil de ${name}` : undefined}
+		onclick={() => {
+			if (author) openProfile(author);
+		}}
+	>
+		{name}
+		</button>
+
+			<span class="time">
+				{formatTime(message.created_at)}
+				{#if message.edited_at}
+					<span class="edited">· editado</span>
+				{/if}
+			</span>
+
+			{#if message.reply_to}
+				{#if replyAuthor}
+					<span class="reply-from">
 						<Avatar user={replyAuthor} size={18} />
 						{replyAuthor.nickname || replyAuthor.username}
-						{#if msgReply && msgReply.content}
-							{msgReply?.content.length > 10 ? msgReply?.content.slice(0, 32) + '...' : msgReply?.content}
-						{/if}
+
+						{#if msgReply}
+							{#if msgReply.content}
+								{msgReply.content.length > 32
+									? msgReply.content.slice(0, 32) + '...'
+									: msgReply.content}
+							{:else}
+								{#if msgReply.attachments.length}
+									<span class="reply-from">
+										<i>Anexo</i>
+									</span>
+								{/if}
+							{/if}
+						{/if}	
+					</span>
+				{:else}
+					<span class="reply-from">
+						<i>Conteúdo Indisponível</i>
 					</span>
 				{/if}
-				{#if showActions}
-					<div class="message-actions" role="toolbar">
-						{#if canReply}
-							<button class="act-btn" type="button" title="Responder" aria-label="Responder" onclick={doReply}>
-								<Icon name="arrow-bend-up-left" variant="light" />
-							</button>
-						{/if}
-						{#if canPin}
-							<button
-								class="act-btn"
-								type="button"
-								title={isPinned ? 'Desfixar mensagem' : 'Fixar mensagem'}
-								aria-label={isPinned ? 'Desfixar mensagem' : 'Fixar mensagem'}
-								onclick={togglePin}
-							>
-								<Icon name={isPinned ? 'pin' : 'push-pin'} variant="light" />
-							</button>
-						{/if}
-						{#if canEdit}
-							<button class="act-btn" type="button" title="Editar" aria-label="Editar" onclick={startEdit}>
-								<Icon name="pencil" variant="light" />
-							</button>
-						{/if}
-						{#if canDelete}
-							<button class="act-btn" type="button" title="Excluir" aria-label="Excluir" onclick={() => (showDeleteConfirm = true)}>
-								<Icon name="trash" variant="light" />
-							</button>
-						{/if}
-					</div>
-				{/if}
-			</div>
+			{/if}
 
+			{#if showActions}
+				<div class="message-actions" role="toolbar">
+					{#if canReply}
+						<button class="act-btn" type="button" title="Responder" onclick={doReply}>
+							<Icon name="arrow-bend-up-left" variant="light" />
+						</button>
+					{/if}
 
+					{#if canPin}
+						<button
+							class="act-btn"
+							type="button"
+							title={isPinned ? 'Desfixar mensagem' : 'Fixar mensagem'}
+							onclick={togglePin}
+						>
+							<Icon name={isPinned ? 'pin' : 'push-pin'} variant="light" />
+						</button>
+					{/if}
+
+					{#if canEdit}
+						<button class="act-btn" type="button" title="Editar" onclick={startEdit}>
+							<Icon name="pencil" variant="light" />
+						</button>
+					{/if}
+
+					{#if canDelete}
+						<button
+							class="act-btn"
+							type="button"
+							title="Excluir"
+							onclick={() => (showDeleteConfirm = true)}
+						>
+							<Icon name="trash" variant="light" />
+						</button>
+					{/if}
+				</div>
+			{/if}
+		</div>
 			{#if isEditing}
-				<form class="edit-form" onsubmit={(e) => { e.preventDefault(); doEdit(); }}>
-					<input
-						class="edit-input"
-						bind:value={editText}
-						aria-label="Editar mensagem"
-						placeholder="..."
-						onkeydown={(e) => {
-							if (e.key === 'Escape') cancelEdit();
+				<div class="bubble">
+					<form
+						class="edit-form"
+						onsubmit={(e) => {
+							e.preventDefault();
+							doEdit();
 						}}
-					/>
-				</form>
+					>
+						<textarea
+							class="edit-input"
+							bind:value={editText}
+							aria-label="Editar mensagem"
+							placeholder="..."
+							onkeydown={handleEditKeydown}/>
+					</form>
+					<button class="confirm-btn" type="button" onclick={doEdit}> Enviar </button>
+				</div>
 			{:else if message.content}
 				<div class="bubble">
-					<p>{message.content}</p>
+					<FormattedMessage content={message.content} />
 				</div>
+				{#if message.previews.length}
+					{#each message.previews as p (p.id)}
+						<PreviewCard preview={p} />
+					{/each}
+				{/if}
 			{:else if message.previews.length}
 				{#each message.previews as p (p.id)}
 					<PreviewCard preview={p} />
 				{/each}
 			{/if}
 
-			<!-- anexos (uploads ainda em fase de integração; renderize simples) -->
+			<!-- anexos: thumbnail de imagem, player de vídeo/áudio ou chip. -->
 			{#if message.attachments.length}
 				{#each message.attachments as a (a.id)}
-					<span class="attachment-chip">{a.original_file_name}</span>
+					<Attachment attachment={a} />
 				{/each}
 			{/if}
 
 			{#if showDeleteConfirm}
 				<div class="delete-confirm" role="alert">
 					<span>Excluir mensagem?</span>
-					<button class="confirm-btn danger" type="button" onclick={doDelete}>
-						Excluir
-					</button>
-					<button class="confirm-btn" type="button" onclick={cancelDelete}>
-						Cancelar
-					</button>
+					<button class="confirm-btn danger" type="button" onclick={doDelete}> Excluir </button>
+					<button class="confirm-btn" type="button" onclick={cancelDelete}> Cancelar </button>
 				</div>
 			{:else}
 				{#if message.reactions.length || canReply}
@@ -261,7 +303,6 @@
 			{/if}
 		</div>
 	</div>
-
 </article>
 
 <style>
@@ -272,15 +313,52 @@
 		border-radius: 10px;
 		position: relative;
 	}
+	.edit-input {
+		font: inherit;
+		color: var(--text-primary);
+		background: transparent;
+
+		border: 1px solid var(--muted);
+		border-radius: 8px;
+		padding: 6px 10px;
+
+		width: fit-content;
+		max-width: 100%;
+		min-width: 40px;
+
+		field-sizing: content;
+		box-sizing: border-box;
+
+		resize: none;
+		overflow-wrap: anywhere;
+		white-space: pre-wrap;
+		outline: none;
+	}
+	/* importante: seu .message só possui .message-enter como filho */
 	.message-enter {
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+		width: 100%;
+		min-width: 0;
 		animation: message-enter 180ms ease;
 	}
-	@keyframes message-enter {
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
+
+	.content {
+		flex: 1;
+		min-width: 0;
 	}
+
+	.meta {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+
+		/* impede toolbar de criar uma segunda linha */
+		flex-wrap: nowrap;
+	}
+
 	.name {
 		font: inherit;
 		font-weight: 600;
@@ -289,57 +367,64 @@
 		cursor: pointer;
 		color: var(--text-primary);
 		padding: 0;
+
+		flex-shrink: 0;
 	}
+	@keyframes message-enter {
+		to {
+			opacity: 1;
+			transform: translateY(-2px);
+		}
+	}
+
 	.time {
 		color: var(--muted);
 		font-size: 12px;
-		margin-left: 6px;
+		margin-left: 0;
+		white-space: nowrap;
+		flex-shrink: 0;
 	}
+
 	.edited {
 		color: var(--muted-soft);
 	}
-	.bubble p {
-		margin: 0;
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
+
+	.message-actions {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+
+		margin-left: auto;
+		height: 20px;
+		flex-shrink: 0;
+
+		/* deixa a toolbar como último item da linha */
+		order: 99;
 	}
+
+	.act-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+
+		width: 20px;
+		height: 20px;
+		padding: 0;
+	}
+
 	.reply-from {
 		display: inline-flex;
 		align-items: center;
 		gap: 4px;
 		font-size: 12px;
 		color: var(--muted);
-		margin-bottom: 4px;
-	}
-	.edit-input {
-		width: 100%;
-		font: inherit;
-		background: transparent;
-		border: none;
-		color: var(--text-primary);
-		outline: none;
+
 		margin: 0;
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
 	}
-	.edit-form {
-		display: flex;
-	}
-	.attachment-chip {
-		display: inline-block;
-		font-size: 12px;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		padding: 2px 8px;
-		margin-left: 6px;
-		color: var(--text-secondary);
-	}
-	.message-actions {
-		margin-left: auto;
-		display: flex;
-		align-items: center;
-		align-self: center;
-		gap: 4px;
-}
 	.act-btn {
 		display: flex;
 		align-items: center;
@@ -367,13 +452,43 @@
 		border-radius: 8px;
 		font-size: 13px;
 	}
+	/* mesmo idioma visual do .send (aero.css): segue o tema (light/dark)
+	 * e fica parecido com o botão de enviar. */
 	.confirm-btn {
 		font: inherit;
-		border-radius: 6px;
-		padding: 2px 8px;
+		font-weight: 800;
+		border-radius: 16px;
+		border: 1px solid rgba(255, 255, 255, 0.42);
+		background: linear-gradient(180deg, #54aaf2, #0a73d6);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.48),
+			0 8px 18px rgba(10, 96, 165, 0.2);
+		color: #fff;
 		cursor: pointer;
+		padding: 4px 12px;
+		transition: 0.18s var(--ease);
+	}
+	.confirm-btn:hover {
+		transform: translateY(-2px);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.58),
+			0 12px 23px rgba(10, 96, 165, 0.28),
+			0 0 18px rgba(84, 170, 242, 0.2);
+	}
+	.confirm-btn:active {
+		transform: scale(0.97);
 	}
 	.confirm-btn.danger {
-		color: var(--danger);
+		background: linear-gradient(180deg, #ff8a7d, #d6423e);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.48),
+			0 8px 18px rgba(214, 66, 62, 0.25);
+		color: #fff;
+	}
+	.confirm-btn.danger:hover {
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.58),
+			0 12px 23px rgba(214, 66, 62, 0.3),
+			0 0 18px rgba(255, 138, 125, 0.2);
 	}
 </style>

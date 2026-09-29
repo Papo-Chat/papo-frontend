@@ -30,8 +30,7 @@
 	};
 
 	const icon = $derived(
-		(iconMap[channel.name] ??
-			(channel.type === 'voice' ? 'speaker-waves' : 'channel'))
+		iconMap[channel.name] ?? (channel.type === 'voice' ? 'speaker-waves' : 'channel')
 	);
 	const unread = $derived(channelsState.unread.get(channel.id)?.count ?? 0);
 </script>

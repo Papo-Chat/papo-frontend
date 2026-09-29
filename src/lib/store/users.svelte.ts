@@ -389,5 +389,5 @@ export function setBanState(userId: string, ban: boolean): void {
 		})
 		.catch((err) => {
 			console.error('failha ao alterar estado de ban:', err);
-		})
+		});
 }

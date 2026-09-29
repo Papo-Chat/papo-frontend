@@ -870,6 +870,20 @@ async function _fetchPage(
 			return;
 		}
 
+		// Imagens de preview (image_data) não vêm no REST (só metadados); o
+		// previewCache fica vazio em carga inicial (F5). Resolve via
+		// GET /link-previews/:id para renderizar. ensurePreview é idempotente
+		// (cache + dedup in-flight), então é seguro chamar por preview id.
+		const previewIds = new Set<string>();
+		for (const m of messages) {
+			for (const p of m.previews) {
+				previewIds.add(p.id);
+			}
+		}
+		for (const id of previewIds) {
+			ensurePreview(id);
+		}
+
 		const newByd = new SvelteMap<string, MessageWithAttachment>();
 
 		if (!freshLatest) {

@@ -46,16 +46,12 @@
 	// Ban state: the REST list does NOT expose `banned`, so this is the
 	// client-side session cache (bannedIds) intersected with known users.
 	const banned = $derived(
-		[
-			...usersStore.state.bannedIds,
-		]
+		[...usersStore.state.bannedIds]
 			.map((id) => usersStore.state.byId.get(id))
 			.filter((u): u is UserSummary => !!u)
 	);
 
-	const activeCount = $derived(
-		users.filter((u) => !usersStore.state.bannedIds.has(u.id)).length
-	);
+	const activeCount = $derived(users.filter((u) => !usersStore.state.bannedIds.has(u.id)).length);
 
 	function isBanned(id: string): boolean {
 		return usersStore.state.bannedIds.has(id);
@@ -152,7 +148,7 @@
 								<strong>{u.nickname || u.username}</strong>
 								<span class="user-user">@{u.username}</span>
 							</div>
-									<span class="status-dot {statusDotClass(u.id)}"></span>
+							<span class="status-dot {statusDotClass(u.id)}"></span>
 							<div class="role-select">
 								<select
 									class="user-role-select"
@@ -171,13 +167,19 @@
 								</select>
 							</div>
 							<div class="role-chips">
-									{#each u.roles as r (r.id)}
-										<span class="chip" style="color:{r.color}">
-											{r.name}
-											<button class="chip-x" aria-label={`Remover Role ${r.name}`} onclick={() => removeRole(u.id, r.id)}>  </button>
-										</span>
-									{/each}
-								</div>
+								{#each u.roles as r (r.id)}
+									<span class="chip" style="color:{r.color}">
+										{r.name}
+										<button
+											class="chip-x"
+											aria-label={`Remover Role ${r.name}`}
+											onclick={() => removeRole(u.id, r.id)}
+										>
+											
+										</button>
+									</span>
+								{/each}
+							</div>
 
 							<button
 								class="admin-btn ghost small"
@@ -192,7 +194,11 @@
 				{/each}
 				{#if usersStore.state.list.hasMore}
 					<div class="load-more">
-						<button class="load-more-btn" onclick={loadNext} disabled={usersStore.state.list.loading}>
+						<button
+							class="load-more-btn"
+							onclick={loadNext}
+							disabled={usersStore.state.list.loading}
+						>
 							{usersStore.state.list.loading ? 'Carregando…' : 'Carregar mais'}
 						</button>
 					</div>
@@ -369,7 +375,7 @@
 		font-size: 10px;
 		line-height: 1;
 		display: grid;
-	place-items: center;
+		place-items: center;
 		cursor: pointer;
 	}
 	.chip-x:hover {

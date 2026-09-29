@@ -39,10 +39,7 @@
 				});
 			}
 		} catch (e) {
-			error =
-				e instanceof Error
-					? e.message
-					: 'Erro ao registrar a conta. Tente novamente.';
+			error = e instanceof Error ? e.message : 'Erro ao registrar a conta. Tente novamente.';
 		}
 		busy = false;
 		if (error) {
@@ -68,8 +65,19 @@
 
 <div class="form-grid">
 	<AuthField label="Usuário" icon="user" placeholder="Seu usuário" bind:value={username} />
-	<AuthField label="Apelido" icon="user" placeholder="Como quer ser chamado" bind:value={nickname} />
-	<AuthField label="Senha" icon="lock-key" type="password" placeholder="Sua senha" bind:value={password} />
+	<AuthField
+		label="Apelido"
+		icon="user"
+		placeholder="Como quer ser chamado"
+		bind:value={nickname}
+	/>
+	<AuthField
+		label="Senha"
+		icon="lock-key"
+		type="password"
+		placeholder="Sua senha"
+		bind:value={password}
+	/>
 
 	<div class="field">
 		<label>Confirmar senha</label>

@@ -11,8 +11,7 @@ export interface DeviceImage {
 }
 
 // Preview for the "Padrão" option (matches --user-background in theme.css).
-export const defaultBackground =
-	'linear-gradient(125deg, #062f75 0%, #0080ba 48%, #0a8067 100%)';
+export const defaultBackground = 'linear-gradient(125deg, #062f75 0%, #0080ba 48%, #0a8067 100%)';
 
 const KEY = 'papo:background';
 const IMAGE_KEY = 'papo:user-image';
@@ -118,9 +117,7 @@ const initial = read();
 applyToDom(initial);
 
 export const backgroundId = writable<string>(initial);
-export const userImageUrl = writable<string>(
-	initial === CUSTOM_BG_ID ? readUserImage() : ''
-);
+export const userImageUrl = writable<string>(initial === CUSTOM_BG_ID ? readUserImage() : '');
 
 export function setBackground(next: string): void {
 	backgroundId.set(next);

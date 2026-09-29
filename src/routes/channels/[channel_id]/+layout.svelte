@@ -21,9 +21,7 @@
 	// Profile card (4.1): opened by clicking a user in the members drawer
 	// or in the chat.
 	const profileUser = $derived(state.profileOpen ? state.profileUser : null);
-	const profileProfile: UserProfile | null = $derived(
-		profileUser ? toProfile(profileUser) : null
-	);
+	const profileProfile: UserProfile | null = $derived(profileUser ? toProfile(profileUser) : null);
 
 	function toProfile(u: UserSummary): UserProfile {
 		return {

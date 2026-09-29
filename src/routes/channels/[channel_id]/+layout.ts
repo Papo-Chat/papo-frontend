@@ -61,8 +61,7 @@ export async function load({
 
 	// 4. Resolver o canal da URL (id exato, depois nome) — LoadEvent `params`,
 	// com fallback na URL.
-	const channelId =
-		params.channel_id ?? channelIdFromPathname(url.pathname);
+	const channelId = params.channel_id ?? channelIdFromPathname(url.pathname);
 
 	const channel = channelsStore.resolve(channelId);
 	if (channel) {

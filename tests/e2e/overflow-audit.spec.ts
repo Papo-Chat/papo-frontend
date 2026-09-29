@@ -25,7 +25,7 @@ const routes = [
 	'/admin/users',
 	'/admin/audit',
 	'/admin/emojis',
-	'/admin/server',
+	'/admin/server'
 ];
 
 // The dev server (inside the container) binds to IPv6 ::1:5173, so the
@@ -75,14 +75,14 @@ for (const route of routes) {
 		await page.waitForTimeout(250);
 
 		// The app renders client-side; verify real content mounted (not a 404 shell).
-		const bodyLen = await page.evaluate(() =>
-			document.body?.innerHTML?.length ?? 0
-		);
+		const bodyLen = await page.evaluate(() => document.body?.innerHTML?.length ?? 0);
 		expect(bodyLen).toBeGreaterThan(100);
 
 		const overflows: Overflow[] = await page.evaluate(overflowScript);
 
-		console.log(`\n${overflows.length ? 'OVERFLOW' : 'PASS'} ${route} (${overflows.length} elements)`);
+		console.log(
+			`\n${overflows.length ? 'OVERFLOW' : 'PASS'} ${route} (${overflows.length} elements)`
+		);
 		for (const o of overflows) {
 			console.log(
 				`  ${o.tag}${o.id ? '#' + o.id : ''} .${o.cls}  cw=${o.clientWidth} sw=${o.scrollWidth}  ox=${o.overflowX} pos=${o.position}`
@@ -133,6 +133,5 @@ for (const route of routes) {
 			path: `test-results/overflow-${slug}.png`,
 			fullPage: false
 		});
-
 	});
 }

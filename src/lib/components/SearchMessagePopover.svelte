@@ -40,7 +40,7 @@
 		dateStart: string;
 		dateEnd: string;
 		order: 'asc' | 'desc';
-		containsAttachment: AttachmentFilter
+		containsAttachment: AttachmentFilter;
 	}>({
 		author: '',
 		dateStart: '',
@@ -131,9 +131,7 @@
 	});
 
 	function authorFor(result: SearchResult): UserSummary | undefined {
-		return result.author_id
-			? usersStore.state.byId.get(result.author_id)
-			: undefined;
+		return result.author_id ? usersStore.state.byId.get(result.author_id) : undefined;
 	}
 
 	function onItemEnter(e: KeyboardEvent): void {
@@ -216,31 +214,19 @@
 			/>
 
 			<div class="search-filters" aria-label="Filtros de busca">
-				<select 
-					class="admin-select"
-					bind:value={filters.order}
-					aria-label="Ordem"
-				>
+				<select class="admin-select" bind:value={filters.order} aria-label="Ordem">
 					<option class="admin-option" value="desc">Mais recentes</option>
 					<option class="admin-option" value="asc">Mais antigas</option>
 				</select>
 
-				<select
-					class="admin-select"
-					bind:value={filters.containsAttachment}
-					aria-label="Anexos"
-				>
+				<select class="admin-select" bind:value={filters.containsAttachment} aria-label="Anexos">
 					<option class="admin-option" value="">Anexos: todos</option>
 					<option class="admin-option" value="with">Anexos: com</option>
 					<option class="admin-option" value="without">Anexos: sem</option>
 				</select>
 
 				{#if authorOptions.length}
-					<select
-						class="admin-select"
-						bind:value={filters.author}
-						aria-label="Autor"
-					>
+					<select class="admin-select" bind:value={filters.author} aria-label="Autor">
 						<option class="admin-option" value="">Autor: todos</option>
 						{#each authorOptions as u (u.id)}
 							<option class="admin-option" value={u.id}>Autor: {u.nickname || u.username}</option>
@@ -248,18 +234,8 @@
 					</select>
 				{/if}
 
-				<input
-					class="admin-select"
-					type="date"
-					bind:value={filters.dateStart}
-					aria-label="De"
-				/>
-				<input
-					class="admin-select"
-					type="date"
-					bind:value={filters.dateEnd}
-					aria-label="Até"
-				/>
+				<input class="admin-select" type="date" bind:value={filters.dateStart} aria-label="De" />
+				<input class="admin-select" type="date" bind:value={filters.dateEnd} aria-label="Até" />
 			</div>
 
 			{#if loading}
@@ -283,7 +259,7 @@
 						{results.length === 1 ? 'resultado' : 'resultados'}
 					</div>
 					{#each results as m (m.id)}
-					{@const a = authorFor(m)}
+						{@const a = authorFor(m)}
 						<div
 							class="popover-item"
 							on:click={() => onResultClick?.(m)}
@@ -292,7 +268,6 @@
 							tabindex={0}
 							data-result-id={m.id}
 						>
-							
 							<Avatar user={a} size={34} />
 							<div>
 								<div class="meta">

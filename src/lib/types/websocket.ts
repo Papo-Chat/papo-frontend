@@ -255,7 +255,7 @@ export interface WsVoiceLeave {
 export interface WsActiveSpeakerUpdate {
 	type: 'active_speaker_update';
 	channel_id: string;
-	user_ids: string[]| null;
+	user_ids: string[] | null;
 }
 
 export type WsOutbound =

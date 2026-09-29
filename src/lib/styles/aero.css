@@ -2436,21 +2436,50 @@ button.name:focus-visible {
    child of the positioned `.app-shell` (or any positioned ancestor) so the
    `inset: 0` overlay covers the whole view.
    ===================================================================== */
-
 .profile-overlay {
 	position: absolute;
 	inset: 0;
 	z-index: 180;
-	opacity: 0;
-	pointer-events: none;
+	pointer-events: auto;
+
 	background: rgba(4, 18, 31, 0.12);
 	backdrop-filter: blur(13px) saturate(120%);
 	-webkit-backdrop-filter: blur(13px) saturate(120%);
-	transition: opacity 0.24s ease;
+
+	animation: profile-overlay-in 180ms ease-out both;
 }
-.profile-overlay.open {
-	opacity: 1;
-	pointer-events: auto;
+@keyframes profile-overlay-in {
+	from {
+		opacity: 0;
+	}
+
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes profile-card-pop {
+	0% {
+		opacity: 0;
+		transform: translate(-50%, -50%) translateY(12px) scale(0.9);
+	}
+
+	65% {
+		opacity: 1;
+		transform: translate(-50%, -50%) translateY(-2px) scale(1.025);
+	}
+
+	100% {
+		opacity: 1;
+		transform: translate(-50%, -50%) translateY(0) scale(1);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.profile-overlay,
+	.profile-card {
+		animation: none;
+	}
 }
 
 .profile-card {
@@ -2483,6 +2512,8 @@ button.name:focus-visible {
 	transition:
 		opacity 0.24s ease,
 		transform 0.28s var(--ease);
+	animation: profile-card-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+	will-change: transform, opacity;
 }
 .profile-card.open {
 	opacity: 1;
@@ -2535,7 +2566,6 @@ button.name:focus-visible {
 	display: grid;
 	place-items: center;
 	z-index: 3;
-
 }
 .profile-avatar-img {
 	width: 100%;
@@ -3101,11 +3131,11 @@ button.name:focus-visible {
 	transition: 0.18s var(--ease);
 }
 
-.admin-select select{
+.admin-select select {
 	font-size: 16px;
 }
 
-.admin-option{
+.admin-option {
 	font-size: 16px;
 }
 

@@ -36,7 +36,6 @@
 		close();
 	}
 
-
 	function toggleOpen() {
 		open = !open;
 	}
@@ -61,12 +60,7 @@
 	});
 </script>
 
-<button
-	class="bg-control"
-	on:click={toggleOpen}
-	aria-label="Mudar fundo"
-	title="Mudar fundo"
->
+<button class="bg-control" on:click={toggleOpen} aria-label="Mudar fundo" title="Mudar fundo">
 </button>
 
 {#if open}
@@ -79,7 +73,10 @@
 			{#each deviceImages as img (img.id)}
 				<button
 					class="bg-option {$backgroundId === img.id ? 'selected' : ''}"
-					on:click={() => { setBackground(img.id); close(); }}
+					on:click={() => {
+						setBackground(img.id);
+						close();
+					}}
 					style="background: {img.background || defaultBackground}"
 					aria-label={img.label}
 				>
@@ -144,15 +141,14 @@
 		transition:
 			filter 0.2s var(--ease),
 			transform 0.2s var(--ease);
-	}@media (max-width: 1600px) {
+	}
+	@media (max-width: 1600px) {
 		:global(.bg-control) {
 			display: none;
 		}
 	}
 	.bg-control:hover {
-		filter:
-			brightness(1.8)
-			contrast(1.25);
+		filter: brightness(1.8) contrast(1.25);
 
 		transform: scale(1.12);
 		transform-origin: bottom right;

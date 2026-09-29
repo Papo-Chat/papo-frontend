@@ -40,13 +40,17 @@ export function formatBytes(bytes: number): string {
 	if (bytes < 1024) {
 		return `${bytes} B`;
 	}
+
 	const units = ['KB', 'MB', 'GB', 'TB'];
-	const i = Math.floor(Math.log2(bytes) / 10);
+	const i = Math.floor(Math.log(bytes) / Math.log(1024)) - 1;
 	const value = bytes / 1024 ** (i + 1);
+
 	return `${value.toFixed(1)} ${units[i]}`;
 }
 
 // True when the mime type is an image the UI can render inline.
-export function isImageMime(mime: string): boolean {
-	return /^image\/(png|jpe?g|gif|webp|bmp|avif)$/i.test(mime);
+export function isImageMime(mime: string): {isImage: boolean;isGif: boolean} {
+	const isImage = /^image\/(png|jpe?g|gif|webp|bmp|avif)$/i.test(mime);
+	const isGif = /^image\/(gif)$/i.test(mime);
+	return {isImage,isGif};
 }

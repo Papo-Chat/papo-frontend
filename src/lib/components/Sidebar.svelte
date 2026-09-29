@@ -18,7 +18,8 @@
 	const groups = $derived(channelsStore.grouped());
 
 	const onlineCount = $derived(
-		[...usersStore.state.byId.values()].filter((u) => usersStore.effectiveStatus(u.id) === 'online').length
+		[...usersStore.state.byId.values()].filter((u) => usersStore.effectiveStatus(u.id) === 'online')
+			.length
 	);
 	const drawerOpen = $derived(state.channelsDrawerOpen);
 

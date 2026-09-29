@@ -55,7 +55,13 @@
 
 <div class="form-grid">
 	<AuthField label="Usuário" icon="user" placeholder="Seu usuário" bind:value={username} />
-	<AuthField label="Senha" icon="lock-key" type="password" placeholder="Sua senha" bind:value={password} />
+	<AuthField
+		label="Senha"
+		icon="lock-key"
+		type="password"
+		placeholder="Sua senha"
+		bind:value={password}
+	/>
 
 	<div class="field">
 		<label>Senha do servidor</label>

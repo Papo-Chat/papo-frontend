@@ -20,9 +20,7 @@
 	// single source of truth; toggling updates it optimistically (see
 	// toggleMute) so the UI reacts to self-muting without waiting on the
 	// round-trip.
-	const myMuted = $derived(
-		members.find((m) => m.user_id === me)?.muted ?? false
-	);
+	const myMuted = $derived(members.find((m) => m.user_id === me)?.muted ?? false);
 
 	// Clear the joining state once the server confirms (voice_joined).
 	$effect(() => {
@@ -100,8 +98,6 @@
 						<Avatar user={u} size={32} />
 
 						<div class="voice-member-info">
-
-
 							{#if m.muted}
 								<span class="voice-member-name">
 									{u?.nickname || u?.username}
@@ -134,22 +130,14 @@
 				<span>{myMuted ? 'Falar' : 'Mudo'}</span>
 			</button>
 
-			<button
-				class="voice-btn danger"
-				on:click={leave}
-				aria-label="Sair da voz"
-			>
+			<button class="voice-btn danger" on:click={leave} aria-label="Sair da voz">
 				<Icon name="x" variant="light" />
 				<span>Sair</span>
 			</button>
 		</div>
 	{:else}
 		<div class="voice-join">
-			<button
-				class="voice-join-btn"
-				on:click={join}
-				disabled={joining}
-			>
+			<button class="voice-join-btn" on:click={join} disabled={joining}>
 				{#if joining}
 					<Icon name="arrow-clockwise" variant="light" />
 					Conectando…

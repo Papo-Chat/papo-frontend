@@ -23,25 +23,16 @@
 
 	const profile = $derived(user ? usersStore.getProfile(user.id) : null);
 
-	const name = $derived(
-		profile?.nickname ||
-		user?.nickname ||
-		user?.username ||
-		'Usuário'
-	);
+	const name = $derived(profile?.nickname || user?.nickname || user?.username || 'Usuário');
 
-	const gradient = $derived(
-		user ? avatarGradient(user.username) : avatarGradient('U')
-	);
+	const gradient = $derived(user ? avatarGradient(user.username) : avatarGradient('U'));
 
 	const initial = $derived(
 		user ? avatarInitial(user.username, profile?.nickname ?? user.nickname) : 'U'
 	);
 
 	const avatarSrc = $derived(
-		profile?.avatar_blob
-			? blobToUrl(profile.avatar_blob, profile.avatar_format)
-			: ''
+		profile?.avatar_blob ? blobToUrl(profile.avatar_blob, profile.avatar_format) : ''
 	);
 
 	const iconSize = $derived(size * 0.5);
@@ -49,9 +40,7 @@
 	// Anel global: cor da primeira role com cor do usuário.
 	// A prop `ringColor` (se passada) sobrepondo a cor derivada.
 	const roleRing = $derived(
-		user
-			? user.roles.find((r: RoleSummary) => r.color)?.color ?? null
-			: null
+		user ? (user.roles.find((r: RoleSummary) => r.color)?.color ?? null) : null
 	);
 	const ring = $derived(ringColor ?? roleRing);
 
@@ -70,17 +59,9 @@
 
 {#snippet content()}
 	{#if avatarSrc}
-		<img
-			class="avatar-image"
-			src={avatarSrc}
-			alt={name}
-		/>
+		<img class="avatar-image" src={avatarSrc} alt={name} />
 	{:else if icon}
-		<Icon
-			name={icon}
-			variant="duotone"
-			size={iconSize}
-		/>
+		<Icon name={icon} variant="duotone" size={iconSize} />
 	{:else}
 		<span class="avatar-initial">{initial}</span>
 	{/if}
@@ -97,10 +78,7 @@
 		{@render content()}
 	</button>
 {:else}
-	<span
-		class="avatar"
-		style={ringStyle}
-	>
+	<span class="avatar" style={ringStyle}>
 		{@render content()}
 	</span>
 {/if}

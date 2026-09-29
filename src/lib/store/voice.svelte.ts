@@ -523,9 +523,7 @@ export function onVoiceStateUpdate(ev: WsVoiceStateUpdate): void {
 	}
 
 	if (ev.muted) {
-		state.activeSpeakers = state.activeSpeakers.filter(
-			(id) => id !== ev.user_id
-		);
+		state.activeSpeakers = state.activeSpeakers.filter((id) => id !== ev.user_id);
 
 		if (state.activeSpeaker === ev.user_id) {
 			state.activeSpeaker = null;

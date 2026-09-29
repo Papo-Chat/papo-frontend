@@ -10,11 +10,7 @@
 
 import { api } from '../api';
 import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
-import type {
-	CreateServerRequest,
-	Server,
-	UpdateServerRequest
-} from '../types';
+import type { CreateServerRequest, Server, UpdateServerRequest } from '../types';
 
 export const state = $state({
 	server: null as Server | null,

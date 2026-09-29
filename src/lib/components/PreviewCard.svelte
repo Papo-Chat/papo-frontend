@@ -1,85 +1,176 @@
 <script lang="ts">
 	import type { LinkPreview } from '$lib/types';
+	import { getPreview } from '$lib/store/messages.svelte';
+	import { blobToUrl, mimeToFormat } from '$lib/utils/media';
+	import { truncate } from '$lib/utils/text';
 
 	let { preview } = $props<{ preview: LinkPreview }>();
+
+	// Preview completo (com image_data) vem do cache do store de mensagens.
+	const resolved = $derived(getPreview(preview.id));
+
+	const imageUrl = $derived(
+		resolved && resolved.image_data
+			? blobToUrl(resolved.image_data, mimeToFormat(resolved.image_mime_type ?? ''))
+			: ''
+	);
+
+	const title = $derived(preview.title ?? truncate(preview.url, 60));
+
+	// Embed de vídeo: apenas se casar exatamente com o contrato do backend
+	// (YouTube, ID válido). Frontend revalida antes de renderizar o iframe
+	// (THUMBNAILS_IMPLEMENTATION.md §9.4).
+	const isYoutube = $derived(
+		preview.embed_url !== null &&
+			/^https:\/\/www\.youtube\.com\/embed\/[A-Za-z0-9_-]{11}$/.test(preview.embed_url)
+	);
+
+	let youtubeLoaded = $state(false);
+	function openYouTube(): void {
+		youtubeLoaded = true;
+	}
 </script>
 
 <div class="preview-card">
-	<div class="preview-title">{preview.title}</div>
+	<a class="preview-title" href={preview.url} target="_blank" rel="noopener">
+		{title}
+	</a>
 
-	{#if preview.kind === 'dashboard'}
-		<!-- Mockup dashboard preview (static). -->
-		<div class="dashboard">
-			<div class="dash-nav">
-				<div class="dash-tab active">Dashboard</div>
-				<div class="dash-tab">Atividade</div>
-				<div class="dash-tab">Membros</div>
-				<div class="dash-tab">Arquivos</div>
-			</div>
-			<div class="dash-body">
-				<strong>Resumo da Comunidade</strong>
-				<div class="kpis">
-					<div class="kpi"><span>MEMBROS</span><strong>128</strong></div>
-					<div class="kpi"><span>ONLINE</span><strong>42</strong></div>
-					<div class="kpi"><span>MSG HOJE</span><strong>312</strong></div>
-					<div class="kpi"><span>NOVOS</span><strong>18</strong></div>
-				</div>
-				<div class="dashboard-lower">
-					<div class="panel">
-						<strong>Atividade</strong>
-						<div class="chart">
-							<svg viewBox="0 0 300 60" preserveAspectRatio="none" aria-hidden="true">
-								<defs>
-									<linearGradient id="pc-line" x1="0" y1="0" x2="1" y2="1">
-										<stop offset="0" stop-color="#49a0e7" stop-opacity="0.9" />
-										<stop offset="1" stop-color="#0a84ff" stop-opacity="0.9" />
-									</linearGradient>
-								</defs>
-								<path
-									d="M0,46 C30,34 50,50 75,40 C100,30 120,44 150,34 C180,24 200,40 230,30 C260,20 280,36 300,28"
-									fill="none"
-									stroke="url(#pc-line)"
-									stroke-width="2.5"
-									stroke-linecap="round"
-								/>
-							</svg>
-						</div>
-					</div>
-					<div class="panel">
-						<strong>Última atividade</strong>
-						<div class="activity-line"><span>Orion</span><span>2 min</span></div>
-						<div class="activity-line"><span>Maya</span><span>10 min</span></div>
-						<div class="activity-line"><span>Kael</span><span>15 min</span></div>
-					</div>
-				</div>
-			</div>
-		</div>
-	{:else}
-		<!-- Standard link preview. -->
-		<div class="preview-body">
-			{#if preview.description}
-				<p>{preview.description}</p>
+	<div class="preview-body">
+		{#if isYoutube}
+			{#if !youtubeLoaded}
+				<button
+					class="preview-yt-thumb"
+					aria-label="Reproduzir vídeo"
+					onclick={openYouTube}
+				>
+					{#if imageUrl}
+						<img src={imageUrl} alt="" />
+					{:else}
+						<span class="preview-yt-bg" aria-hidden="true"></span>
+					{/if}
+					<span class="preview-yt-play" aria-hidden="true">▶</span>
+				</button>
+			{:else}
+				<iframe
+					class="preview-yt-iframe"
+					src={preview.embed_url}
+					title="Vídeo"
+					allow="autoplay; encrypted-media; picture-in-picture"
+					allowfullscreen
+				></iframe>
 			{/if}
-			{#if preview.provider_name}
-				<span class="preview-provider">{preview.provider_name}</span>
-			{/if}
-		</div>
-	{/if}
+		{:else if imageUrl}
+			<img class="preview-image" src={imageUrl} alt="" loading="lazy" />
+		{/if}
+
+		{#if preview.description}
+			<p class="preview-description">{preview.description}</p>
+		{/if}
+		{#if preview.provider_name}
+			<span class="preview-provider">{preview.provider_name}</span>
+		{/if}
+	</div>
 </div>
 
 <style>
-	.preview-body {
-		padding: 12px 14px;
+	.preview-card {
+		width: 100%;
+		max-width: 500px;
+		padding: 10px;
+		box-sizing: border-box;
+		overflow: hidden;
 	}
-	.preview-body p {
-		margin: 0;
-		color: var(--text-strong);
+	.preview-card .preview-title {
+		display: block;
+		padding: 2px 0 2px;
+		background: transparent;
+		border-bottom: none;
+		backdrop-filter: none;
+		font-weight: 600;
+		font-size: 14px;
+		color: var(--text-primary);
+		text-decoration: none;
+	}
+
+	.preview-card .preview-title:hover {
+		text-decoration: underline;
+	}
+
+	.preview-body {
+		width: 100%;
+		max-width: 100%;
+		min-width: 0;
+		padding: 8px 0 0;
+		box-sizing: border-box;
+		overflow: hidden;
+	}
+
+	.preview-image {
+		display: block;
+		width: 100%;
+		max-width: 100%;
+		height: auto;
+		object-fit: contain;
+		border-radius: 10px;
+		margin-bottom: 8px;
+	}
+
+	.preview-description {
+		margin: 0 0 4px;
+		max-width: 100%;
 		font-size: 13px;
+		line-height: 1.45;
+		color: var(--text-primary);
+		overflow-wrap: anywhere;
 	}
 	.preview-provider {
 		display: block;
-		margin-top: 6px;
 		font-size: 11px;
 		color: var(--muted-soft);
+	}
+	.preview-yt-thumb {
+		display: block;
+		width: 100%;
+		aspect-ratio: 16 / 9;
+		position: relative;
+		border: none;
+		border-radius: 10px;
+		overflow: hidden;
+		background: #0b1b2b;
+		cursor: pointer;
+		margin-bottom: 8px;
+	}
+	.preview-yt-thumb img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		display: block;
+	}
+	.preview-yt-bg {
+		width: 100%;
+		height: 100%;
+		display: block;
+		background: #0b1b2b;
+	}
+	.preview-yt-play {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 30px;
+		line-height: 1;
+		color: #fff;
+		background: rgba(0, 0, 0, 0.35);
+		border-radius: 10px;
+	}
+	.preview-yt-iframe {
+		display: block;
+		width: 100%;
+		aspect-ratio: 16 / 9;
+		border: 0;
+		border-radius: 10px;
+		margin-bottom: 8px;
 	}
 </style>

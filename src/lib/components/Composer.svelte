@@ -50,16 +50,18 @@
 		if (!t || disabled || sending) return;
 		error = null;
 		sending = true;
-		onSend?.(t).then(() => {
-			text = '';
-			emojiOpen = false;
-			notifyTyping();
-		}).catch((err: unknown) => {
-			error = err instanceof Error ? err.message : 'Erro ao enviar a mensagem.';
-		})
-		.finally(() => {
-			sending = false;
-		});
+		onSend?.(t)
+			.then(() => {
+				text = '';
+				emojiOpen = false;
+				notifyTyping();
+			})
+			.catch((err: unknown) => {
+				error = err instanceof Error ? err.message : 'Erro ao enviar a mensagem.';
+			})
+			.finally(() => {
+				sending = false;
+			});
 	}
 
 	function onInput(e: Event): void {
@@ -82,7 +84,8 @@
 	}
 
 	function onPickEmoji(emoji: EmojiOption): void {
-		const char = emoji.kind === 'unicode' ? emoji.char : emoji.name;
+		// Custom: shortcode :name: (renderizado inline no Message); unicode: char.
+		const char = emoji.kind === 'unicode' ? emoji.char : `:${emoji.name}:`;
 		const el = inputEl;
 		const start = el?.selectionStart ?? 0;
 		const end = el?.selectionEnd ?? 0;
@@ -106,9 +109,17 @@
 	{#if replyTo}
 		<div class="composer-reply">
 			<Icon name="arrow-bend-up-left" variant="light" />
-			<Avatar user={replyAuthor} size={20}/>
+			<Avatar user={replyAuthor} size={20} />
 			<span class="reply-name">{replyToAuthorName}</span>
-			<span class="reply-text">{replyTo.content ?? ''}</span>
+			<span class="reply-text">
+			{#if replyTo.content}
+				{replyTo.content.length > 120
+					? replyTo.content.slice(0, 120) + '...'
+					: replyTo.content}
+			{:else}
+				<i>Anexo</i>
+			{/if}
+			</span>
 			<button class="reply-cancel" onclick={cancelReply} aria-label="Cancelar resposta">
 				<Icon name="x" variant="light" />
 			</button>
@@ -123,20 +134,10 @@
 	{/if}
 
 	<footer class="composer">
-		<button
-			class="composer-tool"
-			title="Anexo"
-			aria-label="Anexo"
-			disabled={disabled}
-		>
+		<button class="composer-tool" title="Anexo" aria-label="Anexo" {disabled}>
 			<Icon name="paperclip" variant="light" />
 		</button>
-		<button
-			class="composer-tool"
-			title="Microfone"
-			aria-label="Microfone"
-			disabled={disabled}
-		>
+		<button class="composer-tool" title="Microfone" aria-label="Microfone" {disabled}>
 			<Icon name="microphone" variant="light" />
 		</button>
 		<button
@@ -144,7 +145,7 @@
 			title="Emojis"
 			aria-label="Emojis"
 			onclick={toggleEmoji}
-			disabled={disabled}
+			{disabled}
 		>
 			<Icon name="smiley" variant="light" />
 			<EmojiPicker bind:open={emojiOpen} onPick={onPickEmoji} />
@@ -157,15 +158,13 @@
 				bind:value={text}
 				placeholder="Digite sua mensagem..."
 				aria-label="Digite sua mensagem"
-				disabled={disabled}
+				{disabled}
 				oninput={onInput}
 				onkeydown={onKeydown}
 			/>
 		</div>
 
-		<button class="send" onclick={send} disabled={disabled || text.trim() === ''}>
-			Enviar
-		</button>
+		<button class="send" onclick={send} disabled={disabled || text.trim() === ''}> Enviar </button>
 	</footer>
 </div>
 

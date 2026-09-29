@@ -5,6 +5,7 @@
 	import type { EmojiOption } from '$lib/utils/emojis';
 	import Avatar from './Avatar.svelte';
 	import Icon from './Icon.svelte';
+	import ReactionEmoji from './ReactionEmoji.svelte';
 	import EmojiPicker from './EmojiPicker.svelte';
 	import ReactionUsersPopover from './ReactionUsersPopover.svelte';
 
@@ -17,9 +18,7 @@
 
 	// Chaves (unicode ou emoji_id) das reações do usuário atual.
 	const myKeys = $derived(
-		new Set(
-			userReactions.map((r: MessageUserReaction) => (r.unicode ?? r.emoji_id) ?? '')
-		)
+		new Set(userReactions.map((r: MessageUserReaction) => r.unicode ?? r.emoji_id ?? ''))
 	);
 
 	// Destaque (azulado) nas reações do próprio usuário.
@@ -30,30 +29,30 @@
 	// Lista completa de reações do canal (com usuários por emoji), cacheada
 	// por mensagem. Buscada uma única vez, sob demanda (primeiro hover/click).
 	let cached: {
-		reactions: { emoji_id: string | null; unicode: string | null; users: { id: string; user_id: string; created_at: string }[] }[];
+		reactions: {
+			emoji_id: string | null;
+			unicode: string | null;
+			users: { id: string; user_id: string; created_at: string }[];
+		}[];
 	} | null = $state(null);
 
 	const usersFor = (emoji: string, count: number): UserSummary[] => {
 		if (!cached) return [];
-		const found = cached.reactions.find(
-			(r) => (r.unicode ?? r.emoji_id) === emoji
-		);
-		return (found?.users ?? [])
-			.slice(0, count)
-			.map((u) => {
-				const s = usersStore.state.byId.get(u.user_id) ?? null;
-				return {
-					id: u.id,
-					username: s?.username ?? '',
-					nickname: s?.nickname ?? null,
-					status: null,
-					status_message: null,
-					typing: null,
-					status_updated_at: null,
-					created_at: '',
-					roles: []
-				};
-			});
+		const found = cached.reactions.find((r) => (r.unicode ?? r.emoji_id) === emoji);
+		return (found?.users ?? []).slice(0, count).map((u) => {
+			const s = usersStore.state.byId.get(u.user_id) ?? null;
+			return {
+				id: u.id,
+				username: s?.username ?? '',
+				nickname: s?.nickname ?? null,
+				status: null,
+				status_message: null,
+				typing: null,
+				status_updated_at: null,
+				created_at: '',
+				roles: []
+			};
+		});
 	};
 
 	function togglePill(r: MessageReactionSummary): void {
@@ -92,15 +91,18 @@
 
 	function ensureUsers(): void {
 		if (cached) return;
-		messagesStore.reactionUsers(channelId, messageId).then((res) => {
-			cached = {
-				reactions: res.reactions.map((r) => ({
-					emoji_id: r.emoji_id,
-					unicode: r.unicode,
-					users: r.users
-				}))
-			};
-		}).catch(() => {});
+		messagesStore
+			.reactionUsers(channelId, messageId)
+			.then((res) => {
+				cached = {
+					reactions: res.reactions.map((r) => ({
+						emoji_id: r.emoji_id,
+						unicode: r.unicode,
+						users: r.users
+					}))
+				};
+			})
+			.catch(() => {});
 	}
 
 	function openPopover(emoji: string): void {
@@ -138,7 +140,7 @@
 				aria-label={`Usuários que reagiram`}
 				onclick={() => togglePill(r)}
 			>
-				{r.unicode ?? r.emoji_id ?? ''}
+				<ReactionEmoji unicode={r.unicode} emojiId={r.emoji_id} />
 				{r.count}
 			</button>
 
@@ -160,7 +162,7 @@
 		>
 			<Icon name="smiley" variant="light" />
 		</button>
-		<EmojiPicker bind:open={emojiOpen} onPick={onPick} />
+		<EmojiPicker bind:open={emojiOpen} {onPick} />
 	</div>
 </div>
 

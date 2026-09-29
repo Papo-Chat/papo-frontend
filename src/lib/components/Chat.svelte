@@ -48,7 +48,11 @@
 
 <div class="chat" bind:this={listEl}>
 	{#if hasMoreNewer}
-		<button class="jump-to-latest" on:click={onJumpToLatest} aria-label="Ir para as últimas mensagens">
+		<button
+			class="jump-to-latest"
+			on:click={onJumpToLatest}
+			aria-label="Ir para as últimas mensagens"
+		>
 			↓ Ver últimas mensagens
 		</button>
 	{/if}
@@ -64,10 +68,7 @@
 			</div>
 		{:else}
 			{#each messages as m (m.id)}
-				<Message
-					message={m}
-					onReply={(msg) => onReply?.(msg)}
-				/>
+				<Message message={m} onReply={(msg) => onReply?.(msg)} />
 			{/each}
 		{/if}
 	{/if}

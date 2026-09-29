@@ -15,13 +15,15 @@
 	import VoiceRoom from '$lib/components/VoiceRoom.svelte';
 
 	// Resolve o canal da URL (id exato, depois nome). O guard garante resolvido.
-	const channel = $derived(channelsStore.resolve(page.params.channel_id) ?? channelsStore.homeChannel());
+	const channel = $derived(
+		channelsStore.resolve(page.params.channel_id) ?? channelsStore.homeChannel()
+	);
 
 	const ch = $derived(channel && messagesStore.getChannel(channel.id));
 
 	const messages = $derived(
 		ch
-			? ch.ids.map((id) => ch.byId.get(id) ?? null).filter(Boolean) as MessageWithAttachment[]
+			? (ch.ids.map((id) => ch.byId.get(id) ?? null).filter(Boolean) as MessageWithAttachment[])
 			: []
 	);
 
@@ -144,36 +146,35 @@
 			goto(`/channels/${result.channel_id}`);
 		}
 	}
-
 </script>
 
 {#if channel}
 	<Topbar
-		channel={channel}
+		{channel}
 		{searchQuery}
 		{searchOpen}
 		{onSearchQueryChange}
 		{onSearchOpenChange}
-		onSearchResult={onSearchResult}
+		{onSearchResult}
 	/>
 
 	{#if channel.type === 'voice'}
-		<VoiceRoom channel={channel} />
+		<VoiceRoom {channel} />
 	{:else}
 		<Chat
-			messages={messages}
+			{messages}
 			{onReply}
 			searchActive={searchQuery.trim() !== ''}
 			{loading}
 			{hasMoreNewer}
 			onJumpToLatest={() => messagesStore.setLatest(channel.id)}
-			highlightMessageId={highlightMessageId}
+			{highlightMessageId}
 		/>
 		<Composer
 			onSend={sendText}
 			channelId={channel.id}
 			{replyTo}
-			onReplyCancel={onReplyCancel}
+			{onReplyCancel}
 			disabled={!messagesStore.getChannel(channel.id)}
 		/>
 	{/if}

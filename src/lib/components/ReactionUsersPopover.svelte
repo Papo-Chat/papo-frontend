@@ -151,26 +151,26 @@
 </script>
 
 {#if open}
-<div
-	class="reaction-users {shown ? 'open' : ''} {flip}"
-	role="dialog"
-	aria-label={`Usuários que reagiram com ${emoji}`}
-	bind:this={cardEl}
->
-	<div class="reaction-users-head">
-		<span class="reaction-users-emoji" aria-hidden="true">{emoji}</span>
-		<span class="reaction-users-count">{countText}</span>
-	</div>
+	<div
+		class="reaction-users {shown ? 'open' : ''} {flip}"
+		role="dialog"
+		aria-label={`Usuários que reagiram com ${emoji}`}
+		bind:this={cardEl}
+	>
+		<div class="reaction-users-head">
+			<span class="reaction-users-emoji" aria-hidden="true">{emoji}</span>
+			<span class="reaction-users-count">{countText}</span>
+		</div>
 
-	<ul class="reaction-users-list">
-		{#each users as u (u.id)}
-			<li class="reaction-user">
-				<Avatar user={u} size={30} />
-				<span class="reaction-user-name">{u.nickname || u.username}</span>
-			</li>
-		{/each}
-	</ul>
-</div>
+		<ul class="reaction-users-list">
+			{#each users as u (u.id)}
+				<li class="reaction-user">
+					<Avatar user={u} size={30} />
+					<span class="reaction-user-name">{u.nickname || u.username}</span>
+				</li>
+			{/each}
+		</ul>
+	</div>
 {/if}
 
 <style>

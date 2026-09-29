@@ -105,13 +105,15 @@
 			</div>
 
 			<div class="profile-avatar">
-				<Avatar user={user} size={90}/>
+				<Avatar {user} size={90} />
 				<span class="profile-status-dot {statusClass}" aria-label="Status: {statusLabel}"></span>
 			</div>
 
 			<div class="profile-name-block">
 				<div class="profile-name-row">
-					<strong class="profile-name" style={roleColor ? `color:${roleColor}` : undefined}>{name}</strong>
+					<strong class="profile-name" style={roleColor ? `color:${roleColor}` : undefined}
+						>{name}</strong
+					>
 					<span class="profile-username">@{user.username}</span>
 					{#if user.status_message}
 						<span class="profile-status-text {statusClass}">{user.status_message}</span>
