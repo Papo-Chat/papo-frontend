@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { Channel } from '$lib/types';
 	import { state } from '$lib/store/ui.svelte';
-	import { sampleChannels, sampleServer, sampleUsers } from '$lib/sample';
+	import * as channelsStore from '$lib/store/channels.svelte';
+	import { state as serverState } from '$lib/store/server.svelte';
+	import * as usersStore from '$lib/store/users.svelte';
 	import Icon from './Icon.svelte';
 	import ServerIcon from './ServerIcon.svelte';
 	import ChannelItem from './ChannelItem.svelte';
@@ -13,25 +14,12 @@
 		onSelectChannel?: (id: string) => void;
 	}>();
 
-	// Group channels by category (categories act as section headers).
-	function computeGroups(): Array<{ category: string | null; channels: Channel[] }> {
-		const result: Array<{ category: string | null; channels: Channel[] }> = [];
-		let current: { category: string | null; channels: Channel[] } | null = null;
-		for (const c of sampleChannels) {
-			if (c.type === 'category') {
-				if (current) result.push(current);
-				current = { category: c.name, channels: [] };
-			} else {
-				if (!current) current = { category: null, channels: [] };
-				current.channels.push(c);
-			}
-		}
-		if (current) result.push(current);
-		return result;
-	}
-	const groups = $derived(computeGroups());
+	const server = $derived(serverState.server);
+	const groups = $derived(channelsStore.grouped());
 
-	const onlineCount = $derived(sampleUsers.filter((u) => u.status === null).length);
+	const onlineCount = $derived(
+		[...usersStore.state.byId.values()].filter((u) => usersStore.effectiveStatus(u.id) === 'online').length
+	);
 	const drawerOpen = $derived(state.channelsDrawerOpen);
 
 	function closeDrawer(): void {
@@ -40,6 +28,11 @@
 
 	function selectChannel(id: string): void {
 		onSelectChannel(id);
+	}
+
+	function goHome(): void {
+		const home = channelsStore.homeChannel();
+		if (home) goto(`/channels/${home.id}`);
 	}
 
 	// Atalhos: only route-related shortcuts are kept (channels are sample
@@ -66,22 +59,22 @@
 	<div class="community">
 		<div class="community-logo" aria-hidden="true">
 			<ServerIcon
-				iconBlob={sampleServer.icon_blob}
-				iconFormat={sampleServer.icon_format}
-				name={sampleServer.name}
+				iconBlob={server?.icon_blob ?? null}
+				iconFormat={server?.icon_format ?? ''}
+				name={server?.name ?? ''}
 				size={54}
 			/>
 		</div>
 		<div>
-			<h1>{sampleServer.name}</h1>
-			<p>Comunidade de amigos<br />e criadores</p>
+			<h1>{server?.name}</h1>
+			<p>Comunidade de amigos</p>
 			<p style="margin-top:7px">
 				<span class="online-dot"></span>{onlineCount} Online
 			</p>
 		</div>
 	</div>
 
-	<button class="home-link" aria-label="Início">
+	<button class="home-link" aria-label="Início" on:click={goHome}>
 		<span class="icon">
 			<Icon name="house" variant="light" />
 		</span>
@@ -90,7 +83,7 @@
 
 	{#each groups as group}
 		{#if group.category}
-			<div class="section-title">{group.category}</div>
+			<div class="section-title">{group.category.name}</div>
 		{/if}
 		{#each group.channels as channel (channel.id)}
 			<ChannelItem

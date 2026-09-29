@@ -1,5 +1,5 @@
 <script lang="ts">
-	// User settings (notifications + display). Demo only — local state seeded
+	// User settings (notifications + monitor). Demo only — local state seeded
 	// with sensible defaults; shape matches UserConfig (UserConfigNotifications
 	// + UserConfigDisplay) so it can bind to the real settings store later.
 	import { sampleMe } from '$lib/sample';
@@ -11,7 +11,7 @@
 		sound: true,
 		mentions: true
 	});
-	let display = $state({
+	let monitor = $state({
 		fontSize: 'normal' as string,
 		messageDensity: 'comfortable' as string,
 		showTimestamps: true,
@@ -65,13 +65,13 @@
 
 	<div class="admin-card">
 		<div class="admin-card-head">
-			<Icon name="display" variant="duotone" size={16} />
+			<Icon name="monitor" variant="duotone" size={16} />
 			Aparência
 		</div>
 		<div class="admin-card-body">
 			<div class="admin-field">
 				<label for="set-font">Tamanho da fonte</label>
-				<select id="set-font" class="admin-select" bind:value={display.fontSize}>
+				<select id="set-font" class="admin-select" bind:value={monitor.fontSize}>
 					<option class="admin-option" value="small">Pequena</option>
 					<option class="admin-option" value="normal">Normal</option>
 					<option class="admin-option" value="large">Grande</option>
@@ -79,21 +79,21 @@
 			</div>
 			<div class="admin-field">
 				<label for="set-density">Densidade</label>
-				<select id="set-density" class="admin-select" bind:value={display.messageDensity}>
+				<select id="set-density" class="admin-select" bind:value={monitor.messageDensity}>
 					<option class="admin-option" value="compact">Compacta</option>
 					<option class="admin-option" value="comfortable">Confortável</option>
 					<option class="admin-option" value="spacious">Espaça</option>
 				</select>
 			</div>
 			<label class="admin-checkbox">
-				<input type="checkbox" bind:checked={display.showTimestamps} />
+				<input type="checkbox" bind:checked={monitor.showTimestamps} />
 				<span class="cb-text">
 					<strong>Mostrar timestamps</strong>
 					<span class="hint">Exibir data e hora abaixo das mensagens</span>
 				</span>
 			</label>
 			<label class="admin-checkbox">
-				<input type="checkbox" bind:checked={display.showAvatars} />
+				<input type="checkbox" bind:checked={monitor.showAvatars} />
 				<span class="cb-text">
 					<strong>Mostrar avatares</strong>
 					<span class="hint">Exibir avatar ao lado de cada mensagem</span>
@@ -118,12 +118,12 @@
 		padding: 4px 0 8px;
 	}
 	.cb-text {
-		display: flex;
+		monitor: flex;
 		flex-direction: column;
 		gap: 2px;
 	}
 	.settings-actions {
-		display: flex;
+		monitor: flex;
 		align-items: center;
 		gap: 12px;
 		margin-top: 4px;

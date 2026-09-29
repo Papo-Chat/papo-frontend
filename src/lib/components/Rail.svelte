@@ -3,17 +3,19 @@
 	// route-related shortcuts are kept (channels are sample data, so the
 	// mockup channel/mockup buttons were dropped).
 	import { goto } from '$app/navigation';
-	import { sampleServer } from '$lib/sample';
+	import { state as serverState } from '$lib/store/server.svelte';
 	import Icon from './Icon.svelte';
 	import ServerIcon from './ServerIcon.svelte';
+
+	const server = $derived(serverState.server);
 </script>
 
 <aside class="rail">
-	<div class="brand-orb" title={sampleServer.name} aria-hidden="true">
+	<div class="brand-orb" title={server?.name ?? ''} aria-hidden="true">
 		<ServerIcon
-			iconBlob={sampleServer.icon_blob}
-			iconFormat={sampleServer.icon_format}
-			name={sampleServer.name}
+			iconBlob={server?.icon_blob ?? null}
+			iconFormat={server?.icon_format ?? ''}
+			name={server?.name ?? ''}
 			size={56}
 		/>
 	</div>

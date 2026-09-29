@@ -1,7 +1,7 @@
 // Users store: summaries (byId), lazy profiles (byId), ephemeral presence,
 // typing (TTL), and a keyset list.
 
-import { SvelteMap } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
 import { nextCursor } from '../utils/keyset';
 import { blobToUrl } from '../utils/media';
@@ -26,6 +26,11 @@ export const state = $state({
 	presence: new SvelteMap<string, LivePresence>(),
 	// channelId → userId → expiresAt (ms epoch).
 	typing: new SvelteMap<string, SvelteMap<string, number>>(),
+	// Ban state. The REST list (GET /users) does NOT expose the `banned`
+	// column (it is excluded from UserSummary), so this is a client-side
+	// session cache: seeded empty and updated on successful ban/unban.
+	// Only reset on logout/full reset — not per list load.
+	bannedIds: new SvelteSet<string>(),
 	list: {
 		items: [] as UserSummary[],
 		hasMore: false,
@@ -119,6 +124,22 @@ export function getProfile(id: string): UserProfile | null {
 	return state.profiles.get(id) ?? null;
 }
 
+// Summary built from a fetched profile (used to seed `byId` so byId-based
+// renderers pick up the user's name/roles immediately).
+function summaryFromProfile(p: UserProfile): UserSummary {
+	return {
+		id: p.id,
+		username: p.username,
+		nickname: p.nickname,
+		status: p.status,
+		status_message: p.status_message,
+		typing: p.typing,
+		status_updated_at: p.status_updated_at,
+		created_at: p.created_at,
+		roles: p.roles
+	};
+}
+
 export async function ensureProfile(id: string): Promise<UserProfile> {
 	const cached = state.profiles.get(id);
 	if (cached) {
@@ -132,26 +153,22 @@ export async function ensureProfile(id: string): Promise<UserProfile> {
 	state.profiles.set(id, profile);
 	// Seed the summary even when the user is unknown — a new author / a
 	// profile fetched directly must still appear in the summaries map.
-	const summary: UserSummary = {
-		id: profile.id,
-		username: profile.username,
-		nickname: profile.nickname,
-		status: profile.status,
-		status_message: profile.status_message,
-		typing: profile.typing,
-		status_updated_at: profile.status_updated_at,
-		created_at: profile.created_at,
-		roles: profile.roles
-	};
-	state.byId.set(id, summary);
+	state.byId.set(id, summaryFromProfile(profile));
 	return profile;
 }
 
 export async function ensureProfiles(ids: string[]): Promise<UserProfile[]> {
+	// Callers pass "all visible users"; only the ids missing from the profile
+	// cache actually hit the network. Re-runs with everything cached are a
+	// no-op (no fetch).
+	const missing = [...new Set(ids)].filter((id) => id !== '' && !state.profiles.has(id));
 	const out: UserProfile[] = [];
-	// Chunk ≤ 50.
-	for (let i = 0; i < ids.length; i += 50) {
-		const chunk = ids.slice(i, i + 50);
+	if (missing.length === 0) {
+		return out;
+	}
+	// Chunk ≤ 50 (server limit).
+	for (let i = 0; i < missing.length; i += 50) {
+		const chunk = missing.slice(i, i + 50);
 		const epoch = currentSessionEpoch();
 		const res = await api.users.profileBatch(chunk);
 		if (!isCurrentSessionEpoch(epoch)) {
@@ -159,6 +176,9 @@ export async function ensureProfiles(ids: string[]): Promise<UserProfile[]> {
 		}
 		for (const p of res.profiles) {
 			state.profiles.set(p.id, p);
+			// Seed the summary so byId-based renderers (message authors,
+			// member rows, …) show name/roles/avatar without another fetch.
+			state.byId.set(p.id, summaryFromProfile(p));
 			out.push(p);
 		}
 	}
@@ -346,6 +366,7 @@ export function reset(): void {
 	state.profiles.clear();
 	state.presence.clear();
 	state.typing.clear();
+	state.bannedIds.clear();
 	const nextGeneration = state.list.loadGeneration + 1;
 
 	state.list = {
@@ -355,4 +376,18 @@ export function reset(): void {
 		loading: false,
 		loadGeneration: nextGeneration
 	};
+}
+
+// Ban / unban. The API does not return the resulting ban state; it is
+// applied locally only after the server confirms success.
+export function setBanState(userId: string, ban: boolean): void {
+	api.users
+		.ban({ user_id: userId, ban_state: ban })
+		.then(() => {
+			if (ban) state.bannedIds.add(userId);
+			else state.bannedIds.delete(userId);
+		})
+		.catch((err) => {
+			console.error('failha ao alterar estado de ban:', err);
+		})
 }

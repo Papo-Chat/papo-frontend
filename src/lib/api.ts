@@ -557,14 +557,14 @@ export const messages = {
 		messageId: string,
 		req: ReactionRequest
 	): Promise<{
-		id: string;
+		message_id: string;
 		user_id: string;
 		emoji_id: string | null;
 		unicode: string | null;
 		created_at: string;
 	}> {
 		return request<{
-			id: string;
+			message_id: string;
 			user_id: string;
 			emoji_id: string | null;
 			unicode: string | null;

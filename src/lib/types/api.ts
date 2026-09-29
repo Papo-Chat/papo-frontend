@@ -81,8 +81,12 @@ export interface DropConnectionResponse {
 
 export interface UpdateUserRequest {
 	// nickname, status and description are all required (nil → 400).
+	// NOTE: in this endpoint `status` is the free-text STATUS MESSAGE
+	// (users.status_message), NOT the online status (away/busy). The online
+	// status is a separate field set via PUT /users/:id/status
+	// (`UpdateStatusRequest`). An empty string is the neutral/default value.
 	nickname: string;
-	status: 'away' | 'busy' | null;
+	status: string;
 	description: string;
 	// Optional: absent (null) leaves the persisted value unchanged.
 	typing: string | null;
@@ -246,14 +250,14 @@ export interface CreateEmojiRequest {
 // ── search ─────────────────────────────────────────────
 
 export interface SearchRequest {
-	// At least one filter must be provided.
-	text: string;
-	author: string;
-	order: 'asc' | 'desc';
+	// Filtros combináveis; pelo menos 1 campo é obrigatório no request.
+	text?: string;
+	author?: string;
+	order?: 'asc' | 'desc';
 	// YYYY-MM-DD, date_start <= date_end.
-	date_start: string;
-	date_end: string;
-	contains_attachment: boolean | null;
+	date_start?: string;
+	date_end?: string;
+	contains_attachment?: boolean | null;
 }
 
 // ── admin ──────────────────────────────────────────────

@@ -65,7 +65,7 @@
 
 		<div class="admin-card">
 			<div class="admin-card-head">
-				<Icon name="settings" variant="duotone" size={16} />
+				<Icon name="gear" variant="duotone" size={16} />
 				Definições
 			</div>
 			<div class="admin-card-body">

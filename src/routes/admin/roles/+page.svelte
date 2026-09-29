@@ -1,6 +1,7 @@
 <script lang="ts">
-	// Roles: list + create. Demo only — no API wiring.
-	import { sampleRoles, sampleUsers } from '$lib/sample';
+	// Roles: list + create. Data: rolesStore (roles) + usersStore (member counts).
+	import * as rolesStore from '$lib/store/roles.svelte';
+	import * as usersStore from '$lib/store/users.svelte';
 	import type { Role, RolePermissions } from '$lib/types';
 	import Icon from '$lib/components/Icon.svelte';
 
@@ -12,30 +13,49 @@
 	const palette = ['#e7a80b', '#30d158', '#0a84ff', '#9b5de5', '#ff5d63', '#5ac8fa'];
 
 	const visibleRoles = $derived(
-		filter
-			? sampleRoles.filter((r) => r.name.toLowerCase().includes(filter.toLowerCase()))
-			: sampleRoles
-	);
+        rolesStore.state.list.filter((r) =>
+            !filter || r.name.toLowerCase().includes(filter.toLowerCase())
+        )
+    );
 
 	function memberCount(roleId: string): number {
-		return sampleUsers.filter((u) => u.roles.some((r) => r.id === roleId)).length;
-	}
+        let count = 0;
+        for (const u of usersStore.state.byId.values()) {
+            if (u.roles.some((r) => r.id === roleId)) count++;
+        }
+        return count;
+    }
 
 	function openCreate(): void {
-		creating = true;
-		name = '';
-		color = palette[0];
-	}
+        creating = true;
+        name = '';
+        color = palette[0];
+    }
 
 	function closeCreate(): void {
-		creating = false;
-	}
+        creating = false;
+    }
 
 	function create(): void {
-		// Demo: no API.
-		closeCreate();
-	}
-</script>
+        const n = name.trim();
+        if (!n) return;
+        // New role starts with no permissions; edit them on the role detail page.
+        rolesStore.create({
+            name: n,
+            color,
+            permissions: {
+                manage_server: false,
+                manage_channels: false,
+                manage_roles: false,
+                ban_members: false,
+                pin_message: false,
+                everyone_message: false,
+                send_attachment: false
+            }
+        });
+        closeCreate();
+    }
+</script>>
 
 <div class="roles-page">
 	<header class="roles-head">

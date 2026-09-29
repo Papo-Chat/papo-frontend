@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { Channel } from '$lib/types';
+	import type { Channel, SearchResult } from '$lib/types';
 	import { state } from '$lib/store/ui.svelte';
+	import * as notificationsStore from '$lib/store/notifications.svelte';
 	import Icon from './Icon.svelte';
 	import NotificationsPopover from './NotificationsPopover.svelte';
 	import PinsPopover from './PinsPopover.svelte';
@@ -12,13 +13,15 @@
 		searchQuery = $bindable(''),
 		searchOpen = $bindable(false),
 		onSearchQueryChange,
-		onSearchOpenChange
+		onSearchOpenChange,
+		onSearchResult
 	} = $props<{
 		channel: Channel;
 		searchQuery?: string;
 		searchOpen?: boolean;
 		onSearchQueryChange?: (q: string) => void;
 		onSearchOpenChange?: (open: boolean) => void;
+		onSearchResult?: (result: SearchResult) => void;
 	}>();
 
 	function openSidebar(): void {
@@ -85,11 +88,15 @@
 		{/if}
 		<button
 			class="pill circle header-icon-btn"
+			style="position: relative"
 			on:click={openNotifications}
 			aria-label="Notificações"
 			title="Notificações"
 		>
 			<Icon name="bell" variant="light" />
+			{#if notificationsStore.state.unreadCount > 0}
+				<span class="unread-badge">{notificationsStore.state.unreadCount}</span>
+			{/if}
 		</button>
 		<button
 			class="pill circle header-icon-btn"
@@ -104,7 +111,12 @@
 	<NotificationsPopover />
 	<PinsPopover />
 	{#if onSearchOpenChange}
-		<SearchMessagePopover {searchQuery} open={searchOpen} onOpenChange={onSearchOpenChange} />
+		<SearchMessagePopover
+			{searchQuery}
+			open={searchOpen}
+			onOpenChange={onSearchOpenChange}
+			onResultClick={onSearchResult}
+		/>
 	{/if}
 </header>
 

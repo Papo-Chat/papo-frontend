@@ -165,7 +165,7 @@
 	<ul class="reaction-users-list">
 		{#each users as u (u.id)}
 			<li class="reaction-user">
-				<Avatar username={u.username} nickname={u.nickname} size={30} />
+				<Avatar user={u} size={30} />
 				<span class="reaction-user-name">{u.nickname || u.username}</span>
 			</li>
 		{/each}

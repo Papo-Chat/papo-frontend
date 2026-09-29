@@ -673,8 +673,10 @@ describe('react / unreact (user_reactions)', () => {
 	});
 
 	it('react() adds the user reaction; unreact() removes it', async () => {
+		// Resposta do POST /reactions conforme o contrato: `message_id` (sem
+		// `id`). O `user_reactions` local usa placeholder `''` para `id`.
 		vi.mocked(apiMessages.react).mockResolvedValue({
-			id: 'ur1',
+			message_id: 'm1',
 			user_id: 'u1',
 			emoji_id: 'e1',
 			unicode: null,
@@ -682,7 +684,7 @@ describe('react / unreact (user_reactions)', () => {
 		});
 		await react('ch1', 'm1', { emoji_id: 'e1', unicode: null });
 		expect(globalState.channels.get('ch1')!.byId.get('m1')!.user_reactions).toEqual([
-			{ id: 'ur1', emoji_id: 'e1', unicode: null }
+			{ id: '', emoji_id: 'e1', unicode: null }
 		]);
 		vi.mocked(apiMessages.unreact).mockResolvedValue(undefined);
 		await unreact('ch1', 'm1', { emoji_id: 'e1', unicode: null });

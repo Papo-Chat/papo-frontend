@@ -4,8 +4,9 @@
 // services/channels.go):
 //   - The server owner implicitly has ALL permissions.
 //   - A channel with no permission entries is "open": everyone can read,
-//     send, delete and join voice (matches "canais abertos sem permissões
-//     definidas").
+//     send and join voice. Delete is NOT free even in open channels — it
+//     still needs an explicit role permission (author can always delete their
+//     own message). (matches "canais abertos sem permissões definidas").
 //   - Non-owner access is the union of the user's roles.
 
 import type { Channel, Role, RolePermissions } from '../types/models';
@@ -67,9 +68,12 @@ export function channelAccess(channel: Channel, ctx: RoleContext): ChannelAccess
 	if (ctx.isOwner) {
 		return { read: true, send: true, del: true, voice: true };
 	}
-	// Open channel: no permission entries → everyone has full access.
+	// Open channel: no permission entries → everyone can read, send and join
+	// voice. Delete is NOT free: it requires an explicit role permission
+	// (the author check lives in Message.svelte, per the backend rule that
+	// author OR delete_messages is required).
 	if (channel.permissions.length === 0) {
-		return { read: true, send: true, del: true, voice: true };
+		return { read: true, send: true, del: false, voice: true };
 	}
 	const userRoleIds = new Set(ctx.roles.map((r) => r.id));
 	const access: ChannelAccess = {

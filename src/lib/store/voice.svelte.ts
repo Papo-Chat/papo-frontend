@@ -38,7 +38,10 @@ export const state = $state({
 	// The single currently-active speaker (F20).
 	activeSpeaker: null as string | null,
 	// Whether we are currently connected to a voice room.
-	connected: false
+	connected: false,
+	// Canal do room atual, reativo: o `currentChannelId` (módulo, não
+	// rastreado) é usado só internamente; o UI precisa da versão reativa.
+	channelId: null as string | null
 });
 
 let peer: RTCPeerConnection | null = null;
@@ -305,6 +308,7 @@ export function leave(channelId: string | null): void {
 	state.activeSpeakers = [];
 	state.activeSpeaker = null;
 	state.connected = false;
+	state.channelId = null;
 
 	currentChannelId = null;
 
@@ -319,7 +323,9 @@ export function clearRoom(channelId: string): void {
 }
 
 export function isJoined(channelId: string): boolean {
-	return currentChannelId === channelId;
+	// Lê `state.channelId` (reativo) em vez do `currentChannelId` de módulo
+	// (variável não rastreada): sem isso, o UI nunca sai do estado inicial.
+	return state.channelId === channelId;
 }
 
 // Called by the websocket store when the WS closes (P0.1). The call belongs
@@ -346,6 +352,7 @@ export function onSocketClose(): void {
 	state.activeSpeakers = [];
 	state.activeSpeaker = null;
 	state.connected = false;
+	state.channelId = null;
 
 	currentChannelId = null;
 
@@ -364,6 +371,7 @@ export function onVoiceJoined(ev: WsVoiceJoined): void {
 	state.activeSpeaker = ev.active_speakers.length === 1 ? ev.active_speakers[0] : null;
 
 	state.connected = true;
+	state.channelId = ev.channel_id;
 
 	joinResolve?.();
 }
@@ -498,16 +506,30 @@ export function onVoiceStateUpdate(ev: WsVoiceStateUpdate): void {
 	if (currentChannelId !== ev.channel_id) {
 		return;
 	}
+
 	const idx = state.members.findIndex((m) => m.user_id === ev.user_id);
+
 	if (idx >= 0) {
 		const next = [...state.members];
+
 		next[idx] = {
 			...next[idx],
 			muted: ev.muted,
 			camera_on: ev.camera_on,
 			screen_sharing: ev.screen_sharing
 		};
+
 		state.members = next;
+	}
+
+	if (ev.muted) {
+		state.activeSpeakers = state.activeSpeakers.filter(
+			(id) => id !== ev.user_id
+		);
+
+		if (state.activeSpeaker === ev.user_id) {
+			state.activeSpeaker = null;
+		}
 	}
 }
 
@@ -515,8 +537,11 @@ export function onActiveSpeakerUpdate(ev: WsActiveSpeakerUpdate): void {
 	if (currentChannelId !== ev.channel_id) {
 		return;
 	}
-	state.activeSpeakers = ev.user_ids;
-	state.activeSpeaker = ev.user_ids.length === 1 ? ev.user_ids[0] : null;
+
+	const users = ev.user_ids ?? [];
+
+	state.activeSpeakers = users;
+	state.activeSpeaker = users.length === 1 ? users[0] : null;
 }
 
 export function onVoiceLeave(ev: WsVoiceLeave): void {

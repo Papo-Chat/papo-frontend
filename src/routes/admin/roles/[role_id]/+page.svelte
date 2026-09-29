@@ -1,50 +1,52 @@
 <script lang="ts">
-	// Role edit + permissions. Demo only — no API wiring.
+	// Role edit + permissions. Data: rolesStore.
 	import { page } from '$app/state';
-	import { roleById } from '$lib/sample';
+	import * as rolesStore from '$lib/store/roles.svelte';
 	import type { Role, RolePermissions } from '$lib/types';
 	import Icon from '$lib/components/Icon.svelte';
 
 	let roleId = $derived(page.params.role_id ?? '');
-	let role: Role | null = $derived(roleById(roleId));
+	const role: Role | null = $derived(rolesStore.state.byId.get(roleId) ?? null);
 
 	// Local editable copy of the role's permissions.
 	let perms = $state<RolePermissions>({
-		manage_server: false,
-		manage_channels: false,
-		manage_roles: false,
-		ban_members: false,
-		pin_message: false,
-		everyone_message: false,
-		send_attachment: false
-	});
+        manage_server: false,
+        manage_channels: false,
+        manage_roles: false,
+        ban_members: false,
+        pin_message: false,
+        everyone_message: false,
+        send_attachment: false
+    });
 	let name = $state('');
 	let color = $state('#9b5de5');
 
 	const palette = ['#e7a80b', '#30d158', '#0a84ff', '#9b5de5', '#ff5d63', '#5ac8fa'];
 
 	$effect(() => {
-		if (role) {
-			name = role.name;
-			color = role.color ?? '#9b5de5';
-			perms = { ...role.permissions };
-		}
-	});
+        if (role) {
+            name = role.name;
+            color = role.color ?? '#9b5de5';
+            perms = { ...role.permissions };
+        }
+    });
 
 	const PERMS = [
-		{ key: 'manage_server' as const, label: 'Gerenciar servidor' },
-		{ key: 'manage_channels' as const, label: 'Gerenciar canais' },
-		{ key: 'manage_roles' as const, label: 'Gerenciar Roles' },
-		{ key: 'ban_members' as const, label: 'Expulsar membros' },
-		{ key: 'pin_message' as const, label: 'Fixar mensagens' },
-		{ key: 'everyone_message' as const, label: 'Mensagem para todos' },
-		{ key: 'send_attachment' as const, label: 'Enviar anexos' }
-	];
+        { key: 'manage_server' as const, label: 'Gerenciar servidor' },
+        { key: 'manage_channels' as const, label: 'Gerenciar canais' },
+        { key: 'manage_roles' as const, label: 'Gerenciar Roles' },
+        { key: 'ban_members' as const, label: 'Expulsar membros' },
+        { key: 'pin_message' as const, label: 'Fixar mensagens' },
+        { key: 'everyone_message' as const, label: 'Mensagem para todos' },
+        { key: 'send_attachment' as const, label: 'Enviar anexos' }
+    ];
 
 	function save(): void {
-		// Demo: no API.
-	}
-</script>
+        const n = name.trim();
+        if (!n) return;
+        rolesStore.update(roleId, { name: n, color, permissions: perms });
+    }
+</script>>
 
 <div class="role-edit-page">
 	{#if role}

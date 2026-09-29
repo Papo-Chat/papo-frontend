@@ -112,12 +112,15 @@ describe('channelAccess', () => {
 		});
 	});
 
-	it('open channel (empty permissions) grants everything to anyone', () => {
+	// Backend rule (userHasChannelPermission, freeIfOpen=false): in an open
+	// channel read/send/voice are free, but delete is NOT free (no role
+	// entries can grant it; only author or server owner may delete).
+	it('open channel (empty permissions): read/send/voice free, delete NOT free', () => {
 		const ch = makeChannel([]);
 		expect(channelAccess(ch, { roles: [], isOwner: false })).toEqual({
 			read: true,
 			send: true,
-			del: true,
+			del: false,
 			voice: true
 		});
 	});

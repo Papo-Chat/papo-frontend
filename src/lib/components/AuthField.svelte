@@ -7,15 +7,15 @@
 		label,
 		icon = 'user',
 		placeholder = '',
-		type = 'text'
+		type = 'text',
+		value = $bindable('')
 	} = $props<{
 		label: string;
 		icon?: string;
 		placeholder?: string;
 		type?: string;
+		value?: string;
 	}>();
-
-	let value = $state('');
 
 	function onInput(e: Event): void {
 		value = (e.target as HTMLInputElement).value;

@@ -15,6 +15,7 @@ import * as channelsStore from '../store/channels.svelte';
 import * as messagesStore from '../store/messages.svelte';
 import * as notificationsStore from '../store/notifications.svelte';
 import * as emojisStore from '../store/emojis.svelte';
+import * as serverStore from '../store/server.svelte';
 import * as websocketStore from '../store/websocket.svelte';
 import * as voiceStore from '../store/voice.svelte';
 import type { RoleSummary } from '../types';
@@ -89,8 +90,14 @@ export async function load(): Promise<void> {
 		seedMe(me);
 		await Promise.all([loadUsersList(), loadRoles()]);
 		seedSettings(me.settings.config, me.settings.version);
+		// Notificações e emojis customizados: listas por usuário.
+		notificationsStore.load();
+		emojisStore.load();
 		state.loaded = true;
 		startTimer();
+		// Conexão WS (handshake com o mesmo cookie Auth). Só conecta quando a
+		// sessão é válida; `clearLocalSession()`/logout chamam disconnect().
+		websocketStore.connect();
 	} finally {
 		state.loading = false;
 	}
@@ -115,6 +122,7 @@ export function clearLocalSession(): void {
 	settingsReset();
 	notificationsStore.reset();
 	channelsStore.reset();
+	serverStore.reset();
 	messagesStore.reset();
 	usersReset();
 	rolesReset();

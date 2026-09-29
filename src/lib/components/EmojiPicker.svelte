@@ -352,8 +352,8 @@
 	}
 	.emoji-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, 54px);
-		gap: 4px;
+		grid-template-columns: repeat(auto-fill, 45px);
+		gap: 2px;
 	}
 	.emoji {
 		aspect-ratio: 1;
@@ -384,9 +384,8 @@
 		font-size: 11px;
 	}
 	.emoji.custom img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
+		width: 32px;
+		height: 32px;
 	}
 	.emoji.custom .custom-name {
 		font-size: 11px;

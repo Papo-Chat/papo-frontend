@@ -4,12 +4,20 @@
 
 	let {
 		messages,
-		onAddReaction,
-		searchActive = false
+		onReply,
+		searchActive = false,
+		loading = false,
+		hasMoreNewer = false,
+		onJumpToLatest,
+		highlightMessageId = null
 	} = $props<{
 		messages: MessageWithAttachment[];
-		onAddReaction?: (messageId: string, emoji: string) => void;
+		onReply?: (message: MessageWithAttachment) => void;
 		searchActive?: boolean;
+		loading?: boolean;
+		hasMoreNewer?: boolean;
+		onJumpToLatest?: () => void;
+		highlightMessageId?: string | null;
 	}>();
 
 	let listEl: HTMLElement | null = null;
@@ -25,17 +33,43 @@
 			listEl.scrollTop = listEl.scrollHeight;
 		}
 	});
+
+	//	Roll to message target is set, scroll to it and highlight.
+	$effect(() => {
+		if (!highlightMessageId) return;
+		queueMicrotask(() => {
+			const el = listEl?.querySelector(`[data-message-id="${highlightMessageId}"]`);
+			if (el) {
+				el.scrollIntoView({ block: 'nearest' });
+			}
+		});
+	});
 </script>
 
 <div class="chat" bind:this={listEl}>
-	{#if messages.length === 0}
+	{#if hasMoreNewer}
+		<button class="jump-to-latest" on:click={onJumpToLatest} aria-label="Ir para as últimas mensagens">
+			↓ Ver últimas mensagens
+		</button>
+	{/if}
+
+	{#if loading && messages.length === 0}
 		<div class="chat-empty">
-			<p>{searchActive ? 'Nada encontrado.' : 'Nenhuma mensagem por enquanto.'}</p>
+			<p>Carregando…</p>
 		</div>
 	{:else}
-		{#each messages as m (m.id)}
-			<Message message={m} {onAddReaction} />
-		{/each}
+		{#if messages.length === 0}
+			<div class="chat-empty">
+				<p>{searchActive ? 'Nada encontrado.' : 'Nenhuma mensagem por enquanto.'}</p>
+			</div>
+		{:else}
+			{#each messages as m (m.id)}
+				<Message
+					message={m}
+					onReply={(msg) => onReply?.(msg)}
+				/>
+			{/each}
+		{/if}
 	{/if}
 </div>
 
@@ -50,5 +84,23 @@
 		min-height: 240px;
 		color: var(--muted-soft);
 		font-size: 14px;
+	}
+	.jump-to-latest {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		font: inherit;
+		font-size: 13px;
+		color: var(--text-secondary);
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		padding: 4px 10px;
+		cursor: pointer;
+		margin-bottom: 6px;
+	}
+	.jump-to-latest:hover {
+		background: var(--hover);
+		color: var(--text-primary);
 	}
 </style>

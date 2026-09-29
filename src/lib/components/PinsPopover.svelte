@@ -1,8 +1,16 @@
 <script lang="ts">
 	// Pinned-messages popover (topbar, right-anchored). Open/closed via the UI
 	// store. Closes on outside click, Escape, or the close button.
-	import { state } from '$lib/store/ui.svelte';
-	import { samplePins, userById } from '$lib/sample';
+	//
+	// Data: pinned list of the current (open) channel — messagesStore.getChannel(
+	// openChannelId)?.pinned (GET /channels/:id/pinned). Clicking a pin
+	// navigates/highlights the message (scrollTarget mechanism, same as search).
+	import { goto } from '$app/navigation';
+	import { state, setScrollTarget } from '$lib/store/ui.svelte';
+	import * as channelsStore from '$lib/store/channels.svelte';
+	import * as messagesStore from '$lib/store/messages.svelte';
+	import * as usersStore from '$lib/store/users.svelte';
+	import type { MessageWithAttachment } from '$lib/types';
 	import { formatTime } from '$lib/utils/time';
 	import Icon from './Icon.svelte';
 	import Avatar from './Avatar.svelte';
@@ -10,8 +18,19 @@
 	let el: HTMLElement | null = null;
 	let open = $derived(state.pinsPopoverOpen);
 
+	const openChannelId = $derived(channelsStore.state.openChannelId);
+	const pinned = $derived(
+		openChannelId ? (messagesStore.getChannel(openChannelId)?.pinned ?? []) : []
+	);
+
 	function close(): void {
 		state.pinsPopoverOpen = false;
+	}
+
+	function openPin(m: MessageWithAttachment): void {
+		setScrollTarget(m.id);
+		goto(`/channels/${m.channel_id}`);
+		close();
 	}
 
 	$effect(() => {
@@ -38,17 +57,28 @@
 				<Icon name="push-pin" variant="light" />
 				<strong>Fixadas</strong>
 			</div>
-			<button class="popover-close" on:click={close} aria-label="Fechar">
+			<button class="popover-close" onclick={close} aria-label="Fechar">
 				<Icon name="x" variant="light" />
 			</button>
 		</div>
 		<div class="popover-body">
-			{#if samplePins.length}
-				{#each samplePins as m (m.id)}
-					{@const author = userById(m.author_id)}
+			{#if pinned.length}
+				{#each pinned as m (m.id)}
+					{@const author = usersStore.state.byId.get(m.author_id ?? '')}
 					{#if author}
-						<div class="popover-item">
-							<Avatar username={author.username} nickname={author.nickname} size={34} />
+						<div
+							class="popover-item"
+							role="button"
+							tabindex={0}
+							onclick={() => openPin(m)}
+							onkeydown={(e: KeyboardEvent) => {
+								if (e.key === 'Enter' || e.key === ' ') {
+									e.preventDefault();
+									openPin(m);
+								}
+							}}
+						>
+							<Avatar user={author} size={34} />
 							<div>
 								<div class="meta">
 									<span class="name">{author.nickname || author.username}</span>
@@ -69,11 +99,8 @@
 				<div class="popover-empty-icon">
 					<Icon name="push-pin" variant="duotone" />
 				</div>
-				<strong>Mensagens fixadas</strong>
-				<p>
-					Base pronta para listar mensagens, arquivos e links importantes do canal atual com o mesmo
-					visual Liquid Glass.
-				</p>
+				<strong>Fixadas</strong>
+				<p>Nenhuma mensagem fixada neste canal. Passar o mouse sobre uma mensagem e clicar no alfinete para fixá-la.</p>
 			{/if}
 		</div>
 	</div>

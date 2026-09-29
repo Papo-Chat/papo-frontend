@@ -116,7 +116,7 @@
 					aria-label={`Ver perfil de ${u.nickname || u.username}`}
 					onclick={() => openProfile(u)}
 				>
-					<Avatar username={u.username} nickname={u.nickname} size={36} />
+					<Avatar user={u} size={36} />
 					<div class="admin-row-labels">
 						<strong>{u.nickname || u.username}</strong>
 						<span>

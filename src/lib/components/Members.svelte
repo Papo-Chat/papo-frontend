@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { state as uiState } from '$lib/store/ui.svelte';
-	import { sampleUsers } from '$lib/sample';
+	import * as usersStore from '$lib/store/users.svelte';
 	import type { UserSummary } from '$lib/types';
 	import MemberRow from './MemberRow.svelte';
 	import MobilePanelHead from './MobilePanelHead.svelte';
@@ -8,14 +8,28 @@
 	let searchQuery = $state('');
 	const drawerOpen = $derived(uiState.membersDrawerOpen);
 
+	// Usuários reais: summaries do servidor + presença viva (WS) sobrepondo
+	// o status persistido.
+	const users = $derived([...usersStore.state.byId.values()]);
+
+	// Perfis (avatar/banner) dos usuários que esta lista renderiza — batch,
+	// só ids ausentes do cache (o store dedupica e pula cacheado). Cobre
+	// quem a página não batchou (ex.: o próprio usuário, via seedMe).
+	$effect(() => {
+		void usersStore.ensureProfiles(users.map((u) => u.id));
+	});
+
 	function computeSections(): Array<{ title: string; members: UserSummary[] }> {
+		const get = (u: UserSummary) => usersStore.effectiveStatus(u.id);
 		const groups: Array<{ title: string; members: UserSummary[] }> = [];
-		const online = sampleUsers.filter((u) => u.status === null);
-		const away = sampleUsers.filter((u) => u.status === 'away');
-		const busy = sampleUsers.filter((u) => u.status === 'busy');
+		const online = users.filter((u) => get(u) === 'online');
+		const offline = users.filter((u) => get(u) === 'offline');
+		const away = users.filter((u) => get(u) === 'away');
+		const busy = users.filter((u) => get(u) === 'busy');
 		if (online.length) groups.push({ title: `ONLINE — ${online.length}`, members: online });
 		if (away.length) groups.push({ title: `AUSENTE — ${away.length}`, members: away });
-		if (busy.length) groups.push({ title: `JOGANDO — ${busy.length}`, members: busy });
+		if (busy.length) groups.push({ title: `OCUPADO — ${busy.length}`, members: busy });
+		if (offline.length) groups.push({ title: `OFFLINE — ${offline.length}`, members: offline });
 		return groups;
 	}
 	const sections = $derived(computeSections());
@@ -23,7 +37,7 @@
 	function computeMatches(): UserSummary[] | null {
 		const q = searchQuery.trim().toLowerCase();
 		if (!q) return null;
-		return sampleUsers.filter((u) => (u.nickname || u.username).toLowerCase().includes(q));
+		return users.filter((u) => (u.nickname || u.username).toLowerCase().includes(q));
 	}
 	const matches = $derived(computeMatches());
 

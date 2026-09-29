@@ -1,14 +1,37 @@
 <script lang="ts">
-	// Users: list + ban + assign role. Demo only — no API wiring.
-	import { sampleUsers, sampleRoles } from '$lib/sample';
+	// Users: list + ban + assign role. Data: usersStore (list + ban state)
+	// + rolesStore (roles).
+	import * as usersStore from '$lib/store/users.svelte';
+	import * as rolesStore from '$lib/store/roles.svelte';
 	import type { UserSummary } from '$lib/types';
 	import Icon from '$lib/components/Icon.svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 
-	// Local editable copy so the demo can ban / unban users.
-	let users = $state<UserSummary[]>([...sampleUsers]);
-	let bannedIds = $state<string[]>([]);
 	let filter = $state('');
+
+	// GET /users is not run on the global bootstrap — load once on mount.
+	// loadList() is internally guarded (loadGeneration), so repeated calls
+	// are safe.
+	let usersLoaded = $state(false);
+	$effect(() => {
+		if (!usersLoaded) {
+			usersLoaded = true;
+			void usersStore.loadList();
+		}
+	});
+
+	function loadNext(): void {
+		usersStore.loadMore();
+	}
+
+	const users = $derived(usersStore.state.list.items);
+	const roles = $derived(rolesStore.state.list);
+
+	// Perfis (avatar/banner) dos usuários visíveis na lista — batch, só ids
+	// ausentes do cache.
+	$effect(() => {
+		void usersStore.ensureProfiles(users.map((u) => u.id));
+	});
 
 	const visibleUsers = $derived(
 		filter
@@ -20,32 +43,56 @@
 			: users
 	);
 
+	// Ban state: the REST list does NOT expose `banned`, so this is the
+	// client-side session cache (bannedIds) intersected with known users.
+	const banned = $derived(
+		[
+			...usersStore.state.bannedIds,
+		]
+			.map((id) => usersStore.state.byId.get(id))
+			.filter((u): u is UserSummary => !!u)
+	);
+
+	const activeCount = $derived(
+		users.filter((u) => !usersStore.state.bannedIds.has(u.id)).length
+	);
+
 	function isBanned(id: string): boolean {
-		return bannedIds.includes(id);
+		return usersStore.state.bannedIds.has(id);
 	}
 
-	function toggleBan(id: string): void {
-		bannedIds = bannedIds.includes(id) ? bannedIds.filter((b) => b !== id) : [...bannedIds, id];
+	function toggleBan(u: UserSummary): void {
+		// The API returns no resulting ban state; the store updates the
+		// client cache on success, so the UI reflects the action once the
+		// request resolves.
+		usersStore.setBanState(u.id, !isBanned(u.id));
 	}
 
-	function assignRole(userId: string, role: string): void {
-		// Demo: no API.
-		const u = users.find((x) => x.id === userId);
-		if (!u) return;
-		const roleEntry = sampleRoles.find((r) => r.id === role);
-		if (!roleEntry || u.roles.some((r) => r.id === role)) return;
-		u.roles = [...u.roles, roleEntry];
+	function assignRole(userId: string, roleId: string): void {
+		const u = usersStore.state.byId.get(userId);
+		const role = rolesStore.state.byId.get(roleId);
+		if (!u || !role || u.roles.some((r) => r.id === roleId)) return;
+		// Optimistic: the WS role_add/role_remove events only invalidate the
+		// lazy profile cache, so the list UI is updated here and reconciled
+		// on the next list load.
+		u.roles = [...u.roles, role];
+		rolesStore.assign(userId, roleId);
 	}
 
 	function removeRole(userId: string, roleId: string): void {
-		// Demo: no API.
-		const u = users.find((x) => x.id === userId);
+		const u = usersStore.state.byId.get(userId);
 		if (!u) return;
 		u.roles = u.roles.filter((r) => r.id !== roleId);
+		rolesStore.unassign(userId, roleId);
+	}
+	function statusDotClass(id: string): string {
+		const s = usersStore.effectiveStatus(id);
+		if (s === 'online') return '';
+		if (s === 'offline') return 'offline';
+		return s;
 	}
 
-	const banned = $derived(users.filter((u) => isBanned(u.id)));
-	const total = $derived(users.filter((u) => !isBanned(u.id)).length);
+	const loading = $derived(usersStore.state.list.loading && users.length === 0);
 </script>
 
 <div class="users-page">
@@ -59,11 +106,15 @@
 				aria-label="Filtrar usuários"
 			/>
 			<div class="users-stats">
-				<span>Ativos: <strong>{total}</strong></span>
+				<span>Ativos: <strong>{activeCount}</strong></span>
 				<span class="banned-count">Banidos: <strong>{banned.length}</strong></span>
 			</div>
 		</div>
 	</header>
+
+	{#if loading}
+		<div class="loading-hint">Carregando usuários…</div>
+	{/if}
 
 	{#if banned.length}
 		<div class="banned-card">
@@ -76,7 +127,7 @@
 					<button
 						class="banned-item"
 						aria-label={`Desbanir ${u.nickname || u.username}`}
-						onclick={() => toggleBan(u.id)}
+						onclick={() => toggleBan(u)}
 					>
 						${u.nickname || u.username}
 						<Icon name="arrow-clockwise" variant="light" size={14} />
@@ -96,44 +147,42 @@
 				{#each visibleUsers as u (u.id)}
 					{#if !isBanned(u.id)}
 						<div class="user-row">
-							<Avatar username={u.username} nickname={u.nickname} size={34} />
+							<Avatar user={u} size={34} />
 							<div class="user-info">
 								<strong>{u.nickname || u.username}</strong>
 								<span class="user-user">@{u.username}</span>
 							</div>
-							{#if u.status === null}
-								<span class="status-dot"></span>
-							{:else}
-								<span class="status-dot {u.status}"></span>
-							{/if}
+									<span class="status-dot {statusDotClass(u.id)}"></span>
 							<div class="role-select">
 								<select
 									class="user-role-select"
 									aria-label={`Atribuir Role a ${u.nickname || u.username}`}
 									onchange={(e) => {
-										(e.target as HTMLSelectElement).selectedIndex = 0;
-										const val = (e.target as HTMLSelectElement).value;
+										const sel = e.target as HTMLSelectElement;
+										const val = sel.value;
+										sel.selectedIndex = 0;
 										if (val) assignRole(u.id, val);
 									}}
 								>
 									<option class="admin-option" value="">Atribuir Role…</option>
-									{#each sampleRoles as r (r.id)}
+									{#each roles as r (r.id)}
 										<option class="admin-option" value={r.id}>{r.name}</option>
 									{/each}
 								</select>
 							</div>
 							<div class="role-chips">
-								{#each u.roles as r (r.id)}
-									<span class="chip" style="color:{r.color}">
-										{r.name}
-										<button class="chip-x" aria-label={`Remover Role ${r.name}`}> × </button>
-									</span>
-								{/each}
-							</div>
+									{#each u.roles as r (r.id)}
+										<span class="chip" style="color:{r.color}">
+											{r.name}
+											<button class="chip-x" aria-label={`Remover Role ${r.name}`} onclick={() => removeRole(u.id, r.id)}>  </button>
+										</span>
+									{/each}
+								</div>
+
 							<button
 								class="admin-btn ghost small"
 								aria-label={`Banir ${u.nickname || u.username}`}
-								onclick={() => toggleBan(u.id)}
+								onclick={() => toggleBan(u)}
 							>
 								<Icon name="x-circle" variant="light" size={14} />
 								Banir
@@ -141,6 +190,13 @@
 						</div>
 					{/if}
 				{/each}
+				{#if usersStore.state.list.hasMore}
+					<div class="load-more">
+						<button class="load-more-btn" onclick={loadNext} disabled={usersStore.state.list.loading}>
+							{usersStore.state.list.loading ? 'Carregando…' : 'Carregar mais'}
+						</button>
+					</div>
+				{/if}
 			</div>
 		</div>
 	</div>
@@ -313,7 +369,7 @@
 		font-size: 10px;
 		line-height: 1;
 		display: grid;
-		place-items: center;
+	place-items: center;
 		cursor: pointer;
 	}
 	.chip-x:hover {
@@ -323,6 +379,38 @@
 		height: 32px;
 		padding: 0 10px;
 		font-size: 12px;
+	}
+	.load-more {
+		display: flex;
+		justify-content: center;
+		padding: 12px;
+	}
+	.load-more-btn {
+		font: inherit;
+		font-size: 12px;
+		color: var(--muted);
+		background: transparent;
+		border: 1px solid rgba(255, 255, 255, 0.35);
+		border-radius: 8px;
+		padding: 6px 14px;
+		cursor: pointer;
+	}
+	.load-more-btn:hover {
+		background: rgba(255, 255, 255, 0.2);
+		color: var(--text);
+	}
+	.load-more-btn:disabled {
+		opacity: 0.6;
+		cursor: default;
+	}
+	:global([data-theme='dark']) .load-more-btn {
+		border-color: rgba(185, 224, 250, 0.2);
+	}
+	.loading-hint {
+		text-align: center;
+		padding: 24px;
+		font-size: 13px;
+		color: var(--muted);
 	}
 	@media (max-width: 760px) {
 		.user-row {

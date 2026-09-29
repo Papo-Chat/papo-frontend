@@ -1,48 +1,126 @@
 <script lang="ts">
 	import type { MessageUserReaction, MessageReactionSummary, UserSummary } from '$lib/types';
-	import { reactionUsers } from '$lib/sample';
+	import * as messagesStore from '$lib/store/messages.svelte';
+	import * as usersStore from '$lib/store/users.svelte';
 	import type { EmojiOption } from '$lib/utils/emojis';
 	import Avatar from './Avatar.svelte';
 	import Icon from './Icon.svelte';
 	import EmojiPicker from './EmojiPicker.svelte';
 	import ReactionUsersPopover from './ReactionUsersPopover.svelte';
 
-	let { reactions, userReactions, messageId, onAddReaction } = $props<{
+	let { reactions, userReactions, messageId, channelId } = $props<{
 		reactions: MessageReactionSummary[];
 		userReactions: MessageUserReaction[];
 		messageId: string;
-		onAddReaction?: (emoji: string) => void;
+		channelId: string;
 	}>();
 
-	const myReactions = $derived(new Set(userReactions.map((r: MessageUserReaction) => r.unicode)));
+	// Chaves (unicode ou emoji_id) das reações do usuário atual.
+	const myKeys = $derived(
+		new Set(
+			userReactions.map((r: MessageUserReaction) => (r.unicode ?? r.emoji_id) ?? '')
+		)
+	);
+
+	// Destaque (azulado) nas reações do próprio usuário.
+	function isMine(r: MessageReactionSummary): boolean {
+		return myKeys.has(r.unicode ?? r.emoji_id ?? '');
+	}
+
+	// Lista completa de reações do canal (com usuários por emoji), cacheada
+	// por mensagem. Buscada uma única vez, sob demanda (primeiro hover/click).
+	let cached: {
+		reactions: { emoji_id: string | null; unicode: string | null; users: { id: string; user_id: string; created_at: string }[] }[];
+	} | null = $state(null);
+
+	const usersFor = (emoji: string, count: number): UserSummary[] => {
+		if (!cached) return [];
+		const found = cached.reactions.find(
+			(r) => (r.unicode ?? r.emoji_id) === emoji
+		);
+		return (found?.users ?? [])
+			.slice(0, count)
+			.map((u) => {
+				const s = usersStore.state.byId.get(u.user_id) ?? null;
+				return {
+					id: u.id,
+					username: s?.username ?? '',
+					nickname: s?.nickname ?? null,
+					status: null,
+					status_message: null,
+					typing: null,
+					status_updated_at: null,
+					created_at: '',
+					roles: []
+				};
+			});
+	};
+
+	function togglePill(r: MessageReactionSummary): void {
+		const emoji = r.unicode ?? r.emoji_id ?? '';
+		const already = myKeys.has(emoji);
+		if (already) {
+			messagesStore.unreact(channelId, messageId, {
+				emoji_id: r.emoji_id ?? null,
+				unicode: r.unicode ?? null
+			});
+		} else {
+			messagesStore.react(channelId, messageId, {
+				emoji_id: r.emoji_id ?? null,
+				unicode: r.unicode ?? null
+			});
+		}
+	}
+
+	function onPick(emoji: EmojiOption): void {
+		if (emoji.kind === 'unicode') {
+			messagesStore.react(channelId, messageId, {
+				emoji_id: null,
+				unicode: emoji.char
+			});
+		} else {
+			messagesStore.react(channelId, messageId, {
+				emoji_id: emoji.id,
+				unicode: null
+			});
+		}
+	}
 
 	// One reaction-user popover at a time (hover or click to open).
 	let openEmoji = $state<string | null>(null);
 	let emojiOpen = $state(false);
 
-	const usersFor = (unicode: string, count: number): UserSummary[] =>
-		reactionUsers(messageId, unicode, count);
+	function ensureUsers(): void {
+		if (cached) return;
+		messagesStore.reactionUsers(channelId, messageId).then((res) => {
+			cached = {
+				reactions: res.reactions.map((r) => ({
+					emoji_id: r.emoji_id,
+					unicode: r.unicode,
+					users: r.users
+				}))
+			};
+		}).catch(() => {});
+	}
 
-	function toggle(unicode: string): void {
-		openEmoji = openEmoji === unicode ? null : unicode;
+	function openPopover(emoji: string): void {
+		openEmoji = emoji;
+		ensureUsers();
 	}
 
 	function close(): void {
 		if (openEmoji) openEmoji = null;
 	}
-
-	function onPickEmoji(emoji: EmojiOption): void {
-		onAddReaction?.(emoji.kind === 'unicode' ? emoji.char : emoji.name);
-	}
 </script>
 
 <div class="reactions" role="list">
-	{#each reactions as r (r.unicode)}
+	{#each reactions as r (r.unicode ?? r.emoji_id)}
 		<span
 			class="reaction-group"
 			onpointerenter={(e) => {
 				if (e.pointerType === 'mouse') {
-					openEmoji = r.unicode;
+					openEmoji = r.unicode ?? r.emoji_id ?? '';
+					ensureUsers();
 				}
 			}}
 			onpointerleave={(e) => {
@@ -56,18 +134,18 @@
 		>
 			<button
 				type="button"
-				class="react"
-				aria-label={`Usuários que reagiram com ${r.unicode}`}
-				onclick={() => toggle(r.unicode)}
+				class="react {isMine(r) ? 'mine' : ''}"
+				aria-label={`Usuários que reagiram`}
+				onclick={() => togglePill(r)}
 			>
-				{r.unicode}
+				{r.unicode ?? r.emoji_id ?? ''}
 				{r.count}
 			</button>
 
 			<ReactionUsersPopover
-				emoji={r.unicode}
-				users={usersFor(r.unicode, r.count)}
-				open={openEmoji === r.unicode}
+				emoji={r.unicode ?? r.emoji_id ?? ''}
+				users={usersFor(r.unicode ?? r.emoji_id ?? '', r.count)}
+				open={openEmoji === (r.unicode ?? r.emoji_id ?? '')}
 				onOpenChange={close}
 			/>
 		</span>
@@ -82,7 +160,7 @@
 		>
 			<Icon name="smiley" variant="light" />
 		</button>
-		<EmojiPicker bind:open={emojiOpen} onPick={onPickEmoji} />
+		<EmojiPicker bind:open={emojiOpen} onPick={onPick} />
 	</div>
 </div>
 
@@ -109,5 +187,10 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
+	}
+	.reaction-group .react.mine {
+		background: rgba(10, 132, 255, 0.15);
+		border-color: rgba(10, 132, 255, 0.5);
+		color: var(--blue);
 	}
 </style>

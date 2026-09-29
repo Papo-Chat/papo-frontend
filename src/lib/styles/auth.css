@@ -304,6 +304,22 @@
 	min-width: 0;
 }
 
+.form-error {
+	margin: 10px 0 2px;
+	padding: 9px 12px;
+	border-radius: 13px;
+	font-size: 12.5px;
+	color: #c93a4b;
+	background: rgba(210, 60, 76, 0.08);
+	border: 1px solid rgba(210, 60, 76, 0.22);
+}
+
+[data-theme='dark'] .form-error {
+	color: #ff9aa2;
+	background: rgba(194, 52, 70, 0.14);
+	border-color: rgba(255, 154, 162, 0.22);
+}
+
 /* submit + bottom */
 .submit {
 	width: 100%;
@@ -388,6 +404,16 @@
 		0 0 0 4px rgba(42, 201, 133, 0.09),
 		0 0 12px rgba(42, 201, 133, 0.45);
 }
+.connection-dot-offline {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: #c93a4b;
+	box-shadow:
+		0 0 0 4px rgba(42, 201, 133, 0.09),
+		0 0 12px rgba(42, 201, 133, 0.45);
+}
+
 .auth-link {
 	font-size: 11px;
 	text-decoration: none;

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Channel } from '$lib/types';
-	import { unreadCount } from '$lib/sample';
+	import { state as channelsState } from '$lib/store/channels.svelte';
 	import Icon from './Icon.svelte';
 
 	let {
@@ -29,8 +29,11 @@
 		Favoritos: 'star'
 	};
 
-	const icon = $derived(iconMap[channel.name] ?? 'channel');
-	const unread = $derived(unreadCount(channel));
+	const icon = $derived(
+		(iconMap[channel.name] ??
+			(channel.type === 'voice' ? 'speaker-waves' : 'channel'))
+	);
+	const unread = $derived(channelsState.unread.get(channel.id)?.count ?? 0);
 </script>
 
 <button

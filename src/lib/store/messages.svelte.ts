@@ -175,6 +175,21 @@ export function wsMessageToMsg(m: WsMessage): MessageWithAttachment {
 	};
 }
 
+// A API pode devolver `null` para campos de array opcionais (previews/reactions)
+// — o contrato (openapi) trata `reactions` como nullable e, na prática,
+// `previews` também chega null. A normalização converte para arrays vazios,
+// preservando as invariantes de array não-nulo do store (merge, tombstones,
+// trim).
+function coerceMessage(m: MessageWithAttachment): MessageWithAttachment {
+	return {
+		...m,
+		attachments: m.attachments ?? [],
+		previews: m.previews ?? [],
+		reactions: m.reactions ?? [],
+		user_reactions: m.user_reactions ?? []
+	};
+}
+
 // ── pure helpers (exported for tests) ─────────────────────
 
 function replaceChannel(
@@ -843,6 +858,8 @@ async function _fetchPage(
 	});
 	try {
 		const res = await api.messages.list(channelId, q);
+		// Normaliza arrays nulos vindos da API (previews/reactions).
+		const messages = res.messages.map(coerceMessage);
 		const current = state.channels.get(channelId);
 		if (!current || current.requestGeneration !== gen) {
 			return;
@@ -864,7 +881,7 @@ async function _fetchPage(
 				}
 			}
 		}
-		for (const m of res.messages) {
+		for (const m of messages) {
 			const existing = freshLatest ? undefined : ch2.byId.get(m.id);
 
 			const merged = mergeFetchedMessage(existing, m, ch2);
@@ -943,7 +960,7 @@ async function _fetchPage(
 			cursorOlder: nextCursor(res.messages) ?? null
 			// A fresh load (q == null) is anchored at the newest message.
 		});
-		for (const message of res.messages) {
+		for (const message of messages) {
 			if (newByd.has(message.id)) {
 				applyPendingPreview(state, message.id);
 			}
@@ -985,6 +1002,17 @@ export function load(channelId: string): void {
 		hasMoreNewer: false
 	});
 	_fetchPage(channelId);
+}
+
+// Idempotent initial load: used by the page effect. Skips when the channel
+// already has a page in flight or already loaded, so an effect re-run cannot
+// re-trigger a fresh fetch. `load()`/`setLatest()` stay for explicit refreshes.
+export function ensureLoaded(channelId: string): void {
+	const ch = state.channels.get(channelId);
+	if (ch && (ch.loaded || ch.loading)) {
+		return;
+	}
+	load(channelId);
 }
 
 export function loadMoreOlder(channelId: string): void {
@@ -1060,14 +1088,13 @@ function updateUserReactions(
 			(ur) => key(ur.emoji_id, ur.unicode) !== key(userReaction.emoji_id, userReaction.unicode)
 		);
 	} else {
-		if (userReaction.id === undefined) {
-			return;
-		}
+		// O POST /reactions responde sem `id` (contrato `MessageReaction`):
+		// usa placeholder — a dedupe já é por (emoji_id, unicode).
 		nextUserReactions = [
 			...msg.user_reactions.filter(
 				(ur) => key(ur.emoji_id, ur.unicode) !== key(userReaction.emoji_id, userReaction.unicode)
 			),
-			{ id: userReaction.id, emoji_id: userReaction.emoji_id, unicode: userReaction.unicode }
+			{ id: userReaction.id ?? '', emoji_id: userReaction.emoji_id, unicode: userReaction.unicode }
 		];
 	}
 	const newByd = new SvelteMap<string, MessageWithAttachment>();
@@ -1087,7 +1114,7 @@ export function react(
 	messageId: string,
 	req: { emoji_id: string | null; unicode: string | null }
 ): Promise<{
-	id: string;
+	message_id: string;
 	user_id: string;
 	emoji_id: string | null;
 	unicode: string | null;
@@ -1164,7 +1191,9 @@ export function loadPinned(channelId: string): void {
 
 			state.channels.set(channelId, {
 				...current,
-				pinned: res.pinned.filter((message) => !current.deletedMessageIds.has(message.id)),
+				pinned: res.pinned
+					.map(coerceMessage)
+					.filter((message) => !current.deletedMessageIds.has(message.id)),
 				pinnedLoaded: true
 			});
 		})
@@ -1196,6 +1225,7 @@ export function getMessage(channelId: string, messageId: string): MessageWithAtt
 // Applied after a successful send/edit so the cache matches the server's
 // response.
 export function applySendResponse(channelId: string, msg: MessageWithAttachment): void {
+	const m = coerceMessage(msg);
 	const ch = state.channels.get(channelId);
 
 	if (ch?.windowMode === 'historical') {
@@ -1203,7 +1233,7 @@ export function applySendResponse(channelId: string, msg: MessageWithAttachment)
 		return;
 	}
 
-	upsertMessage(state, channelId, msg);
+	upsertMessage(state, channelId, m);
 }
 
 // Full reset (logout / 401 / account switch) — clears every channel cache and

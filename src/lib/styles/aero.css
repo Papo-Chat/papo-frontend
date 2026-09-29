@@ -469,6 +469,22 @@
 	font-size: 18px;
 }
 
+.unread-badge {
+	position: absolute;
+	top: 3px;
+	right: 3px;
+	min-width: 15px;
+	height: 15px;
+	padding: 0 5px;
+	border-radius: 10px;
+	font-size: 9px;
+	font-weight: 700;
+	display: grid;
+	place-items: center;
+	color: #fff;
+	background: var(--danger);
+}
+
 /* Members button is only needed on mobile/desktop-laptop where the members
  * column is hidden (<= 1220px). On the full layout the column is always
  * visible, so the button is dropped. Match `.pill.circle` specificity so it
@@ -1012,7 +1028,6 @@ button.name:focus-visible {
 	position: relative;
 	z-index: 2;
 	margin: 0 12px 12px;
-	align-self: end;
 	padding: 9px 10px;
 	display: grid;
 	grid-template-columns: 38px 38px 38px minmax(90px, 1fr) auto;
@@ -2520,10 +2535,7 @@ button.name:focus-visible {
 	display: grid;
 	place-items: center;
 	z-index: 3;
-	border: 3px solid rgba(255, 255, 255, 0.85);
-	box-shadow:
-		inset 0 1px 0 rgba(255, 255, 255, 0.95),
-		0 10px 22px rgba(4, 60, 96, 0.2);
+
 }
 .profile-avatar-img {
 	width: 100%;
@@ -2556,7 +2568,9 @@ button.name:focus-visible {
 .profile-status-dot.busy {
 	background: #f03d5e;
 }
-
+.profile-status-dot.offline {
+	background: var(--muted);
+}
 .profile-name-block {
 	padding: calc(var(--avatar-size) / 2 + 14px) 24px 0;
 }
@@ -3352,6 +3366,9 @@ button.name:focus-visible {
 }
 .status-dot.busy {
 	background: #f03d5e;
+}
+.status-dot.offline {
+	background: var(--muted);
 }
 .emoji-grid {
 	display: grid;

@@ -31,35 +31,73 @@ export function setOpen(channelId: string | null): void {
 	state.openChannelId = channelId;
 }
 
-export function load(): void {
+// Resolve a channel from a raw route param: exact id first, then name (so
+// both /channels/:id and /channels/:name resolve). Returns null when nothing
+// matches, so the caller decides where to redirect.
+export function resolve(id: string | null | undefined): Channel | null {
+	if (!id) {
+		return null;
+	}
+	const byId = state.byId.get(id);
+	if (byId) {
+		return byId;
+	}
+	for (const cid of state.ordered) {
+		const c = state.byId.get(cid);
+		if (c && c.name === id) {
+			return c;
+		}
+	}
+	return null;
+}
+
+// The "home" channel used by the bootstrap when the URL points to the root:
+// first text channel, falling back to the first channel of any type.
+export function homeChannel(): Channel | null {
+	for (const cid of state.ordered) {
+		const c = state.byId.get(cid);
+		if (c && c.type === 'text') {
+			return c;
+		}
+	}
+	for (const cid of state.ordered) {
+		const c = state.byId.get(cid);
+		if (c) {
+			return c;
+		}
+	}
+	return null;
+}
+
+// Awaitable full load (F2). Existing fire-and-forget callers are unaffected
+// (the returned promise is simply ignored).
+export async function load(): Promise<void> {
 	state.loading = true;
 	const epoch = currentSessionEpoch();
-	api.channels
-		.list()
-		.then((channels) => {
-			if (!isCurrentSessionEpoch(epoch)) {
-				throw new Error('stale session');
-			}
-			const byId = new SvelteMap<string, Channel>();
-			const ordered: string[] = [];
-			const unread = new SvelteMap<string, { has: boolean; count: number }>();
-			for (const c of channels) {
-				byId.set(c.id, c);
-				ordered.push(c.id);
-				const has =
-					c.last_message && c.last_read_at
-						? c.last_message.created_at > c.last_read_at
-						: !!c.last_message;
-				unread.set(c.id, { has, count: 0 });
-			}
-			state.byId = byId;
-			state.ordered = ordered;
-			state.unread = unread;
-			state.loaded = true;
-		})
-		.finally(() => {
-			state.loading = false;
-		});
+	try {
+		const channels = await api.channels.list();
+		if (!isCurrentSessionEpoch(epoch)) {
+			return;
+		}
+		const byId = new SvelteMap<string, Channel>();
+		const ordered: string[] = [];
+		const unread = new SvelteMap<string, { has: boolean; count: number }>();
+		for (const c of channels) {
+			byId.set(c.id, c);
+			ordered.push(c.id);
+			const has =
+				c.last_message && c.last_read_at
+					? c.last_message.created_at > c.last_read_at
+					: !!c.last_message;
+			unread.set(c.id, { has, count: 0 });
+		}
+		state.byId = byId;
+		state.ordered = ordered;
+		state.unread = unread;
+		state.loaded = true;
+	} finally {
+		state.loading = false;
+	}
 }
 
 // Awaits the create so the reseed (channel list) happens after the channel

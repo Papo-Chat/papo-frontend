@@ -2,9 +2,11 @@
 	// User profile card — a Liquid Glass overlay that floats over the
 	// interface (like the mobile drawers), showing banner, avatar, roles and
 	// description. Follows the same glass language as the popovers.
-	import type { UserProfile } from '$lib/types';
-	import { blobToUrl, mediaUrl } from '$lib/utils/media';
-	import { avatarGradient as utilAvatarGradient, avatarInitial, hash } from '$lib/utils/avatars';
+	import type { RoleSummary, UserProfile } from '$lib/types';
+	import { mediaUrl } from '$lib/utils/media';
+	import * as usersStore from '$lib/store/users.svelte';
+	import { hash } from '$lib/utils/avatars';
+	import Avatar from './Avatar.svelte';
 
 	let {
 		user,
@@ -16,7 +18,24 @@
 		onOpenChange?: (open: boolean) => void;
 	}>();
 
+	const profile = $derived(user ? usersStore.getProfile(user.id) : null);
+	const roleColor = $derived(user.roles.find((r: RoleSummary) => r.color)?.color ?? null);
+
 	let cardEl: HTMLElement | null = null;
+	let loadingProfile: string | null = $state(null);
+
+	// Perfil real (avatar/banner) só existe na cache de perfis. Se ainda não
+	// foi carregado (ex.: o próprio usuário, resumido via seedMe), carrega
+	// uma única vez.
+	$effect(() => {
+		const id = user.id;
+		if (!usersStore.getProfile(id) && loadingProfile !== id) {
+			loadingProfile = id;
+			void usersStore.ensureProfile(id).finally(() => {
+				loadingProfile = null;
+			});
+		}
+	});
 
 	// Deterministic fallbacks (the mockup ships no real binary assets).
 	const bannerGradients = [
@@ -26,21 +45,18 @@
 		'linear-gradient(120deg, #e7a80b, #30d158, #0a84ff)'
 	];
 
-	const statusLabels: Record<'online' | 'away' | 'busy', string> = {
+	const statusLabels: Record<'online' | 'away' | 'busy' | 'offline', string> = {
 		online: 'Online',
 		away: 'Ausente',
-		busy: 'Em ocupação'
+		busy: 'Ocupado',
+		offline: 'Offline'
 	};
 	const name = $derived(user.nickname || user.username || 'Usuário');
-	const initial = $derived(avatarInitial(user.username, user.nickname));
-	const avatarSrc = $derived(
-		user.avatar_blob ? blobToUrl(user.avatar_blob, user.avatar_format) : ''
-	);
-	const bannerSrc = $derived(user.banner_media ? mediaUrl(user.banner_media) : '');
-	const avatarGradient = $derived(utilAvatarGradient(user.username));
+
+	const bannerSrc = profile ? (profile.banner_media ? mediaUrl(profile.banner_media) : '') : '';
 	const bannerGradient = $derived(bannerGradients[hash(name) % bannerGradients.length]);
-	const statusClass = $derived<'online' | 'away' | 'busy'>(
-		user.status === null ? 'online' : user.status
+	const statusClass = $derived<'online' | 'away' | 'busy' | 'offline'>(
+		usersStore.effectiveStatus(user.id)
 	);
 	const statusLabel = $derived(statusLabels[statusClass]);
 
@@ -88,18 +104,14 @@
 				{/if}
 			</div>
 
-			<div class="profile-avatar" style="background: {avatarGradient}">
-				{#if avatarSrc}
-					<img class="profile-avatar-img" src={avatarSrc} alt={name} />
-				{:else}
-					<span class="profile-avatar-initial">{initial}</span>
-				{/if}
+			<div class="profile-avatar">
+				<Avatar user={user} size={90}/>
 				<span class="profile-status-dot {statusClass}" aria-label="Status: {statusLabel}"></span>
 			</div>
 
 			<div class="profile-name-block">
 				<div class="profile-name-row">
-					<strong class="profile-name">{name}</strong>
+					<strong class="profile-name" style={roleColor ? `color:${roleColor}` : undefined}>{name}</strong>
 					<span class="profile-username">@{user.username}</span>
 					{#if user.status_message}
 						<span class="profile-status-text {statusClass}">{user.status_message}</span>

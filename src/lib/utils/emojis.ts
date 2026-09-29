@@ -1,11 +1,12 @@
 // Shared emoji list used by the composer emoji button and the message
 // reaction picker. Combines a curated set of common chat unicode emotions
-// (each with a label for the filter) with the custom server emojis.
-import { sampleEmojis } from '../sample';
+// (each with a label for the filter) with the custom server emojis (live
+// list from the server, keyset-paginated in `emojis.svelte.ts`).
+import * as emojisStore from '../store/emojis.svelte';
 
 export type EmojiOption =
 	| { kind: 'unicode'; char: string; label: string }
-	| { kind: 'custom'; name: string; label: string; image_blob: string; format: string };
+	| { kind: 'custom'; id: string; name: string; label: string; image_blob: string; format: string };
 
 // Curated list of common emojis typically used in chat, with human labels
 // so the picker's filter input can match them.
@@ -64,8 +65,9 @@ const COMMON: { char: string; label: string }[] = [
 
 export function allEmojis(): EmojiOption[] {
 	const unicode = COMMON.map(({ char, label }): EmojiOption => ({ kind: 'unicode', char, label }));
-	const custom = sampleEmojis.map((e): EmojiOption => ({
+	const custom = emojisStore.state.list.map((e): EmojiOption => ({
 		kind: 'custom',
+		id: e.id,
 		name: e.name,
 		label: e.name,
 		image_blob: e.image_blob,

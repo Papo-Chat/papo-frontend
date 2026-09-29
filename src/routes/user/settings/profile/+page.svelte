@@ -11,6 +11,10 @@
 	let description = $state('');
 	let saved = $state(false);
 
+	// Demo preview: merge the unsaved local nickname into the sample summary
+	// so the Avatar preview follows the in-progress edit.
+	const previewUser = $derived({ ...sampleMe, nickname: nickname });
+
 	// Avatar / banner uploads (demo: stored as base64, previewed via objectURL).
 	let avatarImg = $state<{ base64: string; mime: string } | null>(null);
 	let bannerImg = $state<{ base64: string; mime: string } | null>(null);
@@ -76,7 +80,7 @@
 			{#if avatarSrc}
 				<img class="avatar avatar-custom" src={avatarSrc} alt={nickname || sampleMe.username} />
 			{:else}
-				<Avatar username={sampleMe.username} {nickname} size={64} />
+				<Avatar user={previewUser} size={64} />
 			{/if}
 			<div class="profile-preview-info">
 				<h3>{nickname || sampleMe.username}</h3>

@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { state, closeProfile } from '$lib/store/ui.svelte';
-	import { sampleUsers, resolveChannel } from '$lib/sample';
+	import * as channelsStore from '$lib/store/channels.svelte';
 	import Rail from '$lib/components/Rail.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Members from '$lib/components/Members.svelte';
@@ -10,8 +10,9 @@
 	import type { UserProfile, UserSummary } from '$lib/types';
 
 	// Resolve the channel once so sidebar active state and the page both
-	// agree on the canonical channel id (id or name in the URL).
-	const channel = $derived(resolveChannel(page.params.channel_id));
+	// agree on the canonical channel id (id or name in the URL). O guard
+	// (`+layout.ts`) garante um canal resolvido ou redireciona — logo não null.
+	const channel = $derived(channelsStore.resolve(page.params.channel_id)!);
 
 	function selectChannel(id: string): void {
 		if (id !== channel.id) goto(`/channels/${id}`);
@@ -21,7 +22,7 @@
 	// or in the chat.
 	const profileUser = $derived(state.profileOpen ? state.profileUser : null);
 	const profileProfile: UserProfile | null = $derived(
-		profileUser ? toProfile(profileUser) : toProfile(sampleUsers[0])
+		profileUser ? toProfile(profileUser) : null
 	);
 
 	function toProfile(u: UserSummary): UserProfile {
@@ -61,11 +62,13 @@
 
 	<Members />
 
-	<ProfileCard
-		user={profileProfile}
-		bind:open={state.profileOpen}
-		onOpenChange={(o) => {
-			if (!o) closeProfile();
-		}}
-	/>
+	{#if profileProfile}
+		<ProfileCard
+			user={profileProfile}
+			bind:open={state.profileOpen}
+			onOpenChange={(o) => {
+				if (!o) closeProfile();
+			}}
+		/>
+	{/if}
 </div>
