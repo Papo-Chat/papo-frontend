@@ -114,7 +114,18 @@ export async function create(req: {
 	type: ChannelType;
 	topic: string | null;
 }): Promise<Channel> {
+	const epoch = currentSessionEpoch();
 	const channel = await api.channels.create(req);
+	if (!isCurrentSessionEpoch(epoch)) {
+		throw new Error('stale session');
+	}
+	state.byId.set(channel.id, channel);
+	if (!state.ordered.includes(channel.id)) {
+		state.ordered = [...state.ordered, channel.id];
+	}
+	state.unread.set(channel.id, { has: false, count: 0 });
+	rebuildOrdered();
+	// Keep a delayed authoritative reseed for any server-side side effects.
 	reseedChannels.run();
 	return channel;
 }
