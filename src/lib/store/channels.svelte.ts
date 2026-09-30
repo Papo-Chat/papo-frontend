@@ -133,18 +133,19 @@ export async function update(
 	return channel;
 }
 
-export function changePosition(
+export async function changePosition(
 	id: string,
 	req: { old_position: number; new_position: number }
-): void {
+): Promise<Channel> {
 	const epoch = currentSessionEpoch();
-	api.channels.changePosition(id, req).then((c) => {
-		if (!isCurrentSessionEpoch(epoch)) {
-			throw new Error('stale session');
-		}
-		state.byId.set(c.id, c);
-		rebuildOrdered();
-	});
+	const channel = await api.channels.changePosition(id, req);
+	if (!isCurrentSessionEpoch(epoch)) {
+		throw new Error('stale session');
+	}
+	// Positions of sibling channels may also shift server-side, so reseed the
+	// ordered list after the mutation instead of patching only one row.
+	await load();
+	return state.byId.get(channel.id) ?? channel;
 }
 
 // Centralized local drop of a channel (REST delete + WS channel_delete both
