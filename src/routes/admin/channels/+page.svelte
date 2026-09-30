@@ -234,7 +234,9 @@
 			{#if newType !== 'category'}
 				<input class="admin-input" placeholder="tópico (opcional)" bind:value={newTopic} />
 			{/if}
-			<button class="admin-btn" onclick={addChannel} disabled={saving}>Criar</button>
+			<button class="admin-btn" onclick={addChannel} disabled={saving || !newName.trim()}>
+				{saving ? 'Criando…' : 'Criar'}
+			</button>
 		</div>
 	{/if}
 
@@ -311,7 +313,9 @@
 						</div>
 					{/if}
 
-					<button class="admin-btn" onclick={saveChannel} disabled={saving}>Salvar canal</button>
+					<button class="admin-btn" onclick={saveChannel} disabled={saving || !editName.trim()}>
+						{saving ? 'Salvando…' : 'Salvar canal'}
+					</button>
 
 					{#if selected.type !== 'category'}
 						<div class="admin-field permissions-block">
