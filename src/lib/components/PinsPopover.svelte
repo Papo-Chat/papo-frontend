@@ -65,8 +65,7 @@
 			{#if pinned.length}
 				{#each pinned as m (m.id)}
 					{@const author = usersStore.state.byId.get(m.author_id ?? '')}
-					{#if author}
-						<div
+					<div
 							class="popover-item pin-item"
 							role="button"
 							tabindex={0}
@@ -78,10 +77,10 @@
 								}
 							}}
 						>
-							<Avatar user={author} size={34} />
+							<Avatar user={author} userId={m.author_id} size={34} />
 							<div class="pin-main">
 								<div class="meta">
-									<span class="name">{author.nickname || author.username}</span>
+									<span class="name">{author?.nickname || author?.username || 'Usuário'}</span>
 									<span class="time">{formatTime(m.created_at)}</span>
 								</div>
 								{#if m.content}
@@ -94,7 +93,6 @@
 							</div>
 							<span class="pin-badge" aria-hidden="true"><Icon name="push-pin" variant="duotone" size={13} /></span>
 						</div>
-					{/if}
 				{/each}
 			{:else}
 				<div class="popover-empty-icon">

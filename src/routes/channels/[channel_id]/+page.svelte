@@ -205,6 +205,11 @@
 			onJumpToLatest={() => messagesStore.setLatest(channel.id)}
 			onJumpToLastRead={() => channel.last_read_message ? messagesStore.gotoMessage(channel.id, channel.last_read_message, channel.last_read_at) : Promise.resolve(false)}
 			onLoadMoreOlder={() => messagesStore.loadMoreOlder(channel.id)}
+			onReachLatest={(message) => {
+				if (message) {
+					channelsStore.markReadLocal(channel.id, message.id, message.created_at);
+				}
+			}}
 			lastReadMessageId={channel.last_read_message}
 		/>{/key}
 
@@ -219,7 +224,7 @@
 						{#each typingIds as uid (uid)}
 							{@const u = usersStore.state.byId.get(uid)}
 
-							<Avatar user={u} size={18} />
+							<Avatar user={u} userId={uid} size={18} />
 						{/each}
 					</span>
 

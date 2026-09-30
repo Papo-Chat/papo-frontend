@@ -45,13 +45,6 @@
 
 	$effect(() => {
 		if (!open) return;
-		// Perfis dos autores das notificações visíveis (batch, só ids ausentes
-		// do cache). Sem isso, autor ainda não em byId não renderiza o item.
-		const ids = notificationsStore.state.items
-			.map((n) => n.author_id)
-			.filter((id): id is string => id !== null && id !== '');
-		void usersStore.ensureProfiles(ids);
-
 		function onPointerDown(e: PointerEvent): void {
 			if (el && !el.contains(e.target as Node)) close();
 		}
@@ -82,8 +75,7 @@
 			{#if notificationsStore.state.items.length}
 				{#each notificationsStore.state.items as n (n.id)}
 					{@const author = usersStore.state.byId.get(n.author_id ?? '')}
-					{#if author}
-						<div
+					<div
 							class="popover-item notification-item {!n.read ? 'unread' : ''}"
 							role="button"
 							tabindex={0}
@@ -95,10 +87,10 @@
 								}
 							}}
 						>
-							<Avatar user={author} size={34} />
+							<Avatar user={author} userId={n.author_id} size={34} />
 							<div class="notification-main">
 								<div class="meta">
-									<span class="name">{author.nickname || author.username}</span>
+									<span class="name">{author?.nickname || author?.username || 'Usuário'}</span>
 									<span class="time">{formatTime(n.created_at)}</span>
 									{#if !n.read}
 										<span class="unread-dot" aria-hidden="true"></span>
@@ -107,7 +99,6 @@
 								<div class="content notification-content">{n.message_content}</div>
 							</div>
 						</div>
-					{/if}
 				{/each}
 			{:else}
 				<div class="popover-empty-icon">

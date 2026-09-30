@@ -77,18 +77,6 @@
         ].join('|')
     );
 
-    // Search results may reference authors that are not in byId yet. Fetch
-    // those authors in batch; the bounded profile cache handles eviction.
-    $effect(() => {
-        const ids = new Set<string>();
-        for (const result of results) {
-            if (result.author_id) ids.add(result.author_id);
-        }
-        if (ids.size > 0) {
-            void usersStore.ensureProfiles([...ids]);
-        }
-    });
-
     // Request com os filtros atuais. O backend aceita qualquer combinação
     // com pelo menos um filtro real; texto é opcional.
     function buildRequest(): SearchRequest {
@@ -436,7 +424,7 @@
                                     type="button"
                                     onclick={() => onResultClick?.(m)}
                                 >
-                                    <Avatar user={a} size={34} />
+                                    <Avatar user={a} userId={m.author_id} size={34} />
                                     <div class="search-result-main">
                                         <div class="meta search-result-meta">
                                             <span class="name">{a?.nickname || a?.username || m.author_username}</span>

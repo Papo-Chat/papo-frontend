@@ -8,7 +8,7 @@
 //   call. It also disconnects the WS (no reconnect) and drops voice.
 
 import { api, setOnUnauthorized } from '../api';
-import { seedMe, loadList as loadUsersList, reset as usersReset, setPersistedStatus } from '../store/users.svelte';
+import { seedMe, loadAll as loadAllUsers, reset as usersReset, setPersistedStatus } from '../store/users.svelte';
 import { load as loadRoles, reset as rolesReset } from '../store/roles.svelte';
 import { seed as seedSettings, reset as settingsReset } from '../store/settings.svelte';
 import * as channelsStore from '../store/channels.svelte';
@@ -88,12 +88,20 @@ export async function load(): Promise<void> {
 		state.roles = me.roles;
 		// Seed the dependent stores.
 		seedMe(me);
-		await Promise.all([loadUsersList(), loadRoles()]);
+		await loadRoles();
 		seedSettings(me.settings.config, me.settings.version);
-		// Notificações e emojis customizados: listas por usuário.
 		notificationsStore.load();
-		emojisStore.load();
+
+		// Enter the app as soon as the core session/roles are ready. Large
+		// servers continue hydrating summaries/emojis progressively in the
+		// background instead of blocking the initial navigation.
 		state.loaded = true;
+		void loadAllUsers().catch((err) => {
+			console.error('falha ao carregar todos os usuários:', err);
+		});
+		void emojisStore.loadAll().catch((err) => {
+			console.error('falha ao carregar todos os emojis:', err);
+		});
 		startTimer();
 		// Conexão WS (handshake com o mesmo cookie Auth). Só conecta quando a
 		// sessão é válida; `clearLocalSession()`/logout chamam disconnect().

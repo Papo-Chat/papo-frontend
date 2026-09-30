@@ -40,35 +40,21 @@
 	const canManageRoles = $derived(can('manage_roles', adminCtx));
 	const canManageServer = $derived(can('manage_server', adminCtx));
 
-	// GET /users is not run on the global bootstrap — load once on mount.
-	// loadList() is internally guarded (loadGeneration), so repeated calls
-	// are safe.
-	let usersLoaded = $state(false);
+	// UserSummary hydration is global and walks every /users page in the
+	// background. Admin consumes the same store instead of starting a competing
+	// pagination request that could cancel the global preload. Retry at most
+	// once here if the bootstrap preload failed before this page mounted.
+	let requestedUserHydration = false;
 	$effect(() => {
-		if (!usersLoaded) {
-			usersLoaded = true;
-			void usersStore.loadList();
+		if (
+			!requestedUserHydration &&
+			!usersStore.state.list.loading &&
+			!usersStore.state.list.fullyLoaded
+		) {
+			requestedUserHydration = true;
+			void usersStore.loadAll();
 		}
 	});
-
-	function loadNext(): void {
-		usersStore.loadMore();
-	}
-
-	// Scroll-based loading: while the user scrolls `.users-list` towards the
-	// bottom (distance < 200px) and there are more pages, load the next page.
-	// Replaces the "Carregar mais" button (no click, same as the chat messages).
-	function onListScroll(e: Event): void {
-		const sc = e.target as HTMLElement;
-		const distance = sc.scrollHeight - sc.scrollTop - sc.clientHeight;
-		if (
-			distance < 200 &&
-			!usersStore.state.list.loading &&
-			usersStore.state.list.hasMore
-		) {
-			loadNext();
-		}
-	}
 
 	const users = $derived(usersStore.state.list.items);
 	const roles = $derived(rolesStore.state.list);
@@ -241,7 +227,7 @@
 			Membros
 		</div>
 		<div class="admin-card-body">
-			<div class="users-list" onscroll={onListScroll}>
+			<div class="users-list">
 				{#each visibleUsers as u (u.id)}
 					{#if !isBanned(u.id)}
 						<div class="user-row">

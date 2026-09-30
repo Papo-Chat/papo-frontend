@@ -18,6 +18,7 @@ import * as rolesStore from '../store/roles.svelte';
 import * as channelsStore from '../store/channels.svelte';
 import * as messagesStore from '../store/messages.svelte';
 import * as notificationsStore from '../store/notifications.svelte';
+import * as emojisStore from '../store/emojis.svelte';
 import * as voiceStore from '../store/voice.svelte';
 import { meId as sessionMeId } from '../store/session.svelte';
 import { PUBLIC_WS_URL } from '../env';
@@ -93,6 +94,8 @@ function resync(): void {
 	}
 	notificationsStore.load();
 	rolesStore.load();
+	void usersStore.loadAll().catch(() => {});
+	void emojisStore.loadAll().catch(() => {});
 }
 
 export function connect(): void {

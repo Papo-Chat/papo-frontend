@@ -17,7 +17,8 @@
 		lastReadMessageId = null,
 		joinNotice = null,
 		scrollToLatestToken = 0,
-		onUnreadCountChange
+		onUnreadCountChange,
+		onReachLatest
 	} = $props<{
 		messages: MessageWithAttachment[];
 		onReply?: (message: MessageWithAttachment) => void;
@@ -33,12 +34,14 @@
 		joinNotice?: { id: number; name: string } | null;
 		scrollToLatestToken?: number;
 		onUnreadCountChange?: (count: number) => void;
+		onReachLatest?: (message: MessageWithAttachment | null) => void;
 	}>();
 
 	const BOTTOM_THRESHOLD = 24;
 
 	let listEl: HTMLElement | null = null;
 	let contentEl: HTMLElement | null = null;
+	let topEl: HTMLElement | null = null;
 	let bottomEl: HTMLElement | null = null;
 
 	let initialScrollDone = $state(false);
@@ -68,7 +71,9 @@
 	}
 
 	function isAtBottom(): boolean {
-		return distanceFromBottom() <= BOTTOM_THRESHOLD;
+		// Bottom of a historical 300-message window is not the real channel
+		// bottom while newer messages are outside the checkpoint.
+		return !hasMoreNewer && distanceFromBottom() <= BOTTOM_THRESHOLD;
 	}
 
 	function scrollToBottom(): void {
@@ -92,9 +97,11 @@
 	}
 
 	function clearUnreadAtBottom(): void {
+		if (hasMoreNewer) return;
 		stickToBottom = true;
 		setUnreadCount(0);
 		visibleLastReadMessageId = null;
+		onReachLatest?.(messages.at(-1) ?? null);
 	}
 
 	function findLastReadDivider(id: string): HTMLElement | null {
@@ -168,6 +175,9 @@
 				setUnreadCount(0);
 				scrollToBottom();
 				stickToBottom = true;
+				if (!hasMoreNewer) {
+					onReachLatest?.(messages.at(-1) ?? null);
+				}
 			}
 
 			// Allow intrinsic media sizes to settle for two frames before user
@@ -215,23 +225,34 @@
 		const wasAtBottom = stickToBottom;
 		stickToBottom = atBottom;
 
-		// Discord-like behavior: the NEW divider remains stable while reading
-		// history and is consumed only when the user actually reaches the end.
+		// The NEW divider is consumed only when the user really reaches the end.
 		if (!wasAtBottom && atBottom) {
 			clearUnreadAtBottom();
 		}
+	}
 
-		if (listEl.scrollTop < 200 && !atBottom) {
-			void loadOlder();
-		}
+	function messageElement(id: string): HTMLElement | null {
+		return listEl?.querySelector<HTMLElement>(`[data-message-id="${id}"]`) ?? null;
+	}
+
+	function topSentinelNearViewport(): boolean {
+		if (!listEl || !topEl) return false;
+		const listRect = listEl.getBoundingClientRect();
+		const topRect = topEl.getBoundingClientRect();
+		return topRect.top <= listRect.top + 280 && topRect.bottom >= listRect.top - 320;
 	}
 
 	async function loadOlder(): Promise<void> {
 		if (loadingOlder || !hasMoreOlder || !listEl) return;
 
 		loadingOlder = true;
-		const oldScrollTop = listEl.scrollTop;
-		const oldScrollHeight = listEl.scrollHeight;
+
+		// Preserve a concrete message in the viewport instead of relying on the
+		// total scrollHeight delta. Once the 300-message checkpoint starts
+		// dropping newer messages, scrollHeight may barely change even though a
+		// full older page was prepended.
+		const anchorId = messages[0]?.id ?? null;
+		const anchorBefore = anchorId ? messageElement(anchorId)?.getBoundingClientRect().top ?? null : null;
 
 		try {
 			await onLoadMoreOlder?.();
@@ -242,16 +263,27 @@
 		}
 
 		requestAnimationFrame(() => {
-			if (!listEl) {
+			const list = listEl;
+			if (!list) {
 				loadingOlder = false;
 				return;
 			}
 
-			const added = listEl.scrollHeight - oldScrollHeight;
-			if (added > 0) {
-				listEl.scrollTop = oldScrollTop + added;
+			if (anchorId && anchorBefore != null) {
+				const anchorAfter = messageElement(anchorId)?.getBoundingClientRect().top;
+				if (anchorAfter != null) {
+					list.scrollTop += anchorAfter - anchorBefore;
+				}
 			}
+
 			loadingOlder = false;
+
+			// Short pages or unusual media heights can leave the top sentinel
+			// inside the preload zone. Continue automatically until there is
+			// enough history above the viewport or history is exhausted.
+			if (hasMoreOlder && topSentinelNearViewport()) {
+				queueMicrotask(() => void loadOlder());
+			}
 		});
 	}
 
@@ -287,6 +319,17 @@
 		if (currentLastId === lastMessageId) return;
 
 		const previousLastId = lastMessageId;
+		const previousIndex = messages.findIndex((m) => m.id === previousLastId);
+
+		// A historical checkpoint shifts the 300-message window backwards and
+		// can remove the former newest message. That is not a new message and
+		// must not create unread counts/dividers/animations.
+		if (previousIndex < 0) {
+			lastMessageId = currentLastId;
+			animatedMessageId = null;
+			return;
+		}
+
 		animatedMessageId = currentLastId;
 
 		if (!stickToBottom) {
@@ -294,11 +337,7 @@
 				visibleLastReadMessageId = previousLastId;
 			}
 
-			const previousIndex = messages.findIndex((m) => m.id === previousLastId);
-			const addedCount =
-				previousIndex >= 0
-					? Math.max(1, messages.length - previousIndex - 1)
-					: 1;
+			const addedCount = Math.max(1, messages.length - previousIndex - 1);
 			setUnreadCount(unreadCount + addedCount);
 		}
 
@@ -311,8 +350,39 @@
 		if (!initialScrollDone || !stickToBottom || count === 0) return;
 
 		void tick().then(() => {
-			requestAnimationFrame(() => scrollToBottom());
+			requestAnimationFrame(() => {
+				scrollToBottom();
+				clearUnreadAtBottom();
+			});
 		});
+	});
+
+	// Load older history before the user hits the hard top. IntersectionObserver
+	// is more reliable than depending on a particular scroll event cadence.
+	$effect(() => {
+		const list = listEl;
+		const top = topEl;
+		if (!list || !top || !initialScrollDone) return;
+
+		if (typeof IntersectionObserver === 'undefined') {
+			return;
+		}
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (entries.some((entry) => entry.isIntersecting)) {
+					void loadOlder();
+				}
+			},
+			{
+				root: list,
+				rootMargin: '320px 0px 0px 0px',
+				threshold: 0
+			}
+		);
+
+		observer.observe(top);
+		return () => observer.disconnect();
 	});
 
 	// Keep the real bottom pinned when media loads or layout changes. This
@@ -386,6 +456,7 @@
 		onscroll={handleScroll}
 	>
 		<div class="chat-content" bind:this={contentEl}>
+			<div class="chat-top-anchor" bind:this={topEl} aria-hidden="true"></div>
 		{#if hasMoreNewer}
 			<button
 				class="jump-to-latest"
@@ -467,6 +538,7 @@
 		justify-content: flex-end;
 	}
 
+	.chat-top-anchor,
 	.chat-bottom-anchor {
 		flex: 0 0 1px;
 		width: 1px;

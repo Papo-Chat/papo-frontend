@@ -38,6 +38,22 @@ export function setOpen(channelId: string | null): void {
 	state.openChannelId = channelId;
 }
 
+export function markReadLocal(
+	channelId: string,
+	messageId: string,
+	createdAt: string
+): void {
+	const channel = state.byId.get(channelId);
+	if (!channel) return;
+
+	state.byId.set(channelId, {
+		...channel,
+		last_read_message: messageId,
+		last_read_at: createdAt
+	});
+	state.unread.set(channelId, { has: false, count: 0 });
+}
+
 // Resolve a channel from a raw route param: exact id first, then name (so
 // both /channels/:id and /channels/:name resolve). Returns null when nothing
 // matches, so the caller decides where to redirect.

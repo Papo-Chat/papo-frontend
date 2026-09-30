@@ -57,6 +57,7 @@ export const state = $state({
         hasMore: false,
         cursor: null as KeysetCursor | null,
         loading: false,
+        fullyLoaded: false,
         // Guards against concurrent load/loadMore (P1.11).
         loadGeneration: 0
     }
@@ -168,6 +169,7 @@ async function listLoad(q?: { since?: string; last_id?: string }): Promise<void>
         }
         state.list.hasMore = res.has_more;
         state.list.cursor = nextCursor(res.users) ?? null;
+        state.list.fullyLoaded = !res.has_more;
         for (const u of res.users) {
             state.byId.set(u.id, u);
         }
@@ -180,6 +182,65 @@ async function listLoad(q?: { since?: string; last_id?: string }): Promise<void>
 
 export function loadList(): Promise<void> {
     return listLoad();
+}
+
+export async function loadAll(): Promise<void> {
+    const gen = (state.list.loadGeneration += 1);
+    state.list.loading = true;
+    state.list.fullyLoaded = false;
+
+    const all: UserSummary[] = [];
+    const seen = new Set<string>();
+    let cursor: KeysetCursor | null = null;
+    let hasMore = true;
+
+    try {
+        while (hasMore) {
+            const res = await api.users.list(
+                cursor ? { since: cursor.since, last_id: cursor.last_id } : undefined
+            );
+            if (state.list.loadGeneration !== gen) return;
+
+            for (const user of res.users) {
+                state.byId.set(user.id, user);
+                if (!seen.has(user.id)) {
+                    seen.add(user.id);
+                    all.push(user);
+                }
+            }
+
+            // Publish each page so Members/search/admin progressively fill
+            // without waiting for very large servers to finish completely.
+            // Prefer the newest summary already in byId (presence/profile
+            // refresh) and keep live users that arrived after pagination began.
+            const published = all.map((user) => state.byId.get(user.id) ?? user);
+            const publishedIds = new Set(published.map((user) => user.id));
+            for (const user of state.byId.values()) {
+                if (!publishedIds.has(user.id)) {
+                    published.push(user);
+                    publishedIds.add(user.id);
+                }
+            }
+            state.list.items = published;
+            state.list.hasMore = res.has_more;
+            cursor = nextCursor(res.users) ?? null;
+            state.list.cursor = cursor;
+
+            if (!res.has_more || !cursor || res.users.length === 0) {
+                hasMore = false;
+            }
+        }
+
+        if (state.list.loadGeneration === gen) {
+            state.list.hasMore = false;
+            state.list.cursor = null;
+            state.list.fullyLoaded = true;
+        }
+    } finally {
+        if (state.list.loadGeneration === gen) {
+            state.list.loading = false;
+        }
+    }
 }
 
 export function loadMore(): void {
@@ -245,12 +306,22 @@ function summaryFromProfile(p: UserProfile): UserSummary {
     };
 }
 
-function syncSummary(summary: UserSummary): void {
-    state.byId.set(summary.id, summary);
-    const index = state.list.items.findIndex((u) => u.id === summary.id);
-    if (index >= 0) {
-        state.list.items = state.list.items.map((u, i) => (i === index ? summary : u));
+function syncSummaries(summaries: UserSummary[]): void {
+    if (summaries.length === 0) return;
+
+    const updates = new Map<string, UserSummary>();
+    for (const summary of summaries) {
+        state.byId.set(summary.id, summary);
+        updates.set(summary.id, summary);
     }
+
+    if (state.list.items.some((user) => updates.has(user.id))) {
+        state.list.items = state.list.items.map((user) => updates.get(user.id) ?? user);
+    }
+}
+
+function syncSummary(summary: UserSummary): void {
+    syncSummaries([summary]);
 }
 
 export function setPersistedStatus(userId: string, status: 'away' | 'busy' | null): void {
@@ -335,10 +406,12 @@ export async function ensureProfiles(ids: string[]): Promise<UserProfile[]> {
             if (!isCurrentSessionEpoch(epoch)) {
                 throw new Error('stale session');
             }
+            const summaries: UserSummary[] = [];
             for (const p of res.profiles) {
                 cacheProfile(p);
-                syncSummary(summaryFromProfile(p));
+                summaries.push(summaryFromProfile(p));
             }
+            syncSummaries(summaries);
         });
 
         for (const id of chunk) {
@@ -610,6 +683,7 @@ export function reset(): void {
         hasMore: false,
         cursor: null,
         loading: false,
+        fullyLoaded: false,
         loadGeneration: nextGeneration
     };
 }
