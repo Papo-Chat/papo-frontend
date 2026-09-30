@@ -19,6 +19,7 @@
 	let creating = $state(true);
 	let saving = $state(false);
 	let saved = $state(false);
+	let savedMessage = $state('');
 	let error = $state<string | null>(null);
 	let seeded = $state(false);
 
@@ -107,6 +108,7 @@
 			iconFormat = next.icon_format;
 			password = '';
 			creating = false;
+			savedMessage = wasCreating ? 'Servidor criado.' : 'Alterações salvas.';
 			saved = true;
 			setTimeout(() => (saved = false), 2000);
 		} catch (err) {
@@ -265,7 +267,7 @@
 					<span>{error}</span>
 				</div>
 			{:else if saved}
-				<span class="saved">{creating ? 'Servidor criado' : 'Alterações salvas'}</span>
+				<span class="saved">{savedMessage}</span>
 			{/if}
 
 			<div class="server-actions">
