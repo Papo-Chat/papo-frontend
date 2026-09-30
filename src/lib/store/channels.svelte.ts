@@ -219,19 +219,33 @@ export async function setChannelNotification(
 		throw new Error('usuário não autenticado');
 	}
 
-	const setting = await api.channels.setChannelUserSetting(channelId, userId, {
-		notification_settings
-	});
-
-	const channel = state.byId.get(channelId);
-	if (channel) {
+	const before = state.byId.get(channelId);
+	if (before) {
 		state.byId.set(channelId, {
-			...channel,
-			notification_settings: setting.notification_settings
+			...before,
+			notification_settings
 		});
 	}
 
-	return setting;
+	try {
+		const setting = await api.channels.setChannelUserSetting(channelId, userId, {
+			notification_settings
+		});
+
+		const current = state.byId.get(channelId);
+		if (current) {
+			state.byId.set(channelId, {
+				...current,
+				notification_settings: setting.notification_settings
+			});
+		}
+		return setting;
+	} catch (err) {
+		if (before) {
+			state.byId.set(channelId, before);
+		}
+		throw err;
+	}
 }
 
 export async function setAllChannelNotifications(
