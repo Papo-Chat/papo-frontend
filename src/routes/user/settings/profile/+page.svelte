@@ -163,7 +163,7 @@
             const fresh = await api.users.profile(id);
             profile = fresh;
             usersStore.state.profiles.set(id, fresh);
-            usersStore.state.byId.set(id, {
+            const summary = {
                 id: fresh.id,
                 username: fresh.username,
                 nickname: fresh.nickname,
@@ -173,7 +173,11 @@
                 status_updated_at: fresh.status_updated_at,
                 created_at: fresh.created_at,
                 roles: fresh.roles
-            } as UserSummary);
+            } as UserSummary;
+            usersStore.state.byId.set(id, summary);
+            usersStore.state.list.items = usersStore.state.list.items.map((u) =>
+                u.id === id ? summary : u
+            );
 
             avatarImg = null;
             bannerImg = null;
