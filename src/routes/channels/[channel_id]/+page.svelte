@@ -5,7 +5,6 @@
 
 	import * as channelsStore from '$lib/store/channels.svelte';
 	import * as messagesStore from '$lib/store/messages.svelte';
-	import * as voiceStore from '$lib/store/voice.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
 
 	import { typingUsers } from '$lib/store/users.svelte';
