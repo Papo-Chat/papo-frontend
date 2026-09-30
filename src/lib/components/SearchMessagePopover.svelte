@@ -188,6 +188,57 @@
         return result.author_id ? usersStore.state.byId.get(result.author_id) : undefined;
     }
 
+    type HighlightPart = { text: string; match: boolean };
+
+    function searchExcerpt(content: string, query: string): string {
+        const q = query.trim();
+        if (!q) return content;
+
+        const lower = content.toLocaleLowerCase();
+        const needle = q.toLocaleLowerCase();
+        const matchAt = lower.indexOf(needle);
+        const maxChars = 260;
+
+        if (content.length <= maxChars) return content;
+        if (matchAt < 0) return content.slice(0, maxChars).trimEnd() + '…';
+
+        const room = Math.max(0, maxChars - q.length);
+        let start = Math.max(0, matchAt - Math.floor(room / 2));
+        let end = Math.min(content.length, start + maxChars);
+
+        if (end === content.length) {
+            start = Math.max(0, end - maxChars);
+        }
+
+        return `${start > 0 ? '…' : ''}${content.slice(start, end)}${end < content.length ? '…' : ''}`;
+    }
+
+    function highlightParts(content: string, query: string): HighlightPart[] {
+        const excerpt = searchExcerpt(content, query);
+        const q = query.trim();
+        if (!q) return [{ text: excerpt, match: false }];
+
+        const lower = excerpt.toLocaleLowerCase();
+        const needle = q.toLocaleLowerCase();
+        const parts: HighlightPart[] = [];
+        let cursor = 0;
+
+        while (cursor < excerpt.length) {
+            const at = lower.indexOf(needle, cursor);
+            if (at < 0) {
+                parts.push({ text: excerpt.slice(cursor), match: false });
+                break;
+            }
+            if (at > cursor) {
+                parts.push({ text: excerpt.slice(cursor, at), match: false });
+            }
+            parts.push({ text: excerpt.slice(at, at + q.length), match: true });
+            cursor = at + q.length;
+        }
+
+        return parts.length ? parts : [{ text: excerpt, match: false }];
+    }
+
     function close(): void {
         if (open) {
             open = false;
@@ -366,9 +417,17 @@
                                         </div>
 
                                         {#if m.content}
-                                            <div class="content">{m.content}</div>
+                                            <div class="content search-message-content">
+                                                {#each highlightParts(m.content, searchQuery) as part}
+                                                    {#if part.match}
+                                                        <mark>{part.text}</mark>
+                                                    {:else}
+                                                        {part.text}
+                                                    {/if}
+                                                {/each}
+                                            </div>
                                         {:else}
-                                            <div class="content"><span class="content-attachment">Anexo</span></div>
+                                            <div class="content search-message-content"><span class="content-attachment">Anexo</span></div>
                                         {/if}
                                     </div>
                                 </button>
@@ -695,8 +754,25 @@
         color: var(--text);
         font-size: 12px;
         line-height: 1.42;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
         -webkit-box-orient: vertical;
-        -webkit-line-clamp: 2;
+        -webkit-line-clamp: 3;
+    }
+
+    .search-message-content mark {
+        padding: 0 2px;
+        border-radius: 4px;
+        background: rgba(255, 210, 74, 0.46);
+        color: var(--text-strong);
+        font-weight: 800;
+        box-decoration-break: clone;
+        -webkit-box-decoration-break: clone;
+    }
+
+    :global([data-theme='dark']) .search-message-content mark {
+        background: rgba(255, 193, 46, 0.28);
+        color: #fff4c2;
     }
 
     .content-attachment {
