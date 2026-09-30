@@ -109,18 +109,20 @@ function releaseMessageResources(
 
 // ── state ─────────────────────────────────────────────────
 
-function trimLatestWindow(
+function checkpointWindow(
 	ch: ChannelMessagesState,
 	byId: SvelteMap<string, MessageWithAttachment>
 ): {
 	byId: SvelteMap<string, MessageWithAttachment>;
 	hasMoreOlder: boolean;
+	hasMoreNewer: boolean;
 	cursorOlder: ChannelMessagesState['cursorOlder'];
 } {
 	if (byId.size <= MAX_WINDOW) {
 		return {
 			byId,
 			hasMoreOlder: ch.hasMoreOlder,
+			hasMoreNewer: ch.hasMoreNewer,
 			cursorOlder: ch.cursorOlder
 		};
 	}
@@ -128,10 +130,18 @@ function trimLatestWindow(
 	const ids = sortedIds(byId);
 	const excess = ids.length - MAX_WINDOW;
 
+	// Latest window stays anchored at the bottom, so discard oldest messages.
+	// Historical window stays anchored around the user's reading position, so
+	// discard newest messages instead and remember that newer data exists.
+	const dropIds =
+		ch.windowMode === 'latest'
+			? ids.slice(0, excess)
+			: ids.slice(ids.length - excess);
+
 	const dropped: MessageWithAttachment[] = [];
-	for (const id of ids.slice(0, excess)) {
-		const m = byId.get(id);
-		if (m) dropped.push(m);
+	for (const id of dropIds) {
+		const message = byId.get(id);
+		if (message) dropped.push(message);
 		byId.delete(id);
 	}
 	releaseMessageResources(byId, dropped);
@@ -142,13 +152,15 @@ function trimLatestWindow(
 
 	return {
 		byId,
-		hasMoreOlder: true,
-		cursorOlder: oldest
-			? {
-					since: oldest.created_at,
-					last_id: oldest.id
-				}
-			: null
+		hasMoreOlder: ch.windowMode === 'latest' ? true : ch.hasMoreOlder,
+		hasMoreNewer: ch.windowMode === 'historical' ? true : ch.hasMoreNewer,
+		cursorOlder:
+			ch.windowMode === 'latest' && oldest
+				? {
+						since: oldest.created_at,
+						last_id: oldest.id
+					}
+				: ch.cursorOlder
 	};
 }
 
@@ -329,21 +341,15 @@ export function upsertMessage(
 			}
 			newByd.set(safeMessage.id, merged);
 
-			const trimmed =
-				ch.windowMode === 'latest'
-					? trimLatestWindow(ch, newByd)
-					: {
-							byId: newByd,
-							hasMoreOlder: ch.hasMoreOlder,
-							cursorOlder: ch.cursorOlder
-						};
+			const checkpointed = checkpointWindow(ch, newByd);
 
 			state.channels.set(channelId, {
 				...ch,
-				byId: trimmed.byId,
-				ids: sortedIds(trimmed.byId),
-				hasMoreOlder: trimmed.hasMoreOlder,
-				cursorOlder: trimmed.cursorOlder
+				byId: checkpointed.byId,
+				ids: sortedIds(checkpointed.byId),
+				hasMoreOlder: checkpointed.hasMoreOlder,
+				hasMoreNewer: checkpointed.hasMoreNewer,
+				cursorOlder: checkpointed.cursorOlder
 			});
 			inserted = true;
 		}
@@ -860,7 +866,40 @@ export function applyEvent(state: MessagesState, event: WsOutbound): void {
 // ── store actions ─────────────────────────────────────────
 
 export function evict(channelId: string): void {
-	// Clear per-channel caches (tombstones, pending previews) before drop.
+	const ch = state.channels.get(channelId);
+	if (!ch) return;
+
+	const droppedById = new Map<string, MessageWithAttachment>();
+	for (const message of ch.byId.values()) {
+		droppedById.set(message.id, message);
+	}
+	for (const message of ch.pinned) {
+		if (!droppedById.has(message.id)) {
+			droppedById.set(message.id, message);
+		}
+	}
+
+	releaseMessageResources(
+		new SvelteMap<string, MessageWithAttachment>(),
+		[...droppedById.values()]
+	);
+
+	for (const message of droppedById.values()) {
+		pendingPreviews.delete(message.id);
+	}
+
+	// Global preview tombstones are keyed as messageId:previewId. They only
+	// need to survive while the channel window can still receive a stale page.
+	const channelPreviewTombstones = new Set(ch.previewTombstones);
+	for (const key of [...previewTombstones]) {
+		const messageId = key.split(':', 1)[0];
+		if (droppedById.has(messageId) || channelPreviewTombstones.has(key)) {
+			previewTombstones.delete(key);
+		}
+	}
+
+	freshGuards.delete(channelId);
+	_freshInflight.delete(channelId);
 	state.channels.delete(channelId);
 }
 
@@ -990,37 +1029,22 @@ async function _fetchPage(
 				}
 			}
 		}
-		// Trim to MAX_WINDOW.
-		const dropCount = newByd.size - MAX_WINDOW;
-		let drop: string[] = [];
-		let trimmedNewer = false;
-
-		if (dropCount > 0) {
-			const ids = sortedIds(newByd);
-
-			if (ch2.windowMode === 'latest') {
-				drop = ids.slice(0, dropCount);
-			} else {
-				drop = ids.slice(ids.length - dropCount);
-				trimmedNewer = true;
-			}
-
-			const dropped: MessageWithAttachment[] = [];
-			for (const id of drop) {
-				const m = newByd.get(id);
-				if (m) dropped.push(m);
-				newByd.delete(id);
-			}
-			releaseMessageResources(newByd, dropped);
-		}
-		state.channels.set(channelId, {
+		const pageState: ChannelMessagesState = {
 			...ch2,
-			byId: newByd,
-			hasMoreNewer: q == null ? false : ch2.hasMoreNewer || trimmedNewer,
-			ids: sortedIds(newByd),
-			loaded: true,
+			hasMoreNewer: q == null ? false : ch2.hasMoreNewer,
 			hasMoreOlder: res.has_more,
 			cursorOlder: nextCursor(res.messages) ?? null
+		};
+		const checkpointed = checkpointWindow(pageState, newByd);
+
+		state.channels.set(channelId, {
+			...pageState,
+			byId: checkpointed.byId,
+			hasMoreNewer: checkpointed.hasMoreNewer,
+			ids: sortedIds(checkpointed.byId),
+			loaded: true,
+			hasMoreOlder: checkpointed.hasMoreOlder,
+			cursorOlder: checkpointed.cursorOlder
 			// A fresh load (q == null) is anchored at the newest message.
 		});
 		for (const message of messages) {
@@ -1520,6 +1544,7 @@ export function reset(): void {
 
 	previewRequests.clear();
 	freshGuards.clear();
+	_freshInflight.clear();
 	state.channels.clear();
 	pendingPreviews.clear();
 	previewCache.clear();

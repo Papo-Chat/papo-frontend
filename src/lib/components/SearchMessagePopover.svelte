@@ -55,6 +55,28 @@
 
     const authorOptions = $derived(usersStore.state.list.items);
 
+    const hasActiveFilters = $derived(
+        searchQuery.trim() !== '' ||
+        filters.author !== '' ||
+        filters.dateStart !== '' ||
+        filters.dateEnd !== '' ||
+        filters.containsAttachment !== ''
+    );
+
+    // Used by the debounce effect so every searchable filter participates in
+    // reactivity. Order alone is not a valid API filter, but changes the
+    // ordering whenever at least one real filter is active.
+    const searchSignature = $derived(
+        [
+            searchQuery.trim(),
+            filters.author,
+            filters.dateStart,
+            filters.dateEnd,
+            filters.order,
+            filters.containsAttachment
+        ].join('|')
+    );
+
     // Search results may reference authors that are not in byId yet. Fetch
     // those authors in batch; the bounded profile cache handles eviction.
     $effect(() => {
@@ -67,10 +89,14 @@
         }
     });
 
-    // Request com os filtros atuais (o API exige >= 1 campo; `text` sempre
-    // vem da query).
+    // Request com os filtros atuais. O backend aceita qualquer combinação
+    // com pelo menos um filtro real; texto é opcional.
     function buildRequest(): SearchRequest {
-        const req: SearchRequest = { text: searchQuery.trim() };
+        const req: SearchRequest = {};
+        const text = searchQuery.trim();
+        if (text) {
+            req.text = text;
+        }
         if (filters.author) {
             req.author = filters.author;
         }
@@ -163,24 +189,28 @@
             clearTimeout(searchTimer);
         }
 
-        const query = searchQuery.trim();
+        // Force the effect to track all search inputs, not just text.
+        const signature = searchSignature;
+        void signature;
 
-        // Sem termo: limpa a lista e não aciona request.
-        if (!query) {
+        // The API requires at least one real filter. Author/date/attachment
+        // are sufficient even when the text box is empty.
+        if (!hasActiveFilters) {
             results = [];
             loading = false;
             error = null;
             cursor = null;
             hasMore = false;
             searchTimer = null;
+            requestGeneration += 1;
             return;
         }
 
         loading = true;
         error = null;
-        requestGeneration += 1; // invalida fetch em andamento da query anterior
+        requestGeneration += 1; // invalida fetch em andamento da busca anterior
         searchTimer = setTimeout(() => {
-            fetchPage();
+            void fetchPage();
         }, 400);
     });
 
@@ -374,7 +404,7 @@
                         </div>
                         <div class="search-state-copy">
                             <strong>Pesquisando…</strong>
-                            <p>Procurando mensagens que correspondam ao termo.</p>
+                            <p>Procurando mensagens que correspondam aos filtros.</p>
                         </div>
                     </div>
                 {:else if error && results.length === 0}
@@ -387,7 +417,7 @@
                             <p>{error}</p>
                         </div>
                     </div>
-                {:else if searchQuery.trim()}
+                {:else if hasActiveFilters}
                     {#if results.length > 0}
                         <div class="search-results-head">
                             <span class="search-count">
@@ -451,7 +481,7 @@
                             </div>
                             <div class="search-state-copy">
                                 <strong>Nada encontrado</strong>
-                                <p>Nenhuma mensagem contém “{searchQuery.trim()}”.</p>
+                                <p>Nenhuma mensagem corresponde aos filtros selecionados.</p>
                             </div>
                         </div>
                     {/if}
@@ -462,7 +492,7 @@
                         </div>
                         <div class="search-state-copy">
                             <strong>Encontre uma mensagem</strong>
-                            <p>Digite um termo acima e refine a busca pelos filtros, se necessário.</p>
+                            <p>Digite um termo ou use autor, data e anexos como filtros independentes.</p>
                         </div>
                     </div>
                 {/if}
