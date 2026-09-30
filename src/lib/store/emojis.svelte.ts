@@ -12,6 +12,7 @@ export const state = $state({
 	list: [] as Emoji[],
 	loaded: false,
 	loading: false,
+	fullyLoaded: false,
 	hasMore: false,
 	cursor: null as KeysetCursor | null,
 	// Guards against concurrent load/loadMore (P1.11).
@@ -42,6 +43,7 @@ async function _loadPage(q?: { since?: string; last_id?: string }): Promise<void
 		state.hasMore = res.has_more;
 		state.cursor = nextCursor(res.emojis) ?? null;
 		state.loaded = true;
+		state.fullyLoaded = !res.has_more;
 	} finally {
 		if (state.loadGeneration === gen) {
 			state.loading = false;
@@ -53,6 +55,55 @@ export function load(): void {
 	// Fresh load: reset the list.
 	state.list = [];
 	_loadPage();
+}
+
+export async function loadAll(): Promise<void> {
+	const gen = (state.loadGeneration += 1);
+	state.loading = true;
+	state.loaded = true;
+	state.fullyLoaded = false;
+
+	const all: Emoji[] = [];
+	const seen = new Set<string>();
+	let cursor: KeysetCursor | null = null;
+	let hasMore = true;
+
+	try {
+		while (hasMore) {
+			const res = await api.emojis.list(
+				cursor ? { since: cursor.since, last_id: cursor.last_id } : undefined
+			);
+			if (state.loadGeneration !== gen) return;
+
+			for (const emoji of res.emojis) {
+				state.byId.set(emoji.id, emoji);
+				if (!seen.has(emoji.id)) {
+					seen.add(emoji.id);
+					all.push(emoji);
+				}
+			}
+
+			// Publish each page so the picker becomes progressively complete.
+			state.list = [...all];
+			state.hasMore = res.has_more;
+			cursor = nextCursor(res.emojis) ?? null;
+			state.cursor = cursor;
+
+			if (!res.has_more || !cursor || res.emojis.length === 0) {
+				hasMore = false;
+			}
+		}
+
+		if (state.loadGeneration === gen) {
+			state.hasMore = false;
+			state.cursor = null;
+			state.fullyLoaded = true;
+		}
+	} finally {
+		if (state.loadGeneration === gen) {
+			state.loading = false;
+		}
+	}
 }
 
 export function loadMore(): void {
@@ -106,6 +157,7 @@ export function reset(): void {
 	state.list = [];
 	state.loaded = false;
 	state.loading = false;
+	state.fullyLoaded = false;
 	state.hasMore = false;
 	state.cursor = null;
 }
