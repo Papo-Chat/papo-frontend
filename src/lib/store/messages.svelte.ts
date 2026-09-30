@@ -445,7 +445,8 @@ export function patchPinned(state: MessagesState, messageId: string, isPinned: b
 
 			return {
 				...old,
-				pinned
+				pinned,
+				pinnedLoaded: true
 			};
 		});
 
@@ -1466,10 +1467,12 @@ export function reactionUsers(
 }
 
 
-export function loadPinned(channelId: string): void {
+export function loadPinned(channelId: string, force = false): void {
 	const ch = state.channels.get(channelId);
 
-	if (!ch || ch.pinnedLoading) {
+	// Pins are a per-channel cache. Re-opening the popover must not refetch the
+	// same list over and over; pin/unpin + WS events patch it locally.
+	if (!ch || ch.pinnedLoading || (ch.pinnedLoaded && !force)) {
 		return;
 	}
 
