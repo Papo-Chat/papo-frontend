@@ -50,6 +50,8 @@
 	let unreadCount = $state(0);
 	let loadingOlder = $state(false);
 	let suppressScrollHandler = $state(true);
+	let pendingBottomFrame = 0;
+	let touchY: number | null = null;
 
 	let animatedMessageId = $state<string | null>(null);
 	let lastMessageId = $state<string | null>(null);
@@ -218,12 +220,43 @@
 		if (!found) await jumpToLatest();
 	}
 
+	function stopFollowingBottom(): void {
+		if (!stickToBottom) return;
+		stickToBottom = false;
+		if (pendingBottomFrame) {
+			cancelAnimationFrame(pendingBottomFrame);
+			pendingBottomFrame = 0;
+		}
+	}
+
+	function handleWheel(e: WheelEvent): void {
+		if (e.deltaY < 0) stopFollowingBottom();
+	}
+
+	function handleTouchStart(e: TouchEvent): void {
+		touchY = e.touches[0]?.clientY ?? null;
+	}
+
+	function handleTouchMove(e: TouchEvent): void {
+		const nextY = e.touches[0]?.clientY ?? null;
+		if (touchY != null && nextY != null && nextY > touchY + 2) {
+			// Finger moving down means the scroll content is moving up.
+			stopFollowingBottom();
+		}
+		touchY = nextY;
+	}
+
 	function handleScroll(): void {
 		if (!listEl || !initialScrollDone || suppressScrollHandler) return;
 
 		const atBottom = isAtBottom();
 		const wasAtBottom = stickToBottom;
-		stickToBottom = atBottom;
+
+		if (!atBottom && wasAtBottom) {
+			stopFollowingBottom();
+		} else {
+			stickToBottom = atBottom;
+		}
 
 		// The NEW divider is consumed only when the user really reaches the end.
 		if (!wasAtBottom && atBottom) {
@@ -350,7 +383,11 @@
 		if (!initialScrollDone || !stickToBottom || count === 0) return;
 
 		void tick().then(() => {
-			requestAnimationFrame(() => {
+			if (!stickToBottom) return;
+			if (pendingBottomFrame) cancelAnimationFrame(pendingBottomFrame);
+			pendingBottomFrame = requestAnimationFrame(() => {
+				pendingBottomFrame = 0;
+				if (!stickToBottom) return;
 				scrollToBottom();
 				clearUnreadAtBottom();
 			});
@@ -396,7 +433,10 @@
 		const settleBottom = () => {
 			if (!initialScrollDone || !stickToBottom) return;
 			cancelAnimationFrame(frame);
-			frame = requestAnimationFrame(() => scrollToBottom());
+			frame = requestAnimationFrame(() => {
+				if (!stickToBottom) return;
+				scrollToBottom();
+			});
 		};
 
 		const observer =
@@ -454,6 +494,9 @@
 		class:ready={messages.length === 0 || initialScrollDone}
 		bind:this={listEl}
 		onscroll={handleScroll}
+		onwheel={handleWheel}
+		ontouchstart={handleTouchStart}
+		ontouchmove={handleTouchMove}
 	>
 		<div class="chat-content" bind:this={contentEl}>
 			<div class="chat-top-anchor" bind:this={topEl} aria-hidden="true"></div>
