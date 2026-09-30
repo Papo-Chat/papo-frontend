@@ -612,72 +612,112 @@
    ───────────────────────────────────────────────────────────────────── */
 
 @media (max-width: 840px) {
+	html,
 	body {
-		overflow: auto;
+		height: auto;
+		min-height: 100%;
 	}
+
+	body {
+		display: block;
+		min-height: 100dvh;
+		overflow-x: hidden;
+		overflow-y: auto;
+		overscroll-behavior-y: auto;
+	}
+
 	.auth-shell {
 		width: 100%;
 		min-height: 100dvh;
 		margin: 0;
-		grid-template-columns: 1fr;
+		display: block;
+		overflow: visible;
 		border: 0;
 		border-radius: 0;
 	}
+
 	.brand-panel {
-		min-height: 280px;
-		padding: 32px 26px;
+		min-height: 350px;
+		padding: 32px 26px 110px;
 		border-right: 0;
 		border-bottom: 1px solid rgba(255, 255, 255, 0.16);
 	}
+
 	.hero {
-		margin-top: 42px;
+		margin-top: 38px;
 	}
+
 	.hero h2 {
 		max-width: 13ch;
 		font-size: clamp(34px, 10vw, 50px);
 	}
+
 	.brand-footer {
 		display: none;
 	}
+
+	/* Floating auth surface: overlap the hero instead of stacking two large
+	 * full-width panels. The document itself remains scrollable for short
+	 * mobile viewports and the taller register form. */
 	.auth-panel {
-		padding: 28px 18px 34px;
+		position: relative;
+		z-index: 3;
+		display: block;
+		margin-top: -78px;
+		padding: 0 18px 40px;
+		background: transparent;
 	}
+
 	.auth-card {
 		width: min(100%, 500px);
+		margin: 0 auto;
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.98),
+			0 20px 46px rgba(18, 68, 102, 0.2),
+			0 0 34px rgba(90, 200, 250, 0.06);
 	}
 }
 
 @media (max-width: 500px) {
 	.brand-panel {
-		min-height: 240px;
-		padding: 24px 18px;
+		min-height: 315px;
+		padding: 24px 18px 92px;
 	}
+
 	.brand-mark {
 		width: 54px;
 		height: 54px;
 		border-radius: 18px;
 	}
+
 	.hero {
-		margin-top: 32px;
+		margin-top: 30px;
 	}
+
 	.hero-kicker {
 		display: none;
 	}
+
 	.hero p {
 		font-size: 14px;
 		margin-top: 14px;
 	}
+
 	.auth-panel {
-		padding: 18px 10px 22px;
+		margin-top: -64px;
+		padding: 0 10px 28px;
 	}
+
 	.auth-card {
 		padding: 20px 16px;
 		border-radius: 22px;
 	}
+
 	.theme-switch {
 		top: 14px;
 		right: 14px;
 	}
+
 	.auth-bottom {
 		align-items: flex-start;
 		flex-direction: column;
@@ -741,4 +781,27 @@ html[data-ui-flat][data-theme='dark'] .auth-card {
 html[data-ui-mobile] .auth-shell,
 html[data-ui-mobile] .auth-card {
 	box-shadow: none;
+}
+
+
+/* Mobile uses lightweight mode automatically. Keep the floating auth panel
+ * transparent even though flat mode normally paints .auth-panel as a solid
+ * surface; only the card itself should float above the hero. */
+@media (max-width: 840px) {
+	html[data-ui-flat] .auth-panel,
+	html[data-ui-mobile] .auth-panel {
+		background: transparent;
+	}
+
+	html[data-ui-mobile] .auth-card {
+		box-shadow:
+			0 18px 40px rgba(3, 39, 72, 0.18),
+			0 2px 10px rgba(3, 39, 72, 0.08);
+	}
+
+	html[data-ui-mobile][data-theme='dark'] .auth-card {
+		box-shadow:
+			0 18px 40px rgba(0, 0, 0, 0.34),
+			0 2px 10px rgba(0, 0, 0, 0.18);
+	}
 }
