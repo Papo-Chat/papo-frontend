@@ -132,16 +132,19 @@ function applyToDom(id: string): void {
 let currentBackgroundId = read();
 applyToDom(currentBackgroundId);
 
-if (typeof window !== 'undefined') {
-	window.matchMedia(MOBILE_BG_QUERY).addEventListener('change', () => {
-		applyToDom(currentBackgroundId);
-	});
-}
-
 export const backgroundId = writable<string>(currentBackgroundId);
 export const userImageUrl = writable<string>(
 	currentBackgroundId === CUSTOM_BG_ID && customImageAllowed() ? readUserImage() : ''
 );
+
+if (typeof window !== 'undefined') {
+	window.matchMedia(MOBILE_BG_QUERY).addEventListener('change', () => {
+		applyToDom(currentBackgroundId);
+		userImageUrl.set(
+			currentBackgroundId === CUSTOM_BG_ID && customImageAllowed() ? readUserImage() : ''
+		);
+	});
+}
 
 export function setBackground(next: string): void {
 	currentBackgroundId = next;
