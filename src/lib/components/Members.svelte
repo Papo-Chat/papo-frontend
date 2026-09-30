@@ -54,13 +54,28 @@
 <aside class="members {drawerOpen ? 'open' : ''}">
 	<MobilePanelHead icon="users-three" title="Membros" onClose={closeDrawer} />
 	<div class="status-picker" aria-label="Seu status">
-		<span>Seu status</span>
-		<div class="status-actions">
-			<button class:active={myStatus === 'online'} disabled={statusSaving} onclick={() => changeStatus('online')}>Online</button>
-			<button class:active={myStatus === 'away'} disabled={statusSaving} onclick={() => changeStatus('away')}>Ausente</button>
-			<button class:active={myStatus === 'busy'} disabled={statusSaving} onclick={() => changeStatus('busy')}>Ocupado</button>
+		<div class="status-picker-head">
+			<span class="status-picker-title">Seu status</span>
+			<span class="status-current">
+				<span class="status-dot {myStatus}"></span>
+				{myStatus === 'away' ? 'Ausente' : myStatus === 'busy' ? 'Ocupado' : 'Online'}
+			</span>
 		</div>
-		{#if statusError}<small>{statusError}</small>{/if}
+		<div class="status-actions" role="group" aria-label="Alterar status">
+			<button class:active={myStatus === 'online'} disabled={statusSaving} onclick={() => changeStatus('online')}>
+				<span class="status-dot online"></span>
+				<span>Online</span>
+			</button>
+			<button class:active={myStatus === 'away'} disabled={statusSaving} onclick={() => changeStatus('away')}>
+				<span class="status-dot away"></span>
+				<span>Ausente</span>
+			</button>
+			<button class:active={myStatus === 'busy'} disabled={statusSaving} onclick={() => changeStatus('busy')}>
+				<span class="status-dot busy"></span>
+				<span>Ocupado</span>
+			</button>
+		</div>
+		{#if statusError}<small class="status-error">{statusError}</small>{/if}
 	</div>
 
 	<div class="search">
@@ -88,5 +103,169 @@
 </aside>
 
 <style>
-.status-picker{display:flex;flex-direction:column;gap:6px;padding:8px 10px 4px;color:var(--muted-soft);font-size:11px;font-weight:700}.status-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}.status-actions button{padding:6px 4px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--muted-soft);font:inherit;cursor:pointer}.status-actions button.active{background:var(--hover);color:var(--text-primary)}.status-picker small{color:var(--danger)}
+	.status-picker {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		margin: 0 0 12px;
+		padding: 10px;
+		border: 1px solid rgba(255, 255, 255, 0.68);
+		border-radius: 15px;
+		background:
+			radial-gradient(circle at 12% -28%, rgba(255, 255, 255, 0.7), transparent 44%),
+			linear-gradient(145deg, rgba(246, 252, 255, 0.72), rgba(215, 238, 250, 0.55));
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.9),
+			0 7px 18px rgba(22, 77, 112, 0.08);
+		backdrop-filter: blur(12px) saturate(120%);
+		-webkit-backdrop-filter: blur(12px) saturate(120%);
+	}
+
+	.status-picker-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+	}
+
+	.status-picker-title {
+		color: var(--muted);
+		font-size: 10px;
+		font-weight: 800;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.status-current {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		color: var(--muted-soft);
+		font-size: 10px;
+		font-weight: 700;
+	}
+
+	.status-actions {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 5px;
+	}
+
+	.status-actions button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 5px;
+		min-width: 0;
+		height: 31px;
+		padding: 0 6px;
+		border: 1px solid rgba(115, 170, 205, 0.16);
+		border-radius: 10px;
+		background: rgba(255, 255, 255, 0.38);
+		color: var(--muted-soft);
+		font: inherit;
+		font-size: 10px;
+		font-weight: 650;
+		cursor: pointer;
+		transition:
+			transform 0.16s var(--ease),
+			background 0.16s ease,
+			border-color 0.16s ease;
+	}
+
+	.status-actions button:hover:not(:disabled) {
+		transform: translateY(-1px);
+		background: rgba(255, 255, 255, 0.62);
+		border-color: rgba(100, 174, 219, 0.28);
+	}
+
+	.status-actions button.active {
+		border-color: rgba(67, 156, 214, 0.34);
+		background: linear-gradient(180deg, rgba(198, 235, 255, 0.78), rgba(139, 207, 244, 0.42));
+		color: var(--text-primary);
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82);
+	}
+
+	.status-actions button:disabled {
+		opacity: 0.62;
+		cursor: wait;
+	}
+
+	.status-dot {
+		width: 7px;
+		height: 7px;
+		flex: 0 0 7px;
+		border-radius: 50%;
+	}
+
+	.status-dot.online {
+		background: #24c982;
+		box-shadow: 0 0 0 2px rgba(36, 201, 130, 0.12);
+	}
+
+	.status-dot.away {
+		background: #e7a80b;
+		box-shadow: 0 0 0 2px rgba(231, 168, 11, 0.12);
+	}
+
+	.status-dot.busy {
+		background: #f03d5e;
+		box-shadow: 0 0 0 2px rgba(240, 61, 94, 0.12);
+	}
+
+	.status-error {
+		color: var(--danger);
+		font-size: 10px;
+		font-weight: 600;
+	}
+
+	:global(html[data-theme='dark']) .status-picker {
+		border-color: rgba(181, 222, 248, 0.12);
+		background:
+			radial-gradient(circle at 14% -28%, rgba(113, 204, 255, 0.1), transparent 44%),
+			linear-gradient(145deg, rgba(39, 68, 86, 0.68), rgba(14, 39, 54, 0.58));
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.08),
+			0 7px 18px rgba(0, 0, 0, 0.2);
+	}
+
+	:global(html[data-theme='dark']) .status-actions button {
+		border-color: rgba(177, 219, 244, 0.1);
+		background: rgba(87, 126, 149, 0.16);
+	}
+
+	:global(html[data-theme='dark']) .status-actions button:hover:not(:disabled) {
+		background: rgba(95, 165, 204, 0.18);
+		border-color: rgba(138, 207, 245, 0.16);
+	}
+
+	:global(html[data-theme='dark']) .status-actions button.active {
+		border-color: rgba(104, 195, 242, 0.24);
+		background: linear-gradient(180deg, rgba(62, 143, 189, 0.3), rgba(25, 88, 123, 0.26));
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+	}
+
+	:global(html[data-ui-flat]) .status-picker {
+		background: linear-gradient(145deg, #f5fbfe, #dfedf5);
+		box-shadow: 0 5px 14px rgba(20, 73, 106, 0.08);
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+	}
+
+	:global(html[data-ui-flat]) .status-actions button {
+		background: #eef7fb;
+	}
+
+	:global(html[data-ui-flat][data-theme='dark']) .status-picker {
+		background: linear-gradient(145deg, #203f52, #102f42);
+		box-shadow: 0 5px 14px rgba(0, 0, 0, 0.18);
+	}
+
+	:global(html[data-ui-flat][data-theme='dark']) .status-actions button {
+		background: #24495f;
+	}
+
+	:global(html[data-ui-mobile]) .status-actions button:hover:not(:disabled) {
+		transform: none;
+	}
 </style>
