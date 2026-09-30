@@ -42,11 +42,6 @@
 	const users = $derived(usersStore.state.list.items);
 	const roles = $derived(rolesStore.state.list);
 
-	// Perfis (avatar/banner) dos usuários visíveis na lista — batch, só ids
-	// ausentes do cache.
-	$effect(() => {
-		void usersStore.ensureProfiles(users.map((u) => u.id));
-	});
 
 	const visibleUsers = $derived(
 		filter
