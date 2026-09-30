@@ -600,14 +600,8 @@ export function reset(): void {
 // Ban / unban. The API does not return the resulting ban state; it is
 // applied locally only after the server confirms success.
 
-export function setBanState(userId: string, ban: boolean): void {
-    api.users
-        .ban({ user_id: userId, ban_state: ban })
-        .then(() => {
-            if (ban) state.bannedIds.add(userId);
-            else state.bannedIds.delete(userId);
-        })
-        .catch((err) => {
-            console.error('failha ao alterar estado de ban:', err);
-        });
+export async function setBanState(userId: string, ban: boolean): Promise<void> {
+    await api.users.ban({ user_id: userId, ban_state: ban });
+    if (ban) state.bannedIds.add(userId);
+    else state.bannedIds.delete(userId);
 }
