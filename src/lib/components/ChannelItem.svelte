@@ -81,7 +81,7 @@
 							}}
 						>
 							<span class="voice-avatar">
-								<Avatar {user} size={24} />
+								<Avatar {user} userId={m.user_id} size={24} />
 							</span>
 
 							{#if user}
