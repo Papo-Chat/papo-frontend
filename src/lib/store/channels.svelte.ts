@@ -8,7 +8,14 @@ import { debounce } from '../utils/throttle';
 import { evict as messagesEvict } from '../store/messages.svelte';
 import { clearRoom as voiceClearRoom } from '../store/voice.svelte';
 import { meId as sessionMeId } from '../store/session.svelte';
-import type { Channel, ChannelPermissionEntry, ChannelType, WsMessage } from '../types';
+import type {
+	Channel,
+	ChannelPermissionEntry,
+	ChannelType,
+	ChannelUserSetting,
+	NotificationSettings,
+	WsMessage
+} from '../types';
 
 export const state = $state({
 	byId: new SvelteMap<string, Channel>(),
@@ -102,21 +109,28 @@ export async function load(): Promise<void> {
 
 // Awaits the create so the reseed (channel list) happens after the channel
 // exists, avoiding a reseed-before-create race on slow connections.
-export function create(req: { name: string; type: ChannelType; topic: string | null }): void {
-	api.channels.create(req).then(() => {
-		reseedChannels.run();
-	});
+export async function create(req: {
+	name: string;
+	type: ChannelType;
+	topic: string | null;
+}): Promise<Channel> {
+	const channel = await api.channels.create(req);
+	reseedChannels.run();
+	return channel;
 }
 
-export function update(id: string, req: { name: string; topic: string | null }): void {
+export async function update(
+	id: string,
+	req: { name: string; topic: string | null }
+): Promise<Channel> {
 	const epoch = currentSessionEpoch();
-	api.channels.update(id, req).then((c) => {
-		if (!isCurrentSessionEpoch(epoch)) {
-			throw new Error('stale session');
-		}
-		state.byId.set(c.id, c);
-		rebuildOrdered();
-	});
+	const channel = await api.channels.update(id, req);
+	if (!isCurrentSessionEpoch(epoch)) {
+		throw new Error('stale session');
+	}
+	state.byId.set(channel.id, channel);
+	rebuildOrdered();
+	return channel;
 }
 
 export function changePosition(
@@ -144,14 +158,13 @@ export function dropChannelLocal(id: string): void {
 	voiceClearRoom(id);
 }
 
-export function remove(id: string): void {
+export async function remove(id: string): Promise<void> {
 	const epoch = currentSessionEpoch();
-	api.channels.remove(id).then(() => {
-		if (!isCurrentSessionEpoch(epoch)) {
-			throw new Error('stale session');
-		}
-		dropChannelLocal(id);
-	});
+	await api.channels.remove(id);
+	if (!isCurrentSessionEpoch(epoch)) {
+		throw new Error('stale session');
+	}
+	dropChannelLocal(id);
 }
 
 function rebuildOrdered(): void {
@@ -171,7 +184,7 @@ export function getPermissions(id: string): Promise<ChannelPermissionEntry[]> {
 	return api.channels.permissions(id);
 }
 
-export function setRolePermissions(
+export async function setRolePermissions(
 	id: string,
 	roleId: string,
 	perms: {
@@ -180,22 +193,50 @@ export function setRolePermissions(
 		delete_messages: boolean;
 		connect_voice: boolean;
 	}
-): void {
-	api.channels.setRolePermissions(id, roleId, { permissions: perms });
+): Promise<void> {
+	await api.channels.setRolePermissions(id, roleId, { permissions: perms });
 }
 
 // F12 — self only: the store always passes the current user id.
-export function setChannelUserSetting(
-	notification_settings: 'off' | 'only_mentions' | 'all'
-): void {
-	const channelId = state.openChannelId;
+export async function setChannelNotification(
+	channelId: string,
+	notification_settings: NotificationSettings
+): Promise<ChannelUserSetting> {
 	const userId = sessionMeId();
-	if (!channelId || !userId) {
-		return;
+	if (!userId) {
+		throw new Error('usuário não autenticado');
 	}
-	api.channels.setChannelUserSetting(channelId, userId, {
+
+	const setting = await api.channels.setChannelUserSetting(channelId, userId, {
 		notification_settings
 	});
+
+	const channel = state.byId.get(channelId);
+	if (channel) {
+		state.byId.set(channelId, {
+			...channel,
+			notification_settings: setting.notification_settings
+		});
+	}
+
+	return setting;
+}
+
+export async function setAllChannelNotifications(
+	notification_settings: NotificationSettings
+): Promise<void> {
+	const ids = state.ordered.filter((id) => state.byId.get(id)?.type !== 'category');
+	await Promise.all(ids.map((id) => setChannelNotification(id, notification_settings)));
+}
+
+export function setChannelUserSetting(
+	notification_settings: NotificationSettings
+): Promise<ChannelUserSetting> | null {
+	const channelId = state.openChannelId;
+	if (!channelId) {
+		return null;
+	}
+	return setChannelNotification(channelId, notification_settings);
 }
 
 // Group channels by position; categories group the following channels.

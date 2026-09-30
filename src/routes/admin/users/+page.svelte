@@ -3,11 +3,22 @@
 	// + rolesStore (roles).
 	import * as usersStore from '$lib/store/users.svelte';
 	import * as rolesStore from '$lib/store/roles.svelte';
+	import { state as sessionState, meId } from '$lib/store/session.svelte';
+	import { state as serverState } from '$lib/store/server.svelte';
+	import { can } from '$lib/store/roles.svelte';
 	import type { UserSummary } from '$lib/types';
 	import Icon from '$lib/components/Icon.svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 
 	let filter = $state('');
+
+	const me = $derived(meId());
+	const isOwner = $derived(!!me && serverState.server?.owner_id === me);
+	const myRoleIds = $derived(new Set(sessionState.roles.map((r) => r.id)));
+	const myRoles = $derived(rolesStore.state.list.filter((r) => myRoleIds.has(r.id)));
+	const adminCtx = $derived({ roles: myRoles, isOwner });
+	const canManageRoles = $derived(can('manage_roles', adminCtx));
+	const canManageServer = $derived(can('manage_server', adminCtx));
 
 	// GET /users is not run on the global bootstrap — load once on mount.
 	// loadList() is internally guarded (loadGeneration), so repeated calls
@@ -113,7 +124,9 @@
 			/>
 			<div class="users-stats">
 				<span>Ativos: <strong>{activeCount}</strong></span>
-				<span class="banned-count">Banidos: <strong>{banned.length}</strong></span>
+				{#if canManageServer}
+					<span class="banned-count">Banidos: <strong>{banned.length}</strong></span>
+				{/if}
 			</div>
 		</div>
 	</header>
@@ -122,7 +135,7 @@
 		<div class="loading-hint">Carregando usuários…</div>
 	{/if}
 
-	{#if banned.length}
+	{#if canManageServer && banned.length}
 		<div class="banned-card">
 			<div class="banned-card-head">
 				<Icon name="x-circle" variant="duotone" size={14} />
@@ -135,7 +148,7 @@
 						aria-label={`Desbanir ${u.nickname || u.username}`}
 						onclick={() => toggleBan(u)}
 					>
-						${u.nickname || u.username}
+						{u.nickname || u.username}
 						<Icon name="arrow-clockwise" variant="light" size={14} />
 					</button>
 				{/each}
@@ -159,6 +172,7 @@
 								<span class="user-user">@{u.username}</span>
 							</div>
 							<span class="status-dot {statusDotClass(u.id)}"></span>
+{#if canManageRoles}
 							<div class="role-select">
 								<select
 									class="user-role-select"
@@ -176,21 +190,25 @@
 									{/each}
 								</select>
 							</div>
+							{/if}
 							<div class="role-chips">
 								{#each u.roles as r (r.id)}
 									<span class="chip" style="color:{r.color}">
 										{r.name}
+{#if canManageRoles}
 										<button
 											class="chip-x"
 											aria-label={`Remover Role ${r.name}`}
 											onclick={() => removeRole(u.id, r.id)}
 										>
-											
+											×
 										</button>
+										{/if}
 									</span>
 								{/each}
 							</div>
 
+{#if canManageServer}
 							<button
 								class="admin-btn ghost small"
 								aria-label={`Banir ${u.nickname || u.username}`}
@@ -199,6 +217,7 @@
 								<Icon name="x-circle" variant="light" size={14} />
 								Banir
 							</button>
+							{/if}
 						</div>
 					{/if}
 				{/each}
@@ -359,7 +378,9 @@
 	}
 	.chip {
 		position: relative;
-		padding-right: 20px; /* espaço pro X */
+	}
+	.chip:has(.chip-x) {
+		padding-right: 20px;
 	}
 	.chip-x {
 		position: absolute;
