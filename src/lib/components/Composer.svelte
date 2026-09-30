@@ -693,7 +693,7 @@
 		</div>
 	{/if}
 
-	<footer class="composer">
+	<footer class="composer" class:no-attachments={!canSendAttachment}>
 		{#if recording || stopping}
 			<div class="audio-recorder" aria-live="polite">
 				<span class="recording-status">
