@@ -100,7 +100,7 @@
 	function findLastReadDivider(id: string): HTMLElement | null {
 		return (
 			listEl?.querySelector<HTMLElement>(
-				`[data-last-read-divider="${CSS.escape(id)}"]`
+				`[data-last-read-divider="${id}"]`
 			) ?? null
 		);
 	}
@@ -362,7 +362,7 @@
 
 		queueMicrotask(() => {
 			const el = listEl?.querySelector<HTMLElement>(
-				`[data-message-id="${CSS.escape(highlightMessageId)}"]`
+				`[data-message-id="${highlightMessageId}"]`
 			);
 
 			el?.scrollIntoView({
