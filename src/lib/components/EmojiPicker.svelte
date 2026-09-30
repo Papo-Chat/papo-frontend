@@ -454,4 +454,61 @@
 		background: linear-gradient(145deg, rgba(45, 79, 100, 0.72), rgba(25, 51, 68, 0.62));
 		box-shadow: 0 6px 14px rgba(0, 0, 0, 0.24);
 	}
+
+
+	/* Lightweight/performance mode must be genuinely opaque: removing blur
+	 * while keeping alpha would still let the wallpaper bleed through. */
+	:global(html[data-ui-flat]) .emoji-picker {
+		background: linear-gradient(145deg, #f8fcff, #e4f2f9);
+		border-color: #c8dce8;
+		box-shadow: 0 10px 24px rgba(20, 73, 106, 0.14);
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+	}
+
+	:global(html[data-ui-flat]) .emoji-picker-head {
+		background: #edf7fc;
+		border-bottom-color: #cbdde8;
+	}
+
+	:global(html[data-ui-flat]) .emoji-filter {
+		background: #ffffff;
+		border-color: #c9dce8;
+		box-shadow: none;
+	}
+
+	:global(html[data-ui-flat]) .emoji {
+		background: #f4f9fc;
+		border-color: #d3e2eb;
+	}
+
+	:global(html[data-ui-flat]) .emoji:hover {
+		background: #ffffff;
+		box-shadow: 0 4px 10px rgba(20, 80, 120, 0.12);
+	}
+
+	:global(html[data-ui-flat][data-theme='dark']) .emoji-picker {
+		background: linear-gradient(145deg, #1d3a4d, #0d2c3e);
+		border-color: #31566d;
+		box-shadow: 0 10px 24px rgba(0, 0, 0, 0.26);
+	}
+
+	:global(html[data-ui-flat][data-theme='dark']) .emoji-picker-head {
+		background: #173548;
+		border-bottom-color: #31546a;
+	}
+
+	:global(html[data-ui-flat][data-theme='dark']) .emoji-filter {
+		background: #24495f;
+		border-color: #3c6278;
+	}
+
+	:global(html[data-ui-flat][data-theme='dark']) .emoji {
+		background: #203f52;
+		border-color: #31566d;
+	}
+
+	:global(html[data-ui-flat][data-theme='dark']) .emoji:hover {
+		background: #294e63;
+	}
 </style>
