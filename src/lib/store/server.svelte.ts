@@ -22,6 +22,7 @@ export const state = $state({
 // (404). A stale-session / 401 rejection propagates (the 401 hook has
 // already cleared the local session).
 export async function load(): Promise<Server | null> {
+	state.loading = true;
 	const epoch = currentSessionEpoch();
 	try {
 		const server = await api.server.get();
