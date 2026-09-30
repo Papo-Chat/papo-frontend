@@ -76,12 +76,16 @@ export function remove(id: string): void {
 	});
 }
 
-export function assign(userId: string, roleId: string): void {
-	api.users.assignRole(userId, { role_id: roleId });
+export function assign(userId: string, roleId: string): Promise<{
+	user_id: string;
+	role_id: string;
+	assigned_at: string;
+}> {
+	return api.users.assignRole(userId, { role_id: roleId });
 }
 
-export function unassign(userId: string, roleId: string): void {
-	api.users.unassignRole(userId, roleId);
+export function unassign(userId: string, roleId: string): Promise<void> {
+	return api.users.unassignRole(userId, roleId);
 }
 
 // Re-export the pure permission helpers (so they are also available from the
