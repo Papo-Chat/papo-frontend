@@ -4000,3 +4000,152 @@ button.name:focus-visible {
 [data-theme='dark'] .emoji-cell:hover {
 	box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
 }
+
+
+/* =====================================================================
+   LIGHTWEIGHT / FLAT RENDERING
+   Mobile enables this automatically; desktop can opt in from Aero settings.
+   Keep the glass palette, but replace live backdrop sampling with opaque-ish
+   gradients to avoid expensive blur/compositing.
+   ===================================================================== */
+
+html[data-ui-flat] *,
+html[data-ui-flat] *::before,
+html[data-ui-flat] *::after {
+	backdrop-filter: none !important;
+	-webkit-backdrop-filter: none !important;
+}
+
+/* Large glass containers */
+html[data-ui-flat] .app-shell,
+html[data-ui-flat] .admin-shell {
+	background: linear-gradient(145deg, rgba(235, 248, 255, 0.97), rgba(207, 234, 247, 0.95));
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.9),
+		0 10px 28px rgba(3, 39, 72, 0.16);
+}
+
+html[data-ui-flat] .app-shell::after,
+html[data-ui-flat] .bubble::after {
+	display: none;
+}
+
+html[data-ui-flat] .rail {
+	background: linear-gradient(180deg, rgba(40, 121, 177, 0.96), rgba(30, 91, 137, 0.98));
+}
+
+html[data-ui-flat] .sidebar,
+html[data-ui-flat] .members,
+html[data-ui-flat] .admin-nav {
+	background: linear-gradient(155deg, rgba(241, 250, 255, 0.97), rgba(214, 237, 249, 0.96));
+}
+
+html[data-ui-flat] .main {
+	background: linear-gradient(180deg, rgba(249, 253, 255, 0.94), rgba(231, 246, 252, 0.94));
+}
+
+html[data-ui-flat] .topbar,
+html[data-ui-flat] .admin-topbar {
+	background: linear-gradient(145deg, rgba(250, 253, 255, 0.98), rgba(218, 239, 250, 0.96));
+}
+
+/* Frequently rendered cards/controls */
+html[data-ui-flat] .bubble,
+html[data-ui-flat] .preview-card,
+html[data-ui-flat] .composer,
+html[data-ui-flat] .reaction-users,
+html[data-ui-flat] .header-popover,
+html[data-ui-flat] .profile-card,
+html[data-ui-flat] .admin-card,
+html[data-ui-flat] .panel,
+html[data-ui-flat] .kpi,
+html[data-ui-flat] .bg-picker {
+	background: linear-gradient(145deg, rgba(251, 254, 255, 0.98), rgba(222, 241, 250, 0.97));
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.88),
+		0 6px 18px rgba(20, 73, 106, 0.1);
+}
+
+html[data-ui-flat] .pill,
+html[data-ui-flat] .react,
+html[data-ui-flat] .search {
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(221, 240, 250, 0.96));
+}
+
+html[data-ui-flat] .preview-title {
+	background: linear-gradient(180deg, rgba(248, 253, 255, 0.98), rgba(215, 238, 250, 0.96));
+}
+
+/* Overlays keep separation without sampling/blurring the content below. */
+html[data-ui-flat] .popover-overlay,
+html[data-ui-flat] .profile-overlay,
+html[data-ui-flat] .mobile-overlay {
+	background: rgba(4, 18, 31, 0.34);
+}
+
+/* Dark flat surfaces */
+html[data-ui-flat][data-theme='dark'] .app-shell,
+html[data-ui-flat][data-theme='dark'] .admin-shell {
+	background: linear-gradient(145deg, rgba(18, 46, 63, 0.99), rgba(7, 29, 43, 0.99));
+	box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
+html[data-ui-flat][data-theme='dark'] .rail {
+	background: linear-gradient(180deg, rgba(20, 68, 101, 0.99), rgba(11, 44, 67, 0.99));
+}
+
+html[data-ui-flat][data-theme='dark'] .sidebar,
+html[data-ui-flat][data-theme='dark'] .members,
+html[data-ui-flat][data-theme='dark'] .admin-nav {
+	background: linear-gradient(155deg, rgba(25, 54, 72, 0.99), rgba(11, 36, 52, 0.99));
+}
+
+html[data-ui-flat][data-theme='dark'] .main {
+	background: linear-gradient(180deg, rgba(16, 40, 55, 0.99), rgba(8, 30, 44, 0.99));
+}
+
+html[data-ui-flat][data-theme='dark'] .topbar,
+html[data-ui-flat][data-theme='dark'] .admin-topbar {
+	background: linear-gradient(145deg, rgba(29, 58, 76, 0.99), rgba(12, 37, 53, 0.99));
+}
+
+html[data-ui-flat][data-theme='dark'] .bubble,
+html[data-ui-flat][data-theme='dark'] .preview-card,
+html[data-ui-flat][data-theme='dark'] .composer,
+html[data-ui-flat][data-theme='dark'] .reaction-users,
+html[data-ui-flat][data-theme='dark'] .header-popover,
+html[data-ui-flat][data-theme='dark'] .profile-card,
+html[data-ui-flat][data-theme='dark'] .admin-card,
+html[data-ui-flat][data-theme='dark'] .panel,
+html[data-ui-flat][data-theme='dark'] .kpi,
+html[data-ui-flat][data-theme='dark'] .bg-picker {
+	background: linear-gradient(145deg, rgba(29, 58, 76, 0.99), rgba(10, 34, 49, 0.99));
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.08),
+		0 6px 18px rgba(0, 0, 0, 0.22);
+}
+
+html[data-ui-flat][data-theme='dark'] .pill,
+html[data-ui-flat][data-theme='dark'] .react,
+html[data-ui-flat][data-theme='dark'] .search,
+html[data-ui-flat][data-theme='dark'] .preview-title {
+	background: linear-gradient(180deg, rgba(38, 70, 89, 0.99), rgba(19, 49, 66, 0.99));
+}
+
+/* Mobile-specific simplifications beyond the shared flat mode. */
+html[data-ui-mobile] .app-shell,
+html[data-ui-mobile] .admin-shell {
+	box-shadow: none;
+}
+
+html[data-ui-mobile] .message:hover .bubble,
+html[data-ui-mobile] .preview-card:hover,
+html[data-ui-mobile] .pill:hover,
+html[data-ui-mobile] .react:hover {
+	transform: none;
+}
+
+html[data-ui-mobile] .sidebar,
+html[data-ui-mobile] .members {
+	box-shadow: 0 10px 28px rgba(2, 31, 57, 0.24);
+}
