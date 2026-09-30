@@ -1,7 +1,7 @@
 <script lang="ts">
-	// Channels: list + create + edit + permissions. Demo only — no API.
-	import { sampleChannels, sampleRoles } from '$lib/sample';
-	import type { Channel, ChannelPermission, ChannelType, NotificationSettings } from '$lib/types';
+	import * as channelsStore from '$lib/store/channels.svelte';
+	import * as rolesStore from '$lib/store/roles.svelte';
+	import type { Channel, ChannelPermission, ChannelType } from '$lib/types';
 	import Icon from '$lib/components/Icon.svelte';
 	import PermissionTable from '$lib/components/PermissionTable.svelte';
 
@@ -11,69 +11,152 @@
 		voice: 'Voz'
 	};
 
-	// Local copy so the demo can add/remove channels.
-	let channels = $state<Channel[]>([...sampleChannels]);
-	let selectedId = $state<string | null>(channels[0]?.id ?? null);
+	let selectedId = $state<string | null>(null);
 	let creating = $state(false);
 	let newName = $state('');
 	let newType = $state<ChannelType>('text');
+	let newTopic = $state('');
 	let filter = $state('');
+	let editName = $state('');
+	let editTopic = $state('');
+	let channelPerms = $state<Record<string, ChannelPermission>>({});
+	let loadingPerms = $state(false);
+	let saving = $state(false);
+	let error = $state<string | null>(null);
+	let permGeneration = 0;
 
+	const channels = $derived(
+		channelsStore.state.ordered
+			.map((id) => channelsStore.state.byId.get(id))
+			.filter((c): c is Channel => !!c)
+	);
+	const roles = $derived(rolesStore.state.list);
 	const selected = $derived(channels.find((c) => c.id === selectedId) ?? null);
-
 	const visibleChannels = $derived(
-		filter ? channels.filter((c) => c.name.toLowerCase().includes(filter.toLowerCase())) : channels
+		filter
+			? channels.filter((c) => c.name.toLowerCase().includes(filter.toLowerCase()))
+			: channels
 	);
 
-	function select(c: Channel): void {
-		selectedId = c.id;
-		creating = false;
+	$effect(() => {
+		if (!channelsStore.state.loaded && !channelsStore.state.loading) void channelsStore.load();
+	});
+
+	$effect(() => {
+		if (!rolesStore.state.loaded) void rolesStore.load();
+	});
+
+	$effect(() => {
+		if (!selectedId && channels.length) selectedId = channels[0].id;
+	});
+
+	$effect(() => {
+		const channel = selected;
+		if (!channel) return;
+		editName = channel.name;
+		editTopic = channel.topic ?? '';
+		void loadPermissions(channel.id);
+	});
+
+	async function loadPermissions(channelId: string): Promise<void> {
+		const gen = ++permGeneration;
+		loadingPerms = true;
+		try {
+			const entries = await channelsStore.getPermissions(channelId);
+			if (gen !== permGeneration) return;
+			channelPerms = Object.fromEntries(entries.map((e) => [e.role_id, e.permissions]));
+		} catch (err) {
+			if (gen === permGeneration) {
+				error = err instanceof Error ? err.message : 'Erro ao carregar permissões.';
+			}
+		} finally {
+			if (gen === permGeneration) loadingPerms = false;
+		}
 	}
 
-	function addChannel(): void {
-		const name = newName
-			.trim()
-			.toLowerCase()
-			.replace(/[^a-z0-9-]/g, '');
+	function select(channel: Channel): void {
+		selectedId = channel.id;
+		creating = false;
+		error = null;
+	}
+
+	async function addChannel(): Promise<void> {
+		const name = newName.trim();
+		if (!name || saving) return;
+		saving = true;
+		error = null;
+		try {
+			const channel = await channelsStore.create({
+				name,
+				type: newType,
+				topic: newType === 'category' ? null : newTopic.trim() || null
+			});
+			await channelsStore.load();
+			selectedId = channel.id;
+			newName = '';
+			newType = 'text';
+			newTopic = '';
+			creating = false;
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Erro ao criar canal.';
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function saveChannel(): Promise<void> {
+		if (!selected || saving) return;
+		const name = editName.trim();
 		if (!name) return;
-		const channel: Channel = {
-			id: `chan-${name}`,
-			name,
-			type: newType,
-			position: channels.length,
-			permissions: [],
-			created_at: new Date().toISOString(),
-			topic: null,
-			last_message: null,
-			last_read_message: null,
-			last_read_at: null,
-			notification_settings: 'off'
+		saving = true;
+		error = null;
+		try {
+			await channelsStore.update(selected.id, {
+				name,
+				topic: selected.type === 'category' ? null : editTopic.trim() || null
+			});
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Erro ao salvar canal.';
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function removeChannel(id: string): Promise<void> {
+		if (saving) return;
+		saving = true;
+		error = null;
+		try {
+			await channelsStore.remove(id);
+			if (selectedId === id) selectedId = channelsStore.state.ordered[0] ?? null;
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Erro ao remover canal.';
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function togglePermission(
+		roleId: string,
+		key: keyof ChannelPermission,
+		value: boolean
+	): Promise<void> {
+		if (!selected) return;
+		const before = channelPerms[roleId] ?? {
+			read_channel: false,
+			send_messages: false,
+			delete_messages: false,
+			connect_voice: false
 		};
-		channels.push(channel);
-		select(channel);
-		newName = '';
-		newType = 'text';
-		creating = false;
+		const next = { ...before, [key]: value };
+		channelPerms = { ...channelPerms, [roleId]: next };
+		try {
+			await channelsStore.setRolePermissions(selected.id, roleId, next);
+		} catch (err) {
+			channelPerms = { ...channelPerms, [roleId]: before };
+			error = err instanceof Error ? err.message : 'Erro ao atualizar permissão.';
+		}
 	}
-
-	function removeChannel(id: string): void {
-		channels = channels.filter((c) => c.id !== id);
-		if (selectedId === id) selectedId = channels[0]?.id ?? null;
-	}
-
-	const channelPerms = $derived<Record<string, ChannelPermission>>(
-		Object.fromEntries(
-			sampleRoles.map((r) => [
-				r.id,
-				{
-					read_channel: r.permissions.manage_channels ?? false,
-					send_messages: r.permissions.everyone_message ?? false,
-					delete_messages: r.permissions.ban_members ?? false,
-					connect_voice: r.permissions.send_attachment ?? false
-				}
-			])
-		)
-	);
 </script>
 
 <div class="channels-page">
@@ -93,20 +176,22 @@
 		</div>
 	</header>
 
+	{#if error}
+		<div class="admin-error" role="alert">{error}</div>
+	{/if}
+
 	{#if creating}
 		<div class="new-channel">
-			<input
-				class="admin-input"
-				placeholder="nome do canal"
-				bind:value={newName}
-				aria-label="Nome do canal"
-			/>
-			<select class="admin-select" bind:value={newType} aria-label="Tipo do canal">
-				<option class="admin-option" value="text">Texto</option>
-				<option class="admin-option" value="category">Categoria</option>
-				<option class="admin-option" value="voice">Voz</option>
+			<input class="admin-input" placeholder="nome do canal" bind:value={newName} />
+			<select class="admin-select" bind:value={newType}>
+				<option value="text">Texto</option>
+				<option value="category">Categoria</option>
+				<option value="voice">Voz</option>
 			</select>
-			<button class="admin-btn" onclick={addChannel}> Criar </button>
+			{#if newType !== 'category'}
+				<input class="admin-input" placeholder="tópico (opcional)" bind:value={newTopic} />
+			{/if}
+			<button class="admin-btn" onclick={addChannel} disabled={saving}>Criar</button>
 		</div>
 	{/if}
 
@@ -117,28 +202,31 @@
 				Lista
 			</div>
 			<div class="admin-card-body channels-list">
-				{#each visibleChannels as c (c.id)}
-					<div class="channel-row-wrap">
-						<button
-							class="channel-row {selectedId === c.id ? 'selected' : ''}"
-							aria-current={selectedId === c.id ? 'page' : undefined}
-							onclick={() => select(c)}
-						>
-							<div class="channel-row-name">
-								<span class="type-badge {c.type}">{typeLabel[c.type]}</span>
-								{c.name}
-							</div>
-							<span class="channel-row-type">{c.type}</span>
-						</button>
-						<button
-							class="channel-row-del"
-							aria-label={`Remover canal ${c.name}`}
-							onclick={() => removeChannel(c.id)}
-						>
-							<Icon name="trash" variant="light" size={14} />
-						</button>
-					</div>
-				{/each}
+				{#if channelsStore.state.loading && channels.length === 0}
+					<div class="empty">Carregando canais…</div>
+				{:else}
+					{#each visibleChannels as channel (channel.id)}
+						<div class="channel-row-wrap">
+							<button
+								class="channel-row {selectedId === channel.id ? 'selected' : ''}"
+								onclick={() => select(channel)}
+							>
+								<div class="channel-row-name">
+									<span class="type-badge {channel.type}">{typeLabel[channel.type]}</span>
+									{channel.name}
+								</div>
+								<span class="channel-row-type">{channel.position}</span>
+							</button>
+							<button
+								class="channel-row-del"
+								aria-label={`Remover canal ${channel.name}`}
+								onclick={() => void removeChannel(channel.id)}
+							>
+								<Icon name="trash" variant="light" size={14} />
+							</button>
+						</div>
+					{/each}
+				{/if}
 			</div>
 		</div>
 
@@ -149,39 +237,33 @@
 					Editar — {selected.name}
 				</div>
 				<div class="admin-card-body">
+					<div class="admin-field">
+						<label for="ch-name">Nome</label>
+						<input id="ch-name" class="admin-input" bind:value={editName} />
+					</div>
 					{#if selected.type !== 'category'}
 						<div class="admin-field">
 							<label for="ch-topic">Tópico</label>
-							<input
-								id="ch-topic"
-								class="admin-input"
-								value={selected.topic ?? ''}
-								placeholder="Descrição do canal"
-							/>
-						</div>
-						<div class="admin-field">
-							<label for="ch-notif">Notificações</label>
-							<select id="ch-notif" class="admin-select" value={selected.notification_settings}>
-								<option class="admin-option" value="off">Sem notificações</option>
-								<option class="admin-option" value="only_mentions">Somente menções</option>
-								<option class="admin-option" value="all">Todas</option>
-							</select>
-						</div>
-					{:else}
-						<div class="admin-stat">
-							<span>Categoria</span>
-							<strong>{selected.name}</strong>
+							<input id="ch-topic" class="admin-input" bind:value={editTopic} />
 						</div>
 					{/if}
+
+					<button class="admin-btn" onclick={saveChannel} disabled={saving}>Salvar canal</button>
+
 					{#if selected.type !== 'category'}
 						<div class="admin-field permissions-block">
 							<label>Permissões por Role</label>
-							<PermissionTable perms={channelPerms} />
+							{#if loadingPerms}
+								<div class="empty">Carregando permissões…</div>
+							{:else}
+								<PermissionTable perms={channelPerms} {roles} onToggle={togglePermission} />
+							{/if}
 						</div>
 					{/if}
+
 					<div class="admin-stat">
 						<span>Criado</span>
-						<strong>{selected.created_at}</strong>
+						<strong>{new Date(selected.created_at).toLocaleString()}</strong>
 					</div>
 				</div>
 			</div>
@@ -194,169 +276,29 @@
 </div>
 
 <style>
-	.channels-page {
-		padding: 4px 0 8px;
-	}
-	.channels-head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		flex-wrap: wrap;
-		gap: 10px;
-		margin-bottom: 12px;
-	}
-	.channels-head h2 {
-		margin: 0;
-		font-size: 20px;
-	}
-	.channels-actions {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-	}
-	.channels-actions .filter-input {
-		width: 160px;
-	}
-	.new-channel {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		margin-bottom: 12px;
-		flex-wrap: wrap;
-	}
-	.new-channel .admin-input {
-		flex: 1;
-		min-width: 180px;
-	}
-	.new-channel .admin-select {
-		width: 150px;
-	}
-	.channels-list {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		max-height: 440px;
-		overflow-y: auto;
-		scroll-behavior: smooth;
-		scrollbar-width: thin;
-		scrollbar-color: rgba(72, 130, 170, 0.28) transparent;
-	}
-	.channels-list::-webkit-scrollbar {
-		width: 10px;
-	}
-	.channels-list::-webkit-scrollbar-thumb {
-		background: rgba(72, 130, 170, 0.22);
-		border-radius: 999px;
-		border: 3px solid transparent;
-		background-clip: padding-box;
-	}
-	.channel-row-wrap {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		width: 100%;
-	}
-	.channel-row {
-		flex: 1;
-		min-width: 0;
-		display: grid;
-		grid-template-columns: 1fr auto;
-		align-items: center;
-		gap: 8px;
-		padding: 9px 10px;
-		border: none;
-		border-radius: 10px;
-		background: transparent;
-		font: inherit;
-		text-align: left;
-		color: var(--text);
-		cursor: pointer;
-		transition: 0.14s var(--ease);
-	}
-	.channel-row:hover {
-		background: rgba(255, 255, 255, 0.3);
-	}
-	:global([data-theme='dark']) .channel-row:hover {
-		background: rgba(119, 194, 235, 0.085);
-	}
-	.channel-row.selected {
-		background: rgba(100, 196, 250, 0.16);
-		box-shadow: inset 0 0 0 1px rgba(100, 196, 250, 0.4);
-	}
-	.channel-row-name {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		font-weight: 700;
-		font-size: 13px;
-	}
-	.type-badge {
-		font-size: 9px;
-		font-weight: 800;
-		text-transform: uppercase;
-		letter-spacing: 0.03em;
-		padding: 2px 6px;
-		border-radius: 6px;
-		background: rgba(255, 255, 255, 0.4);
-		color: var(--muted);
-	}
-	.type-badge.voice {
-		background: rgba(240, 61, 94, 0.18);
-		color: #f03d5e;
-	}
-	.type-badge.category {
-		background: rgba(239, 248, 252, 0.5);
-	}
-	:global([data-theme='dark']) .type-badge {
-		background: rgba(119, 194, 235, 0.14);
-	}
-	:global([data-theme='dark']) .type-badge.category {
-		background: rgba(119, 194, 235, 0.18);
-	}
-	.channel-row-type {
-		font-size: 10px;
-		color: var(--muted-soft);
-		text-align: right;
-	}
-	.channel-row-del {
-		display: grid;
-		place-items: center;
-		width: 28px;
-		height: 28px;
-		border: none;
-		border-radius: 8px;
-		background: transparent;
-		cursor: pointer;
-		opacity: 0.5;
-		transition: 0.14s var(--ease);
-	}
-	.channel-row-del:hover {
-		opacity: 1;
-		background: rgba(240, 61, 94, 0.14);
-		color: #f03d5e;
-	}
-	.permissions-block {
-		margin-top: 4px;
-	}
-	.permissions-block label {
-		font-size: 12px;
-		font-weight: 700;
-		color: var(--link-muted);
-		margin-bottom: 8px;
-		display: block;
-	}
-	.empty-edit {
-		display: grid;
-		place-items: center;
-		min-height: 220px;
-	}
-	.empty {
-		font-size: 13px;
-		color: var(--muted-soft);
-	}
-	@media (max-width: 900px) {
-		.channels-grid {
-			grid-template-columns: 1fr;
-		}
-	}
+	.channels-page { padding: 4px 0 8px; }
+	.channels-head { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-bottom:12px; }
+	.channels-head h2 { margin:0; font-size:20px; }
+	.channels-actions, .new-channel { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+	.channels-actions .filter-input { width:160px; }
+	.new-channel { margin-bottom:12px; }
+	.new-channel .admin-input { flex:1; min-width:170px; }
+	.new-channel .admin-select { width:140px; }
+	.channels-list { display:flex; flex-direction:column; gap:2px; max-height:460px; overflow-y:auto; }
+	.channel-row-wrap { display:flex; align-items:center; gap:6px; width:100%; }
+	.channel-row { flex:1; min-width:0; display:grid; grid-template-columns:1fr auto; align-items:center; gap:8px; padding:9px 10px; border:0; border-radius:10px; background:transparent; color:var(--text); font:inherit; text-align:left; cursor:pointer; }
+	.channel-row:hover { background:rgba(255,255,255,.3); }
+	.channel-row.selected { background:rgba(100,196,250,.16); box-shadow:inset 0 0 0 1px rgba(100,196,250,.4); }
+	.channel-row-name { display:flex; align-items:center; gap:8px; font-weight:700; font-size:13px; min-width:0; }
+	.channel-row-type { color:var(--muted-soft); font-size:10px; }
+	.type-badge { font-size:9px; font-weight:800; text-transform:uppercase; padding:2px 6px; border-radius:6px; background:rgba(255,255,255,.4); color:var(--muted); }
+	.type-badge.voice { background:rgba(240,61,94,.18); color:#f03d5e; }
+	.channel-row-del { display:grid; place-items:center; width:28px; height:28px; border:0; border-radius:8px; background:transparent; cursor:pointer; opacity:.55; }
+	.channel-row-del:hover { opacity:1; background:rgba(240,61,94,.14); color:#f03d5e; }
+	.permissions-block { margin-top:18px; }
+	.permissions-block > label { display:block; margin-bottom:8px; }
+	.empty-edit { display:grid; place-items:center; min-height:220px; }
+	.empty { color:var(--muted-soft); font-size:13px; }
+	.admin-error { margin-bottom:10px; padding:8px 12px; border-radius:10px; background:rgba(220,40,40,.1); color:#c43a46; font-size:12px; }
+	@media (max-width:900px) { .channels-grid { grid-template-columns:1fr; } }
 </style>
