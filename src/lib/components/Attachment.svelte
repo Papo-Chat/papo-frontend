@@ -1,6 +1,7 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
 	import type { MessageAttachment } from '$lib/types';
-	import { attachmentUrl, attachmentThumbnailUrl } from '$lib/utils/media';
+	import { attachmentUrl, attachmentThumbnailUrl, fetchMediaBlob } from '$lib/utils/media';
 	import { formatBytes, isImageMime } from '$lib/utils/text';
 
 	let { attachment } = $props<{ attachment: MessageAttachment }>();
@@ -15,6 +16,78 @@
 	const fullUrl = $derived(attachmentUrl(attachment.id));
 	const name = attachment.original_file_name || 'anexo';
 	const isImage = isImageMime(attachment.mime_type);
+	const isAudio = attachment.mime_type.startsWith('audio/');
+	const SMALL_AUDIO_MAX = 2 * 1024 * 1024;
+
+	let audioEl: HTMLAudioElement | null = $state(null);
+	let audioSrc = $state('');
+	let audioObjectUrl = '';
+	let audioPlaying = $state(false);
+	let audioCurrent = $state(0);
+	let audioDuration = $state(0);
+	let audioLoading = $state(false);
+
+	function formatAudioTime(value: number): string {
+		if (!Number.isFinite(value) || value < 0) return '0:00';
+		const seconds = Math.floor(value);
+		return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+	}
+
+	function syncAudioTime(): void {
+		if (!audioEl) return;
+		audioCurrent = Number.isFinite(audioEl.currentTime) ? audioEl.currentTime : 0;
+		const duration = audioEl.duration;
+		if (Number.isFinite(duration) && duration > 0) {
+			audioDuration = duration;
+		}
+	}
+
+	function toggleAudio(): void {
+		if (!audioEl) return;
+		if (audioEl.paused) {
+			void audioEl.play();
+		} else {
+			audioEl.pause();
+		}
+	}
+
+	function seekAudio(e: Event): void {
+		if (!audioEl || audioDuration <= 0) return;
+		const value = Number((e.currentTarget as HTMLInputElement).value);
+		audioEl.currentTime = value;
+		audioCurrent = value;
+	}
+
+	$effect(() => {
+		if (!isAudio) return;
+		audioSrc = fullUrl;
+
+		if (attachment.size_bytes <= 0 || attachment.size_bytes > SMALL_AUDIO_MAX) {
+			return;
+		}
+
+		const controller = new AbortController();
+		audioLoading = true;
+		void fetchMediaBlob(fullUrl, controller.signal)
+			.then((blob) => {
+				if (controller.signal.aborted) return;
+				if (audioObjectUrl) URL.revokeObjectURL(audioObjectUrl);
+				audioObjectUrl = URL.createObjectURL(blob);
+				audioSrc = audioObjectUrl;
+			})
+			.catch(() => {
+				if (!controller.signal.aborted) audioSrc = fullUrl;
+			})
+			.finally(() => {
+				if (!controller.signal.aborted) audioLoading = false;
+			});
+
+		return () => controller.abort();
+	});
+
+	onDestroy(() => {
+		if (audioObjectUrl) URL.revokeObjectURL(audioObjectUrl);
+	});
 
 	function openLightbox(): void {
 		lightboxOpen = true;
@@ -83,10 +156,42 @@
 		<video src={fullUrl} controls></video>
 	</div>
 {:else if attachment.mime_type.startsWith('audio/')}
-	<!-- Áudio: player inline. -->
-	<div class="attachment-media">
-		<audio src={fullUrl} controls></audio>
-		<span class="attachment-name">{name}</span>
+	<!-- Áudio: player compacto. Áudios pequenos são baixados inteiros para
+	     blob local, evitando Range/206 e metadados de duração instáveis. -->
+	<div class="attachment-media attachment-audio">
+		<audio
+			bind:this={audioEl}
+			src={audioSrc || fullUrl}
+			preload="metadata"
+			onplay={() => (audioPlaying = true)}
+			onpause={() => (audioPlaying = false)}
+			onended={() => {
+				audioPlaying = false;
+				syncAudioTime();
+			}}
+			onloadedmetadata={syncAudioTime}
+			ondurationchange={syncAudioTime}
+			ontimeupdate={syncAudioTime}
+		></audio>
+		<button class="audio-play" type="button" onclick={toggleAudio} aria-label={audioPlaying ? 'Pausar áudio' : 'Reproduzir áudio'}>
+			<span aria-hidden="true">{audioPlaying ? '❚❚' : '▶'}</span>
+		</button>
+		<input
+			class="audio-progress"
+			type="range"
+			min="0"
+			max={audioDuration > 0 ? audioDuration : 1}
+			step="0.01"
+			value={audioDuration > 0 ? Math.min(audioCurrent, audioDuration) : 0}
+			disabled={audioDuration <= 0}
+			oninput={seekAudio}
+			aria-label="Posição do áudio"
+		/>
+		<span class="audio-time">
+			{formatAudioTime(audioCurrent)}
+			<span class="audio-duration">/ {audioDuration > 0 ? formatAudioTime(audioDuration) : (audioLoading ? '…' : '--:--')}</span>
+		</span>
+		<span class="attachment-name" title={name}>{name}</span>
 	</div>
 {:else}
 	<!-- Arquivo: chip de download. -->
@@ -131,11 +236,68 @@
 		max-width: 100%;
 		margin: 2px 0;
 	}
-	.attachment-media video,
-	.attachment-media audio {
+	.attachment-media video {
 		width: 100%;
 		max-width: 480px;
 		border-radius: 10px;
+	}
+
+	.attachment-audio {
+		display: grid;
+		grid-template-columns: 30px minmax(80px, 180px) auto;
+		align-items: center;
+		gap: 7px;
+		width: fit-content;
+		max-width: min(100%, 360px);
+		padding: 6px 8px;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		background: var(--surface);
+	}
+
+	.attachment-audio audio {
+		display: none;
+	}
+
+	.audio-play {
+		display: grid;
+		place-items: center;
+		width: 30px;
+		height: 30px;
+		padding: 0;
+		border: 0;
+		border-radius: 8px;
+		background: var(--hover);
+		color: var(--text-primary);
+		cursor: pointer;
+		font: inherit;
+		font-size: 11px;
+	}
+
+	.audio-progress {
+		width: 100%;
+		min-width: 80px;
+		accent-color: var(--link);
+	}
+
+	.audio-time {
+		font-variant-numeric: tabular-nums;
+		font-size: 11px;
+		color: var(--text-secondary);
+		white-space: nowrap;
+	}
+
+	.audio-duration {
+		color: var(--muted-soft);
+	}
+
+	.attachment-audio .attachment-name {
+		grid-column: 2 / -1;
+		margin-top: -3px;
+		max-width: 230px;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.attachment-name {
 		font-size: 12px;
