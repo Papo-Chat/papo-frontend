@@ -22,7 +22,9 @@
 	let channelPerms = $state<Record<string, ChannelPermission>>({});
 	let loadingPerms = $state(false);
 	let saving = $state(false);
+	let success = $state('');
 	let error = $state<string | null>(null);
+	let feedbackTimer: ReturnType<typeof setTimeout> | null = null;
 	let permGeneration = 0;
 
 	const channels = $derived(
@@ -85,6 +87,7 @@
 		if (!name || saving) return;
 		saving = true;
 		error = null;
+		success = '';
 		try {
 			const channel = await channelsStore.create({
 				name,
@@ -97,6 +100,9 @@
 			newType = 'text';
 			newTopic = '';
 			creating = false;
+			success = 'Canal criado.';
+			if (feedbackTimer) clearTimeout(feedbackTimer);
+			feedbackTimer = setTimeout(() => (success = ''), 1800);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Erro ao criar canal.';
 		} finally {
@@ -110,11 +116,15 @@
 		if (!name) return;
 		saving = true;
 		error = null;
+		success = '';
 		try {
 			await channelsStore.update(selected.id, {
 				name,
 				topic: selected.type === 'category' ? null : editTopic.trim() || null
 			});
+			success = 'Canal salvo.';
+			if (feedbackTimer) clearTimeout(feedbackTimer);
+			feedbackTimer = setTimeout(() => (success = ''), 1800);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Erro ao salvar canal.';
 		} finally {
@@ -126,9 +136,13 @@
 		if (saving) return;
 		saving = true;
 		error = null;
+		success = '';
 		try {
 			await channelsStore.remove(id);
 			if (selectedId === id) selectedId = channelsStore.state.ordered[0] ?? null;
+			success = 'Canal removido.';
+			if (feedbackTimer) clearTimeout(feedbackTimer);
+			feedbackTimer = setTimeout(() => (success = ''), 1800);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Erro ao remover canal.';
 		} finally {
@@ -143,12 +157,16 @@
 
 		saving = true;
 		error = null;
+		success = '';
 		try {
 			await channelsStore.changePosition(channel.id, {
 				old_position: channel.position,
 				new_position: target.position
 			});
 			selectedId = channel.id;
+			success = 'Ordem dos canais atualizada.';
+			if (feedbackTimer) clearTimeout(feedbackTimer);
+			feedbackTimer = setTimeout(() => (success = ''), 1800);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Erro ao reordenar canal.';
 		} finally {
@@ -198,6 +216,8 @@
 
 	{#if error}
 		<div class="admin-error" role="alert">{error}</div>
+	{:else if success}
+		<div class="admin-success" aria-live="polite">{success}</div>
 	{/if}
 
 	{#if creating}
@@ -343,6 +363,9 @@
 	.permissions-block > label { display:block; margin-bottom:8px; }
 	.empty-edit { display:grid; place-items:center; min-height:220px; }
 	.empty { color:var(--muted-soft); font-size:13px; }
-	.admin-error { margin-bottom:10px; padding:8px 12px; border-radius:10px; background:rgba(220,40,40,.1); color:#c43a46; font-size:12px; }
+	.admin-error,
+	.admin-success { margin-bottom:10px; padding:8px 12px; border-radius:10px; font-size:12px; }
+	.admin-error { background:rgba(220,40,40,.1); color:#c43a46; }
+	.admin-success { background:rgba(36,201,130,.1); color:#199966; }
 	@media (max-width:900px) { .channels-grid { grid-template-columns:1fr; } }
 </style>
