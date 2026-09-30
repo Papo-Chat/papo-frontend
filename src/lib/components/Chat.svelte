@@ -17,7 +17,8 @@
 		lastReadMessageId = null,
 		joinNotice = null,
 		scrollToLatestToken = 0,
-		onUnreadCountChange
+		onUnreadCountChange,
+		onReachLatest
 	} = $props<{
 		messages: MessageWithAttachment[];
 		onReply?: (message: MessageWithAttachment) => void;
@@ -33,6 +34,7 @@
 		joinNotice?: { id: number; name: string } | null;
 		scrollToLatestToken?: number;
 		onUnreadCountChange?: (count: number) => void;
+		onReachLatest?: (message: MessageWithAttachment | null) => void;
 	}>();
 
 	const BOTTOM_THRESHOLD = 24;
@@ -69,7 +71,9 @@
 	}
 
 	function isAtBottom(): boolean {
-		return distanceFromBottom() <= BOTTOM_THRESHOLD;
+		// Bottom of a historical 300-message window is not the real channel
+		// bottom while newer messages are outside the checkpoint.
+		return !hasMoreNewer && distanceFromBottom() <= BOTTOM_THRESHOLD;
 	}
 
 	function scrollToBottom(): void {
@@ -93,9 +97,11 @@
 	}
 
 	function clearUnreadAtBottom(): void {
+		if (hasMoreNewer) return;
 		stickToBottom = true;
 		setUnreadCount(0);
 		visibleLastReadMessageId = null;
+		onReachLatest?.(messages.at(-1) ?? null);
 	}
 
 	function findLastReadDivider(id: string): HTMLElement | null {
