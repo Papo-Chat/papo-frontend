@@ -84,7 +84,7 @@
 					{@const author = usersStore.state.byId.get(n.author_id ?? '')}
 					{#if author}
 						<div
-							class="popover-item"
+							class="popover-item notification-item {!n.read ? 'unread' : ''}"
 							role="button"
 							tabindex={0}
 							onclick={() => openNotification(n)}
@@ -96,7 +96,7 @@
 							}}
 						>
 							<Avatar user={author} size={34} />
-							<div>
+							<div class="notification-main">
 								<div class="meta">
 									<span class="name">{author.nickname || author.username}</span>
 									<span class="time">{formatTime(n.created_at)}</span>
@@ -104,7 +104,7 @@
 										<span class="unread-dot" aria-hidden="true"></span>
 									{/if}
 								</div>
-								<div class="content">{n.message_content}</div>
+								<div class="content notification-content">{n.message_content}</div>
 							</div>
 						</div>
 					{/if}
@@ -129,5 +129,54 @@
 		background: var(--danger);
 		margin-left: 6px;
 		vertical-align: middle;
+	}
+
+	.notifications-popover .popover-body {
+		justify-items: stretch;
+	}
+
+	.notification-item {
+		width: 100%;
+		box-sizing: border-box;
+		align-items: flex-start;
+		cursor: pointer;
+	}
+
+	.notification-main {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.notification-content {
+		display: -webkit-box;
+		overflow: hidden;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		line-height: 1.42;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 3;
+	}
+
+	.notification-item.unread {
+		background: linear-gradient(145deg, rgba(89, 190, 245, 0.18), rgba(57, 143, 213, 0.08));
+		border-color: rgba(72, 168, 228, 0.34);
+		box-shadow: inset 3px 0 0 rgba(10, 132, 255, 0.74);
+	}
+
+	.notification-item:hover,
+	.notification-item:focus-visible {
+		background: rgba(255, 255, 255, 0.3);
+		border-color: rgba(255, 255, 255, 0.44);
+		outline: none;
+	}
+
+	:global([data-theme='dark']) .notification-item.unread {
+		background: linear-gradient(145deg, rgba(50, 153, 220, 0.18), rgba(21, 88, 133, 0.12));
+		border-color: rgba(99, 196, 246, 0.22);
+	}
+
+	:global([data-theme='dark']) .notification-item:hover,
+	:global([data-theme='dark']) .notification-item:focus-visible {
+		background: rgba(119, 194, 235, 0.1);
 	}
 </style>
