@@ -60,7 +60,7 @@
 </script>
 
 <header class="topbar">
-	<button class="chat-icon" on:click={openSidebar} aria-label="Abrir canais" title="Abrir canais">
+	<button class="chat-icon" onclick={openSidebar} aria-label="Abrir canais" title="Abrir canais">
 		<Icon name="list" variant="light" />
 	</button>
 
@@ -70,7 +70,7 @@
 			{#if canManageChannel}
 				<button
 					class="pill channel-admin-btn"
-					on:click={() => goto(`/channels/${channel.id}/admin`)}
+					onclick={() => goto(`/channels/${channel.id}/admin`)}
 					aria-label="Administração do canal"
 					title="Administração do canal"
 				>
@@ -86,7 +86,7 @@
 	<div class="actions">
 		<button
 			class="pill circle header-icon-btn members-btn"
-			on:click={openMembers}
+			onclick={openMembers}
 			aria-label="Abrir membros"
 			title="Abrir membros"
 		>
@@ -95,7 +95,7 @@
 		{#if onSearchOpenChange}
 			<button
 				class="pill circle header-icon-btn"
-				on:click={toggleSearch}
+				onclick={toggleSearch}
 				aria-label="Pesquisar mensagens"
 				title="Pesquisar mensagens"
 			>
@@ -105,7 +105,7 @@
 		<button
 			class="pill circle header-icon-btn"
 			style="position: relative"
-			on:click={openNotifications}
+			onclick={openNotifications}
 			aria-label="Notificações"
 			title="Notificações"
 		>
@@ -116,7 +116,7 @@
 		</button>
 		<button
 			class="pill circle header-icon-btn"
-			on:click={openPins}
+			onclick={openPins}
 			aria-label="Mensagens fixadas"
 			title="Mensagens fixadas"
 		>

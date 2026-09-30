@@ -75,7 +75,7 @@
 		</div>
 	</div>
 
-	<button class="home-link" aria-label="Início" on:click={goHome}>
+	<button class="home-link" aria-label="Início" onclick={goHome}>
 		<span class="icon">
 			<Icon name="house" variant="light" />
 		</span>
@@ -102,7 +102,7 @@
 				<button
 					class="mobile-rail-action"
 					aria-label={s.label}
-					on:click={() => navigateShortcut(s.to)}
+					onclick={() => navigateShortcut(s.to)}
 				>
 					<span class="mobile-rail-icon">
 						<Icon name={s.icon} variant={s.variant} />

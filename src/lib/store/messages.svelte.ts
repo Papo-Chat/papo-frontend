@@ -1047,11 +1047,13 @@ export function getPreview(previewId: string): LinkPreviewWithImage | null {
 	return previewCache.get(previewId) ?? null;
 }
 
-// In-flight fresh loads, keyed by channel: dedupes concurrent callers and
-// lets gotoMessage await the initial page.
+// In-flight explicit fresh loads, keyed by channel (dedupes concurrent
+// refreshes). Awaits the fetch so callers (jump-to-latest / gotoMessage) can
+// scroll after the latest page is in the window.
 const _freshInflight = new SvelteMap<string, Promise<void>>();
 
 // Fresh load: latest 100, anchored at the newest message. Awaits the fetch.
+// Always fetches (no short-circuit) so callers can rely on a real reload.
 async function _freshLoad(channelId: string): Promise<void> {
 	if (!state.channels.has(channelId)) {
 		state.channels.set(channelId, newChannelState());
@@ -1066,13 +1068,8 @@ async function _freshLoad(channelId: string): Promise<void> {
 	await _fetchPage(channelId);
 }
 
-// Idempotent tracked fresh load: resolves once the channel has (or already
-// had) an initial page. Used by load()/setLatest()/ensureLoaded()/gotoMessage.
+// Tracked explicit fresh load (deduped across concurrent callers).
 function _freshLoadTracked(channelId: string): Promise<void> {
-	const ch = state.channels.get(channelId);
-	if (ch && ch.loaded && !ch.loading) {
-		return Promise.resolve();
-	}
 	const existing = _freshInflight.get(channelId);
 	if (existing) {
 		return existing;
@@ -1086,8 +1083,8 @@ function _freshLoadTracked(channelId: string): Promise<void> {
 	return p;
 }
 
+// Fresh load: latest 100, anchored at the newest message (always fetches).
 export function load(channelId: string): void {
-	// Fire-and-forget wrapper for the page effect.
 	_freshLoadTracked(channelId).catch(() => {});
 }
 
@@ -1095,6 +1092,10 @@ export function load(channelId: string): void {
 // already has a page in flight or already loaded, so an effect re-run cannot
 // re-trigger a fresh fetch. `load()`/`setLatest()` stay for explicit refreshes.
 export function ensureLoaded(channelId: string): Promise<void> {
+	const ch = state.channels.get(channelId);
+	if (ch && ch.loaded && !ch.loading) {
+		return Promise.resolve();
+	}
 	return _freshLoadTracked(channelId).catch(() => {});
 }
 

@@ -11,7 +11,7 @@
 	aria-pressed={$theme === 'dark'}
 	title="Alternar tema"
 	aria-label="Alternar tema claro e escuro"
-	on:click={toggle}
+	onclick={toggle}
 >
 	<span class="theme-sun">☀</span>
 	<span class="theme-knob"></span>

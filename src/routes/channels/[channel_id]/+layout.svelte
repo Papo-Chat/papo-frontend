@@ -27,14 +27,14 @@
 		<button
 			class="mobile-overlay"
 			aria-hidden="true"
-			on:click={() => (state.channelsDrawerOpen = false)}
+			onclick={() => (state.channelsDrawerOpen = false)}
 		></button>
 	{/if}
 	{#if state.membersDrawerOpen}
 		<button
 			class="mobile-overlay"
 			aria-hidden="true"
-			on:click={() => (state.membersDrawerOpen = false)}
+			onclick={() => (state.membersDrawerOpen = false)}
 		></button>
 	{/if}
 

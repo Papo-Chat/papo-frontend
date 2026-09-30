@@ -24,7 +24,7 @@
 		class="rail-btn"
 		title="Administração"
 		aria-label="Administração"
-		on:click={() => goto('/admin/server')}
+		onclick={() => goto('/admin/server')}
 	>
 		<Icon name="shield-check" variant="light" />
 	</button>
@@ -35,7 +35,7 @@
 		class="rail-btn muted"
 		title="Configurações"
 		aria-label="Configurações"
-		on:click={() => goto('/user/settings')}
+		onclick={() => goto('/user/settings')}
 	>
 		<Icon name="gear" variant="light" />
 	</button>

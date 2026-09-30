@@ -47,7 +47,7 @@
 			<div class="theme-cards">
 				<button
 					class="theme-card {$theme === 'light' ? 'selected' : ''}"
-					on:click={() => setTheme('light')}
+					onclick={() => setTheme('light')}
 					aria-pressed={$theme === 'light'}
 					aria-label="Usar tema claro"
 				>
@@ -56,7 +56,7 @@
 				</button>
 				<button
 					class="theme-card {$theme === 'dark' ? 'selected' : ''}"
-					on:click={() => setTheme('dark')}
+					onclick={() => setTheme('dark')}
 					aria-pressed={$theme === 'dark'}
 					aria-label="Usar tema escuro"
 				>
@@ -74,7 +74,7 @@
 					onchange={(e) => setFlatUi((e.currentTarget as HTMLInputElement).checked)}
 				/>
 				<span class="performance-copy">
-					<strong>Interface leve</strong>
+					<strong>Modo Batata</strong>
 					<span>
 						{$mobileFlatUi
 							? 'Ativa automaticamente no celular.'
@@ -88,7 +88,7 @@
 				{#each deviceImages as img (img.id)}
 					<button
 						class="bg-card {$backgroundId === img.id ? 'selected' : ''}"
-						on:click={() => setBackground(img.id)}
+						onclick={() => setBackground(img.id)}
 						style="background: {img.background || defaultBackground}"
 						aria-label={img.label}
 					>
@@ -97,7 +97,7 @@
 				{/each}
 				<button
 					class="bg-card bg-custom desktop-image-background {$backgroundId === CUSTOM_BG_ID ? 'selected' : ''}"
-					on:click={pickUserImage}
+					onclick={pickUserImage}
 					title="Enviar imagem de fundo (PNG/JPEG, até 2MB)"
 					aria-label="Enviar imagem de fundo"
 				>
@@ -118,7 +118,7 @@
 				type="file"
 				accept="image/png,image/jpeg"
 				bind:this={customInput}
-				on:change={onCustomSelect}
+				onchange={onCustomSelect}
 				aria-label="Escolher imagem de fundo"
 				hidden
 			/>

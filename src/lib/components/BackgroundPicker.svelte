@@ -60,20 +60,20 @@
 	});
 </script>
 
-<button class="bg-control" on:click={toggleOpen} aria-label="Mudar fundo" title="Mudar fundo">
+<button class="bg-control" onclick={toggleOpen} aria-label="Mudar fundo" title="Mudar fundo">
 </button>
 
 {#if open}
 	<div class="bg-picker">
 		<div class="bg-picker-header">
 			<h3>Fundo</h3>
-			<button class="bg-picker-close" on:click={close} aria-label="Fechar">×</button>
+			<button class="bg-picker-close" onclick={close} aria-label="Fechar">×</button>
 		</div>
 		<div class="bg-picker-grid">
 			{#each deviceImages as img (img.id)}
 				<button
 					class="bg-option {$backgroundId === img.id ? 'selected' : ''}"
-					on:click={() => {
+					onclick={() => {
 						setBackground(img.id);
 						close();
 					}}
@@ -85,7 +85,7 @@
 			{/each}
 			<button
 				class="bg-option bg-custom {$backgroundId === CUSTOM_BG_ID ? 'selected' : ''}"
-				on:click={pickUserImage}
+				onclick={pickUserImage}
 				title="Enviar imagem de fundo (PNG/JPEG, até 2MB)"
 				aria-label="Enviar imagem de fundo"
 			>
@@ -107,7 +107,7 @@
 			type="file"
 			accept="image/png,image/jpeg"
 			bind:this={customInput}
-			on:change={onCustomSelect}
+			onchange={onCustomSelect}
 			aria-label="Escolher imagem de fundo"
 			hidden
 		/>
