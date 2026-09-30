@@ -132,8 +132,7 @@
 				files,
 				onProgress
 			})
-			.then((msg) => {
-				messagesStore.applySendResponse(channel.id, msg);
+			.then(() => {
 				replyTo = null;
 			});
 	}
