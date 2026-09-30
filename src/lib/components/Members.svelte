@@ -1,12 +1,23 @@
 <script lang="ts">
 	import { state as uiState } from '$lib/store/ui.svelte';
+	import { state as sessionState, setStatus } from '$lib/store/session.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
 	import type { UserSummary } from '$lib/types';
 	import MemberRow from './MemberRow.svelte';
 	import MobilePanelHead from './MobilePanelHead.svelte';
 
 	let searchQuery = $state('');
+	let statusSaving = $state(false);
+	let statusError: string | null = $state(null);
 	const drawerOpen = $derived(uiState.membersDrawerOpen);
+	const myStatus = $derived(sessionState.status ?? 'online');
+	async function changeStatus(status: 'online' | 'away' | 'busy'): Promise<void> {
+		if (statusSaving || status === myStatus) return;
+		statusSaving = true; statusError = null;
+		try { await setStatus(status === 'online' ? null : status); }
+		catch (err) { statusError = err instanceof Error ? err.message : 'Falha ao alterar status.'; }
+		finally { statusSaving = false; }
+	}
 
 	// Usuários reais: summaries do servidor + presença viva (WS) sobrepondo
 	// o status persistido.
@@ -42,6 +53,15 @@
 
 <aside class="members {drawerOpen ? 'open' : ''}">
 	<MobilePanelHead icon="users-three" title="Membros" onClose={closeDrawer} />
+	<div class="status-picker" aria-label="Seu status">
+		<span>Seu status</span>
+		<div class="status-actions">
+			<button class:active={myStatus === 'online'} disabled={statusSaving} onclick={() => changeStatus('online')}>Online</button>
+			<button class:active={myStatus === 'away'} disabled={statusSaving} onclick={() => changeStatus('away')}>Ausente</button>
+			<button class:active={myStatus === 'busy'} disabled={statusSaving} onclick={() => changeStatus('busy')}>Ocupado</button>
+		</div>
+		{#if statusError}<small>{statusError}</small>{/if}
+	</div>
 
 	<div class="search">
 		<i class="ph-light ph-magnifying-glass" aria-hidden="true"></i>
@@ -66,3 +86,7 @@
 		{/each}
 	{/if}
 </aside>
+
+<style>
+.status-picker{display:flex;flex-direction:column;gap:6px;padding:8px 10px 4px;color:var(--muted-soft);font-size:11px;font-weight:700}.status-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}.status-actions button{padding:6px 4px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--muted-soft);font:inherit;cursor:pointer}.status-actions button.active{background:var(--hover);color:var(--text-primary)}.status-picker small{color:var(--danger)}
+</style>
