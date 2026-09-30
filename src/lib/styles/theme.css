@@ -198,3 +198,33 @@ html.has-user-image body {
 		scroll-behavior: auto !important;
 	}
 }
+
+
+/* LIGHTWEIGHT BACKGROUND
+   Avoid large animated blurred layers on mobile / flat mode. */
+html[data-ui-flat] body::before,
+html[data-ui-flat] body::after {
+	display: none;
+	filter: none;
+	animation: none;
+}
+
+html[data-ui-flat] body {
+	background:
+		linear-gradient(135deg, rgba(8, 91, 161, 0.16), transparent 42%),
+		linear-gradient(225deg, rgba(19, 161, 126, 0.13), transparent 46%),
+		var(--user-background);
+}
+
+html[data-ui-flat][data-theme='dark'] body {
+	background:
+		linear-gradient(135deg, rgba(7, 74, 128, 0.2), transparent 42%),
+		linear-gradient(225deg, rgba(13, 112, 89, 0.16), transparent 46%),
+		var(--user-background);
+}
+
+/* Mobile never renders a user-uploaded image, even if one is stored from a
+   desktop session on the same device/browser profile. */
+html[data-ui-mobile].has-user-image body {
+	background-size: auto;
+}
