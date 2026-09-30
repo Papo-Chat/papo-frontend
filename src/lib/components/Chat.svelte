@@ -52,6 +52,7 @@
 	let suppressScrollHandler = $state(true);
 	let pendingBottomFrame = 0;
 	let touchY: number | null = null;
+	let lastScrollTop = 0;
 
 	let animatedMessageId = $state<string | null>(null);
 	let lastMessageId = $state<string | null>(null);
@@ -193,6 +194,7 @@
 			if (stickToBottom) scrollToBottom();
 			initialScrollDone = true;
 			suppressScrollHandler = false;
+			lastScrollTop = listEl?.scrollTop ?? 0;
 			lastMessageId = messages.at(-1)?.id ?? null;
 		} finally {
 			initializingPosition = false;
@@ -249,17 +251,26 @@
 	function handleScroll(): void {
 		if (!listEl || !initialScrollDone || suppressScrollHandler) return;
 
-		const atBottom = isAtBottom();
-		const wasAtBottom = stickToBottom;
+		const currentScrollTop = listEl.scrollTop;
+		const movedUp = currentScrollTop < lastScrollTop - 0.5;
+		const movedDown = currentScrollTop > lastScrollTop + 0.5;
+		lastScrollTop = currentScrollTop;
 
-		if (!atBottom && wasAtBottom) {
+		if (movedUp) {
 			stopFollowingBottom();
-		} else {
-			stickToBottom = atBottom;
 		}
 
-		// The NEW divider is consumed only when the user really reaches the end.
-		if (!wasAtBottom && atBottom) {
+		const atBottom = isAtBottom();
+
+		if (!atBottom) {
+			stickToBottom = false;
+			return;
+		}
+
+		// Re-enter follow mode only by actually scrolling down to the real
+		// bottom (or via an explicit jumpToLatest). Merely remaining inside the
+		// bottom threshold after an upward gesture must not snap back.
+		if (!stickToBottom && movedDown) {
 			clearUnreadAtBottom();
 		}
 	}
