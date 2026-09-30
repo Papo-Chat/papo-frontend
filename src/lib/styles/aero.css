@@ -490,10 +490,7 @@
 	font-weight: 700;
 	line-height: 1;
 }
-/* Members button is only needed on mobile/desktop-laptop where the members
- * column is hidden (<= 1220px). On the full layout the column is always
- * visible, so the button is dropped. Match `.pill.circle` specificity so it
- * overrides the circle pill's `display: grid`. */
+/* Members button is shown exactly while the fixed members column is collapsed. */
 .pill.circle.members-btn {
 	display: none;
 }
@@ -1885,6 +1882,63 @@ button.name:focus-visible {
 	}
 }
 
+
+/* Members becomes a drawer whenever the fixed members column is collapsed.
+ * This applies to desktop/laptop/tablet/mobile, not only the mobile breakpoint. */
+@media (max-width: 1220px) {
+	.members {
+		display: block !important;
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		bottom: 8px;
+		left: auto;
+		width: min(84vw, 320px);
+		z-index: 90;
+		overflow-y: auto;
+		filter: none !important;
+		backdrop-filter: none !important;
+		-webkit-backdrop-filter: none !important;
+		border: 1px solid rgba(255, 255, 255, 0.72);
+		border-radius: 24px;
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.96),
+			0 28px 70px rgba(2, 31, 57, 0.3),
+			0 8px 22px rgba(7, 64, 103, 0.12);
+		opacity: 0;
+		transform: translate3d(8px, 0, 0) scale(0.985);
+		pointer-events: none;
+	}
+
+	.members.open {
+		transform: translate3d(0, 0, 0) scale(1);
+		opacity: 1;
+		pointer-events: auto;
+		animation: drawerRightFinal 0.34s var(--ease);
+	}
+
+	.members * {
+		filter: none !important;
+	}
+
+	.members .mobile-panel-head {
+		display: flex !important;
+	}
+
+	.mobile-overlay.members-overlay {
+		display: block;
+		position: absolute;
+		inset: 0;
+		z-index: 80;
+		border: 0;
+		padding: 0;
+		background: rgba(4, 18, 31, 0.12);
+		backdrop-filter: blur(13px) saturate(120%);
+		-webkit-backdrop-filter: blur(13px) saturate(120%);
+		cursor: default;
+	}
+}
+
 /* < 700px: mobile + drawers */
 @media (max-width: 700px) {
 	html,
@@ -1959,8 +2013,7 @@ button.name:focus-visible {
 	}
 
 	/* drawers: absolute inside the shell, sharp (no blur on the drawer) */
-	.sidebar,
-	.members {
+	.sidebar {
 		display: block !important;
 		position: absolute;
 		top: 8px;
@@ -1991,14 +2044,7 @@ button.name:focus-visible {
 		border-radius: 24px;
 		transform: translate3d(-8px, 0, 0) scale(0.985);
 	}
-	.members {
-		right: 8px;
-		left: auto;
-		border-radius: 24px;
-		transform: translate3d(8px, 0, 0) scale(0.985);
-	}
-	.sidebar.open,
-	.members.open {
+	.sidebar.open {
 		transform: translate3d(0, 0, 0) scale(1);
 		opacity: 1;
 		pointer-events: auto;
@@ -2006,14 +2052,10 @@ button.name:focus-visible {
 	.sidebar.open {
 		animation: drawerLeftFinal 0.34s var(--ease);
 	}
-	.members.open {
-		animation: drawerRightFinal 0.34s var(--ease);
-	}
-	.sidebar *,
-	.members * {
+	.sidebar * {
 		filter: none !important;
 	}
-	.mobile-panel-head {
+	.sidebar .mobile-panel-head {
 		display: flex !important;
 	}
 	.mobile-rail-shortcuts {
@@ -3244,7 +3286,7 @@ button.name:focus-visible {
 	display: none;
 }
 @media (max-width: 700px) {
-	.mobile-overlay {
+	.mobile-overlay.channels-overlay {
 		display: block;
 		position: absolute;
 		inset: 0;
