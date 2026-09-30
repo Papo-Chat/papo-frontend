@@ -85,22 +85,49 @@
 		usersStore.setBanState(u.id, !isBanned(u.id));
 	}
 
-	function assignRole(userId: string, roleId: string): void {
-		const u = usersStore.state.byId.get(userId);
+	async function assignRole(userId: string, roleId: string): Promise<void> {
 		const role = rolesStore.state.byId.get(roleId);
-		if (!u || !role || u.roles.some((r) => r.id === roleId)) return;
-		// Optimistic: the WS role_add/role_remove events only invalidate the
-		// lazy profile cache, so the list UI is updated here and reconciled
-		// on the next list load.
-		u.roles = [...u.roles, role];
-		rolesStore.assign(userId, roleId);
+		const current = usersStore.state.list.items.find((u) => u.id === userId);
+		if (!current || !role || current.roles.some((r) => r.id === roleId)) return;
+
+		const before = current.roles;
+		const next = { ...current, roles: [...before, role] };
+		usersStore.state.list.items = usersStore.state.list.items.map((u) =>
+			u.id === userId ? next : u
+		);
+		usersStore.state.byId.set(userId, next);
+
+		try {
+			await rolesStore.assign(userId, roleId);
+		} catch {
+			const rollback = { ...next, roles: before };
+			usersStore.state.list.items = usersStore.state.list.items.map((u) =>
+				u.id === userId ? rollback : u
+			);
+			usersStore.state.byId.set(userId, rollback);
+		}
 	}
 
-	function removeRole(userId: string, roleId: string): void {
-		const u = usersStore.state.byId.get(userId);
-		if (!u) return;
-		u.roles = u.roles.filter((r) => r.id !== roleId);
-		rolesStore.unassign(userId, roleId);
+	async function removeRole(userId: string, roleId: string): Promise<void> {
+		const current = usersStore.state.list.items.find((u) => u.id === userId);
+		if (!current) return;
+
+		const before = current.roles;
+		const next = { ...current, roles: before.filter((r) => r.id !== roleId) };
+		usersStore.state.list.items = usersStore.state.list.items.map((u) =>
+			u.id === userId ? next : u
+		);
+		usersStore.state.byId.set(userId, next);
+
+		try {
+			await rolesStore.unassign(userId, roleId);
+		} catch {
+			const rollback = { ...next, roles: before };
+			usersStore.state.list.items = usersStore.state.list.items.map((u) =>
+				u.id === userId ? rollback : u
+			);
+			usersStore.state.byId.set(userId, rollback);
+		}
 	}
 	function statusDotClass(id: string): string {
 		const s = usersStore.effectiveStatus(id);
