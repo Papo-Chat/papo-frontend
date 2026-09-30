@@ -50,15 +50,21 @@
 		return (found?.users ?? []).slice(0, count).map((u) => {
 			const s = usersStore.state.byId.get(u.user_id) ?? null;
 
+			if (s) {
+				return s;
+			}
+
+			// MessageReactionUser.id is the reaction row id, not the user id.
+			// Avatar/profile loading must always use user_id.
 			return {
-				id: u.id,
-				username: s?.username ?? '',
-				nickname: s?.nickname ?? null,
+				id: u.user_id,
+				username: '',
+				nickname: null,
 				status: null,
 				status_message: null,
 				typing: null,
 				status_updated_at: null,
-				created_at: '',
+				created_at: u.created_at,
 				roles: []
 			};
 		});
