@@ -681,10 +681,10 @@ export function mergePreview(
 			fetched_at: preview.fetched_at
 		};
 
-		const exists = msg.previews.some((existing) => normalizedExisting.id === preview.id);
+		const exists = msg.previews.some((existing) => existing.id === preview.id);
 
 		const nextPreviews = exists
-			? msg.previews.map((existing) => (normalizedExisting.id === preview.id ? p : existing))
+			? msg.previews.map((existing) => (existing.id === preview.id ? p : existing))
 			: [...msg.previews, p];
 
 		previewCache.set(preview.id, preview);
