@@ -167,6 +167,11 @@
 	onpointerenter={onEnter}
 	onpointerleave={onLeave}
 >
+	{#if isPinned}
+		<span class="message-pin-indicator" title="Mensagem fixada" aria-label="Mensagem fixada">
+			<Icon name="push-pin" variant="duotone" size={13} />
+		</span>
+	{/if}
 		<Avatar
 			user={author}
 			size={39}
@@ -346,6 +351,28 @@
 		border-radius: 10px;
 		position: relative;
 	}
+	.message-pin-indicator {
+		position: absolute;
+		top: 5px;
+		right: 7px;
+		z-index: 3;
+		display: grid;
+		place-items: center;
+		width: 23px;
+		height: 23px;
+		border-radius: 8px;
+		color: #a87500;
+		background: rgba(231, 168, 11, 0.13);
+		border: 1px solid rgba(231, 168, 11, 0.24);
+		pointer-events: none;
+	}
+
+	:global([data-theme='dark']) .message-pin-indicator {
+		color: #ffd66d;
+		background: rgba(231, 168, 11, 0.15);
+		border-color: rgba(255, 214, 109, 0.18);
+	}
+
 	.edit-input {
 		font: inherit;
 		color: var(--text-primary);
