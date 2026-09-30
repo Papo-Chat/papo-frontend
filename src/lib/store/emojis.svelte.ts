@@ -66,26 +66,29 @@ export function loadMore(): void {
 	});
 }
 
-export function create(req: { name: string; format: string; image_blob: string }): void {
+export async function create(req: {
+	name: string;
+	format: string;
+	image_blob: string;
+}): Promise<Emoji> {
 	const epoch = currentSessionEpoch();
-	api.emojis.create(req).then((e) => {
-		if (!isCurrentSessionEpoch(epoch)) {
-			throw new Error('stale session');
-		}
-		state.byId.set(e.id, e);
-		state.list = [...state.list, e];
-	});
+	const emoji = await api.emojis.create(req);
+	if (!isCurrentSessionEpoch(epoch)) {
+		throw new Error('stale session');
+	}
+	state.byId.set(emoji.id, emoji);
+	state.list = [...state.list, emoji];
+	return emoji;
 }
 
-export function remove(id: string): void {
+export async function remove(id: string): Promise<void> {
 	const epoch = currentSessionEpoch();
-	api.emojis.remove(id).then(() => {
-		if (!isCurrentSessionEpoch(epoch)) {
-			throw new Error('stale session');
-		}
-		state.byId.delete(id);
-		state.list = state.list.filter((e) => e.id !== id);
-	});
+	await api.emojis.remove(id);
+	if (!isCurrentSessionEpoch(epoch)) {
+		throw new Error('stale session');
+	}
+	state.byId.delete(id);
+	state.list = state.list.filter((e) => e.id !== id);
 }
 
 // base64 → objectURL (cached).
