@@ -55,6 +55,44 @@
 			.filter(Boolean)
 			.join(';')
 	);
+
+	let avatarEl: HTMLElement | null = $state(null);
+
+	// Keep heavy profiles hot only for avatars that are visible or close to
+	// becoming visible. The store keeps released profiles in a bounded LRU.
+	$effect(() => {
+		const id = user?.id;
+		const el = avatarEl;
+
+		if (!id || !el) return;
+
+		let retained = false;
+		const setRetained = (next: boolean) => {
+			if (next === retained) return;
+			retained = next;
+			if (next) usersStore.retainProfile(id);
+			else usersStore.releaseProfile(id);
+		};
+
+		if (typeof IntersectionObserver === 'undefined') {
+			setRetained(true);
+			return () => setRetained(false);
+		}
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				setRetained(entries.some((entry) => entry.isIntersecting));
+			},
+			{ rootMargin: '300px 0px' }
+		);
+
+		observer.observe(el);
+
+		return () => {
+			observer.disconnect();
+			setRetained(false);
+		};
+	});
 </script>
 
 {#snippet content()}
@@ -69,6 +107,7 @@
 
 {#if onClick}
 	<button
+		bind:this={avatarEl}
 		type="button"
 		class="avatar"
 		aria-label={ariaLabel ?? `Abrir perfil de ${name}`}
@@ -78,7 +117,7 @@
 		{@render content()}
 	</button>
 {:else}
-	<span class="avatar" style={ringStyle}>
+	<span bind:this={avatarEl} class="avatar" style={ringStyle}>
 		{@render content()}
 	</span>
 {/if}
