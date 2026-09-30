@@ -5,7 +5,6 @@
 
 	import * as channelsStore from '$lib/store/channels.svelte';
 	import * as messagesStore from '$lib/store/messages.svelte';
-	import * as voiceStore from '$lib/store/voice.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
 
 	import { typingUsers } from '$lib/store/users.svelte';
@@ -87,26 +86,6 @@
 		});
 	});
 
-	// Carrega perfis dos usuários visíveis.
-	$effect(() => {
-		const seen = new Set<string>();
-
-		for (const m of messages) {
-			if (m.author_id) {
-				seen.add(m.author_id);
-			}
-		}
-
-		if (channel?.type === 'voice') {
-			for (const member of voiceStore.state.members) {
-				if (member.user_id) {
-					seen.add(member.user_id);
-				}
-			}
-		}
-
-		void usersStore.ensureProfiles([...seen]);
-	});
 
 	// Consome scroll target global: load the message into the window (paging
 	// towards older if it isn't visible yet), then scroll + highlight.

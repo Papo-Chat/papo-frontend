@@ -13,6 +13,18 @@ const TYPING_TTL = 5000; // ms
 
 const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+const PROFILE_CACHE_TARGET = 75;
+const PROFILE_CACHE_MAX = 120;
+
+// Profile cache metadata stays outside Svelte state: it is eviction/request
+// bookkeeping, not UI state.
+const profileLastUsed = new Map<string, number>();
+const retainedProfileCounts = new Map<string, number>();
+const profileInFlight = new Map<string, Promise<UserProfile | null>>();
+const profileLoadQueue = new Set<string>();
+let profileLoadFlushQueued = false;
+let profileTouchSeq = 0;
+
 function typingTimerKey(channelId: string, userId: string): string {
     return `${channelId}:${userId}`;
 }
@@ -47,6 +59,90 @@ export const state = $state({
         loadGeneration: 0
     }
 });
+
+function touchProfile(id: string): void {
+    profileLastUsed.set(id, (profileTouchSeq += 1));
+}
+
+function profileIsRetained(id: string): boolean {
+    return (retainedProfileCounts.get(id) ?? 0) > 0;
+}
+
+function cacheProfile(profile: UserProfile): void {
+    state.profiles.set(profile.id, profile);
+    touchProfile(profile.id);
+}
+
+function invalidateProfile(id: string): void {
+    state.profiles.delete(id);
+    profileLastUsed.delete(id);
+}
+
+function evictProfiles(): void {
+    if (state.profiles.size <= PROFILE_CACHE_MAX) {
+        return;
+    }
+
+    const candidates = [...state.profiles.keys()]
+        .filter((id) => !profileIsRetained(id))
+        .sort((a, b) => (profileLastUsed.get(a) ?? 0) - (profileLastUsed.get(b) ?? 0));
+
+    for (const id of candidates) {
+        if (state.profiles.size <= PROFILE_CACHE_TARGET) {
+            break;
+        }
+        invalidateProfile(id);
+    }
+}
+
+function scheduleProfileLoad(id: string): void {
+    if (!id || state.profiles.has(id) || profileInFlight.has(id)) {
+        return;
+    }
+
+    profileLoadQueue.add(id);
+    if (profileLoadFlushQueued) {
+        return;
+    }
+
+    profileLoadFlushQueued = true;
+    queueMicrotask(() => {
+        profileLoadFlushQueued = false;
+        const ids = [...profileLoadQueue];
+        profileLoadQueue.clear();
+        if (ids.length === 0) {
+            return;
+        }
+        void ensureProfiles(ids).catch((err) => {
+            console.error('falha ao carregar perfis visíveis:', err);
+        });
+    });
+}
+
+// Avatars retain profiles only while they are visible/near-visible. Released
+// profiles stay warm until the cache crosses PROFILE_CACHE_MAX.
+export function retainProfile(id: string): void {
+    if (!id) {
+        return;
+    }
+
+    retainedProfileCounts.set(id, (retainedProfileCounts.get(id) ?? 0) + 1);
+    touchProfile(id);
+
+    if (!state.profiles.has(id)) {
+        scheduleProfileLoad(id);
+    }
+}
+
+export function releaseProfile(id: string): void {
+    const count = retainedProfileCounts.get(id) ?? 0;
+    if (count <= 1) {
+        retainedProfileCounts.delete(id);
+    } else {
+        retainedProfileCounts.set(id, count - 1);
+    }
+    evictProfiles();
+}
 
 // ── list (keyset, 100/page) ─────────────────────────────
 
@@ -125,7 +221,7 @@ export function seedMe(me: {
     state.byId.set(me.id, summary);
 }
 
-// ── profiles (lazy) ─────────────────────────────────────
+// ── profiles (lazy + bounded hot cache) ──────────────────
 
 export function getProfile(id: string): UserProfile | null {
     return state.profiles.get(id) ?? null;
@@ -147,49 +243,104 @@ function summaryFromProfile(p: UserProfile): UserSummary {
     };
 }
 
+function trackProfileRequest(id: string, request: Promise<UserProfile | null>): void {
+    profileInFlight.set(id, request);
+    request.then(
+        () => {
+            if (profileInFlight.get(id) === request) {
+                profileInFlight.delete(id);
+            }
+        },
+        () => {
+            if (profileInFlight.get(id) === request) {
+                profileInFlight.delete(id);
+            }
+        }
+    );
+}
+
 export async function ensureProfile(id: string): Promise<UserProfile> {
     const cached = state.profiles.get(id);
     if (cached) {
+        touchProfile(id);
         return cached;
     }
-    const epoch = currentSessionEpoch();
-    const profile = await api.users.profile(id);
-    if (!isCurrentSessionEpoch(epoch)) {
-        throw new Error('stale session');
-    }
-    state.profiles.set(id, profile);
-    // Seed the summary even when the user is unknown — a new author / a
-    // profile fetched directly must still appear in the summaries map.
-    state.byId.set(id, summaryFromProfile(profile));
-    return profile;
-}
 
-export async function ensureProfiles(ids: string[]): Promise<UserProfile[]> {
-    // Callers pass "all visible users"; only the ids missing from the profile
-    // cache actually hit the network. Re-runs with everything cached are a
-    // no-op (no fetch).
-    const missing = [...new Set(ids)].filter((id) => id !== '' && !state.profiles.has(id));
-    const out: UserProfile[] = [];
-    if (missing.length === 0) {
-        return out;
+    const pending = profileInFlight.get(id);
+    if (pending) {
+        const profile = await pending;
+        if (profile) {
+            touchProfile(id);
+            return profile;
+        }
     }
-    // Chunk ≤ 50 (server limit).
-    for (let i = 0; i < missing.length; i += 50) {
-        const chunk = missing.slice(i, i + 50);
-        const epoch = currentSessionEpoch();
-        const res = await api.users.profileBatch(chunk);
+
+    const epoch = currentSessionEpoch();
+    const request = api.users.profile(id).then((profile) => {
         if (!isCurrentSessionEpoch(epoch)) {
             throw new Error('stale session');
         }
-        for (const p of res.profiles) {
-            state.profiles.set(p.id, p);
-            // Seed the summary so byId-based renderers (message authors,
-            // member rows, …) show name/roles/avatar without another fetch.
-            state.byId.set(p.id, summaryFromProfile(p));
-            out.push(p);
+        cacheProfile(profile);
+        // Seed the summary even when the user is unknown — a new author / a
+        // profile fetched directly must still appear in the summaries map.
+        state.byId.set(id, summaryFromProfile(profile));
+        evictProfiles();
+        return profile;
+    });
+
+    trackProfileRequest(id, request);
+    return request;
+}
+
+export async function ensureProfiles(ids: string[]): Promise<UserProfile[]> {
+    const unique = [...new Set(ids)].filter((id) => id !== '');
+    for (const id of unique) {
+        touchProfile(id);
+    }
+
+    const waits = new Set<Promise<UserProfile | null>>();
+    for (const id of unique) {
+        const pending = profileInFlight.get(id);
+        if (pending) {
+            waits.add(pending);
         }
     }
-    return out;
+
+    const missing = unique.filter((id) => !state.profiles.has(id) && !profileInFlight.has(id));
+
+    // Chunk ≤ 50 (server limit). A single promise is registered per id so a
+    // simultaneous ensureProfile/ensureProfiles call reuses the same request.
+    for (let i = 0; i < missing.length; i += 50) {
+        const chunk = missing.slice(i, i + 50);
+        const epoch = currentSessionEpoch();
+
+        const batch = api.users.profileBatch(chunk).then((res) => {
+            if (!isCurrentSessionEpoch(epoch)) {
+                throw new Error('stale session');
+            }
+            for (const p of res.profiles) {
+                cacheProfile(p);
+                state.byId.set(p.id, summaryFromProfile(p));
+            }
+        });
+
+        for (const id of chunk) {
+            const request = batch.then(() => state.profiles.get(id) ?? null);
+            trackProfileRequest(id, request);
+            waits.add(request);
+        }
+
+        await batch;
+    }
+
+    if (waits.size > 0) {
+        await Promise.all(waits);
+    }
+
+    evictProfiles();
+    return unique
+        .map((id) => state.profiles.get(id) ?? null)
+        .filter((profile): profile is UserProfile => profile !== null);
 }
 
 // ── presence ────────────────────────────────────────────
@@ -383,27 +534,23 @@ export function handlePresenceUpdate(ev: {
 }
 
 export function handleAvatarUpdate(userId: string): void {
-    // Invalidate the profile cache entry (refetch if cached).
-    if (state.profiles.has(userId)) {
-        state.profiles.delete(userId);
-        // Re-fetch if it was cached.
-        ensureProfile(userId);
+    // Invalidate the cached avatar. Re-fetch immediately only when something
+    // on screen is currently retaining this profile.
+    invalidateProfile(userId);
+    if (profileIsRetained(userId)) {
+        scheduleProfileLoad(userId);
     }
 }
 
 export function handleRoleAdd(userId: string): void {
     // Payload is only {user_id, role_id} (no name/color) → invalidate the
     // cached profile (if any) so it refetches with the new roles.
-    if (state.profiles.has(userId)) {
-        state.profiles.delete(userId);
-    }
+    invalidateProfile(userId);
     void ensureProfile(userId);
 }
 
 export function handleRoleRemove(userId: string): void {
-    if (state.profiles.has(userId)) {
-        state.profiles.delete(userId);
-    }
+    invalidateProfile(userId);
     void ensureProfile(userId);
 }
 // Avatar objectURL helper (base64 → objectURL, cached).
@@ -424,6 +571,12 @@ export function reset(): void {
     typingTimers.clear();
     state.byId.clear();
     state.profiles.clear();
+    profileLastUsed.clear();
+    retainedProfileCounts.clear();
+    profileInFlight.clear();
+    profileLoadQueue.clear();
+    profileLoadFlushQueued = false;
+    profileTouchSeq = 0;
     state.presence.clear();
     state.typing.clear();
     state.bannedIds.clear();

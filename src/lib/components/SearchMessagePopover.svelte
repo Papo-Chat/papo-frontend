@@ -55,14 +55,16 @@
 
     const authorOptions = $derived(usersStore.state.list.items);
 
-    // Perfis dos autores dos resultados visíveis (batch, só ids ausentes do
-    // cache) — nome/avatar/anel do autor no popover.
+    // Search results may reference authors that are not in byId yet. Fetch
+    // those authors in batch; the bounded profile cache handles eviction.
     $effect(() => {
         const ids = new Set<string>();
-        for (const r of results) {
-            if (r.author_id) ids.add(r.author_id);
+        for (const result of results) {
+            if (result.author_id) ids.add(result.author_id);
         }
-        void usersStore.ensureProfiles([...ids]);
+        if (ids.size > 0) {
+            void usersStore.ensureProfiles([...ids]);
+        }
     });
 
     // Request com os filtros atuais (o API exige >= 1 campo; `text` sempre
