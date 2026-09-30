@@ -39,6 +39,9 @@
 
 	const ctx = $derived({ roles: myRoles, isOwner });
 	const access = $derived(channel ? channelAccess(channel, ctx) : null);
+	const authorRoleIds = $derived(new Set(author?.roles.map((r) => r.id) ?? []));
+	const authorRoles = $derived(rolesStore.state.list.filter((r) => authorRoleIds.has(r.id)));
+	const authorCanEveryone = $derived(can('everyone_message', { roles: authorRoles, isOwner: !!message.author_id && serverState.server?.owner_id === message.author_id }));
 
 	const isAuthor = $derived(message.author_id === me);
 	const canEdit = $derived(isAuthor);
@@ -307,7 +310,7 @@
 				</div>
 			{:else if message.content}
 				<div class="bubble {isPinned ? 'pinned' : ''}">
-					<FormattedMessage content={message.content} />
+					<FormattedMessage content={message.content} allowEveryoneHighlight={authorCanEveryone} />
 				</div>
 				{#if message.previews.length}
 					{#each message.previews as p (p.id)}
