@@ -10,6 +10,7 @@
 		setUserBackground
 	} from '$lib/store/background.svelte';
 	import Icon from '$lib/components/Icon.svelte';
+	import { flatUi, mobileFlatUi, setFlatUi } from '$lib/store/performance.svelte';
 
 	let customInput: HTMLInputElement | null = null;
 	let customError = '';
@@ -64,6 +65,24 @@
 				</button>
 			</div>
 
+			<h2 class="aero-label">Desempenho</h2>
+			<label class="performance-toggle">
+				<input
+					type="checkbox"
+					checked={$flatUi}
+					disabled={$mobileFlatUi}
+					onchange={(e) => setFlatUi((e.currentTarget as HTMLInputElement).checked)}
+				/>
+				<span class="performance-copy">
+					<strong>Interface leve</strong>
+					<span>
+						{$mobileFlatUi
+							? 'Ativa automaticamente no celular.'
+							: 'Remove blur e usa superfícies em gradiente para reduzir o custo gráfico.'}
+					</span>
+				</span>
+			</label>
+
 			<h2 class="aero-label">Fundo</h2>
 			<div class="bg-grid">
 				{#each deviceImages as img (img.id)}
@@ -77,7 +96,7 @@
 					</button>
 				{/each}
 				<button
-					class="bg-card bg-custom {$backgroundId === CUSTOM_BG_ID ? 'selected' : ''}"
+					class="bg-card bg-custom desktop-image-background {$backgroundId === CUSTOM_BG_ID ? 'selected' : ''}"
 					on:click={pickUserImage}
 					title="Enviar imagem de fundo (PNG/JPEG, até 2MB)"
 					aria-label="Enviar imagem de fundo"
@@ -92,7 +111,8 @@
 					<span>Imagem</span>
 				</button>
 			</div>
-			<p class="bg-hint">PNG, JPEG ou JPG · até 2MB · 720p recomendado</p>
+			<p class="bg-hint desktop-image-background">PNG, JPEG ou JPG · até 2MB · 720p recomendado</p>
+			<p class="bg-hint mobile-gradient-hint">No celular, fundos personalizados usam somente gradientes.</p>
 			{#if customError}<span class="bg-error">{customError}</span>{/if}
 			<input
 				type="file"
@@ -125,6 +145,42 @@
 		grid-template-columns: repeat(2, 1fr);
 		gap: 10px;
 		margin-bottom: 20px;
+	}
+
+	.performance-toggle {
+		display: flex;
+		align-items: flex-start;
+		gap: 10px;
+		margin-bottom: 20px;
+		padding: 12px 14px;
+		border-radius: var(--radius-sm);
+		border: 1px solid var(--line);
+		background: linear-gradient(145deg, rgba(255, 255, 255, 0.48), rgba(222, 241, 250, 0.34));
+		cursor: pointer;
+	}
+
+	.performance-toggle input {
+		margin-top: 2px;
+	}
+
+	.performance-copy {
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+	}
+
+	.performance-copy strong {
+		font-size: 13px;
+	}
+
+	.performance-copy span {
+		font-size: 11px;
+		color: var(--muted-soft);
+		line-height: 1.4;
+	}
+
+	.mobile-gradient-hint {
+		display: none;
 	}
 
 	.bg-grid {
@@ -206,6 +262,11 @@
 		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 	}
 
+	:global([data-theme='dark']) .performance-toggle {
+		background: linear-gradient(145deg, rgba(37, 67, 86, 0.74), rgba(17, 43, 59, 0.64));
+		border-color: rgba(182, 224, 250, 0.14);
+	}
+
 	:global([data-theme='dark']) .theme-card {
 		background: rgba(119, 194, 235, 0.08);
 		border-color: rgba(182, 224, 250, 0.16);
@@ -231,6 +292,15 @@
 		font-size: 11px;
 		color: var(--muted-soft);
 	}
+	@media (max-width: 700px) {
+		.desktop-image-background {
+			display: none !important;
+		}
+		.mobile-gradient-hint {
+			display: block;
+		}
+	}
+
 	.bg-error {
 		display: block;
 		margin-top: 4px;
