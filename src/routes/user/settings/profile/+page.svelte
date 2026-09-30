@@ -222,7 +222,7 @@
                 {:else}
                     <Avatar user={removeAvatar ? null : (profile ?? null)} size={64} />
                 {/if}
-                {#if avatarImg || profile?.avatar_blob}
+                {#if !removeAvatar && (avatarImg || profile?.avatar_blob)}
                     <button
                         class="avatar-reset"
                         type="button"
