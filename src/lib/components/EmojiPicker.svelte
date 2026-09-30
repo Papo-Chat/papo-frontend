@@ -173,10 +173,11 @@
 
 		function onPointerDown(e: PointerEvent): void {
 			if (cardEl && !cardEl.contains(e.target as Node)) {
-				// Ignore clicks on the trigger button (an ancestor of the
-				// picker) so toggling the button doesn't flicker it.
-				const trigger = cardEl.closest('button');
-				if (trigger && trigger.contains(e.target as Node)) return;
+				// Trigger and picker share the same wrapper. Ignore pointerdown
+				// anywhere inside that anchor so the trigger's click can toggle
+				// the picker normally instead of close→reopen in one gesture.
+				const anchor = cardEl.parentElement;
+				if (anchor?.contains(e.target as Node)) return;
 				close();
 			}
 		}
