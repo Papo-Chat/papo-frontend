@@ -4,6 +4,9 @@
 	import * as channelsStore from '$lib/store/channels.svelte';
 	import { state as serverState } from '$lib/store/server.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
+	import { state as sessionState, meId } from '$lib/store/session.svelte';
+	import * as rolesStore from '$lib/store/roles.svelte';
+	import { can } from '$lib/store/roles.svelte';
 	import Icon from './Icon.svelte';
 	import ServerIcon from './ServerIcon.svelte';
 	import ChannelItem from './ChannelItem.svelte';
@@ -22,6 +25,17 @@
 			.length
 	);
 	const drawerOpen = $derived(state.channelsDrawerOpen);
+	const me = $derived(meId());
+	const isOwner = $derived(!!me && server?.owner_id === me);
+	const myRoleIds = $derived(new Set(sessionState.roles.map((r) => r.id)));
+	const myRoles = $derived(rolesStore.state.list.filter((r) => myRoleIds.has(r.id)));
+	const adminCtx = $derived({ roles: myRoles, isOwner });
+	const canOpenAdmin = $derived(
+		(!server && !!me) ||
+			can('manage_server', adminCtx) ||
+			can('manage_channels', adminCtx) ||
+			can('manage_roles', adminCtx)
+	);
 
 	function closeDrawer(): void {
 		state.channelsDrawerOpen = false;
@@ -38,15 +52,17 @@
 
 	// Atalhos: only route-related shortcuts are kept (channels are sample
 	// data, so the mockup channel/mockup buttons were dropped).
-	const shortcuts = [
-		{
-			to: '/admin/server',
-			icon: 'shield-check',
-			variant: 'light' as const,
-			label: 'Administração'
-		},
+	const shortcuts = $derived([
+		...(canOpenAdmin
+			? [{
+					to: '/admin/server',
+					icon: 'shield-check',
+					variant: 'light' as const,
+					label: 'Administração'
+				}]
+			: []),
 		{ to: '/user/settings', icon: 'gear', variant: 'light' as const, label: 'Ajustes' }
-	];
+	]);
 
 	function navigateShortcut(to: string): void {
 		state.channelsDrawerOpen = false;
