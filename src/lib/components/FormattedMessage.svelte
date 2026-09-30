@@ -1,10 +1,12 @@
 <script lang="ts">
 	import * as emojisStore from '$lib/store/emojis.svelte';
+	import * as usersStore from '$lib/store/users.svelte';
+	import { openProfile } from '$lib/store/ui.svelte';
 	import { emojiUrl } from '$lib/store/emojis.svelte';
 	import { renderMessageMarkdown } from '$lib/utils/markdown';
 	import type { Emoji } from '$lib/types';
 
-	let { content } = $props<{ content: string }>();
+	let { content, allowEveryoneHighlight = false } = $props<{ content: string; allowEveryoneHighlight?: boolean }>();
 
 	let el: HTMLDivElement | null = null;
 
@@ -14,7 +16,19 @@
 		new Map<string, Emoji>(emojisStore.state.list.map((e) => [e.name, e]))
 	);
 
-	const html = $derived(renderMessageMarkdown(content, nameMap));
+	const mentionIds = $derived([...content.matchAll(/@mention\(<@([0-9a-fA-F-]{16,})>\)/g)].map((m) => m[1]));
+	const mentionMap = $derived(new Map(mentionIds.map((id) => { const u = usersStore.state.byId.get(id); return [id, u?.nickname || u?.username || 'usuário'] as const; })));
+	$effect(() => { if (mentionIds.length) void usersStore.ensureProfiles(mentionIds).catch(() => {}); });
+	const html = $derived(renderMessageMarkdown(content, nameMap, emojiUrl, { mentions: mentionMap, highlightEveryone: allowEveryoneHighlight }));
+
+	function handleMentionClick(event: MouseEvent): void {
+		const target = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-mention-user-id]');
+		const id = target?.dataset.mentionUserId;
+		if (!id) return;
+		const known = usersStore.state.byId.get(id);
+		if (known) { openProfile(known); return; }
+		void usersStore.ensureProfile(id).then((profile) => openProfile(profile)).catch(() => {});
+	}
 
 	// O compilador trata `innerHTML` como atributo (não propriedade) quando o
 	// valor é string; atribui o HTML gerado pelo parser via efeito.
@@ -26,7 +40,7 @@
 	});
 </script>
 
-<div class="msg-text" bind:this={el}></div>
+<div class="msg-text" bind:this={el} onclick={handleMentionClick}></div>
 
 <style>
 	.msg-text {
@@ -117,4 +131,7 @@
 		margin: 0 1px;
 		border-radius: 4px;
 	}
+	:global(.message-mention) { display: inline; padding: 0.06em 0.3em; border: 0; border-radius: 5px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--link); font: inherit; font-weight: 650; cursor: pointer; }
+	:global(.message-mention:hover) { background: color-mix(in srgb, var(--accent) 24%, transparent); text-decoration: underline; }
+	:global(.message-mention-everyone) { cursor: default; text-decoration: none; }
 </style>
