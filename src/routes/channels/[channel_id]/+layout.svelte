@@ -7,7 +7,6 @@
 	import Sidebar from '$lib/components/Sidebar.svelte';
 	import Members from '$lib/components/Members.svelte';
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
-	import type { UserProfile, UserSummary } from '$lib/types';
 
 	// Resolve the channel once so sidebar active state and the page both
 	// agree on the canonical channel id (id or name in the URL). O guard
@@ -21,17 +20,6 @@
 	// Profile card (4.1): opened by clicking a user in the members drawer
 	// or in the chat.
 	const profileUser = $derived(state.profileOpen ? state.profileUser : null);
-	const profileProfile: UserProfile | null = $derived(profileUser ? toProfile(profileUser) : null);
-
-	function toProfile(u: UserSummary): UserProfile {
-		return {
-			...u,
-			avatar_blob: null,
-			avatar_format: '',
-			banner_media: null,
-			description: u.status_message ?? null
-		};
-	}
 </script>
 
 <div class="app-shell">
@@ -60,9 +48,9 @@
 
 	<Members />
 
-	{#if profileProfile}
+	{#if profileUser}
 		<ProfileCard
-			user={profileProfile}
+			user={profileUser}
 			bind:open={state.profileOpen}
 			onOpenChange={(o) => {
 				if (!o) closeProfile();
