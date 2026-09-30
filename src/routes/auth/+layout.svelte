@@ -1,9 +1,13 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { api } from '$lib/api';
+	import * as healthStore from '$lib/store/health.svelte';
 	import ServerIcon from '$lib/components/ServerIcon.svelte';
 	import type { Server } from '$lib/types';
 
 	const server: Promise<Server | null> = api.server.get();
+
+	onMount(() => healthStore.startPolling());
 </script>
 
 <div class="auth-shell">
