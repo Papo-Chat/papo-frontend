@@ -224,7 +224,7 @@
 						{#each typingIds as uid (uid)}
 							{@const u = usersStore.state.byId.get(uid)}
 
-							<Avatar user={u} size={18} />
+							<Avatar user={u} userId={uid} size={18} />
 						{/each}
 					</span>
 
