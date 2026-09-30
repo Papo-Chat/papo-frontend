@@ -1089,6 +1089,13 @@ button.name:focus-visible {
 	grid-template-columns: 38px 38px 38px minmax(90px, 1fr) auto;
 	align-items: center;
 	gap: 9px;
+}
+
+.composer.no-attachments {
+	grid-template-columns: 38px minmax(90px, 1fr) auto;
+}
+
+.composer {
 	border: 1px solid rgba(255, 255, 255, 0.8);
 	border-radius: 22px;
 	background:
