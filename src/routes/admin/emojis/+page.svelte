@@ -18,10 +18,6 @@
 		filter ? emojis.filter((e) => e.name.toLowerCase().includes(filter.toLowerCase())) : emojis
 	);
 
-	$effect(() => {
-		if (!emojisStore.state.loaded && !emojisStore.state.loading) emojisStore.load();
-	});
-
 	function onFileSelect(e: Event): void {
 		selectedFile = (e.target as HTMLInputElement).files?.[0] ?? null;
 		error = null;
@@ -67,13 +63,6 @@
 		}
 	}
 
-	function onGridScroll(e: Event): void {
-		const sc = e.target as HTMLElement;
-		const distance = sc.scrollHeight - sc.scrollTop - sc.clientHeight;
-		if (distance < 180 && emojisStore.state.hasMore && !emojisStore.state.loading) {
-			emojisStore.loadMore();
-		}
-	}
 </script>
 
 <div class="emojis-page">
@@ -128,7 +117,7 @@
 			<Icon name="smiley" variant="duotone" size={16} />
 			Emojis ({emojis.length})
 		</div>
-		<div class="admin-card-body emoji-list" onscroll={onGridScroll}>
+		<div class="admin-card-body emoji-list">
 			{#if emojisStore.state.loading && emojis.length === 0}
 				<div class="empty">Carregando emojis…</div>
 			{:else if visibleEmojis.length === 0}
@@ -163,9 +152,7 @@
 						</div>
 					{/each}
 				</div>
-				{#if emojisStore.state.loading}
-					<div class="loading-more">Carregando mais…</div>
-				{/if}
+
 			{/if}
 		</div>
 	</div>
