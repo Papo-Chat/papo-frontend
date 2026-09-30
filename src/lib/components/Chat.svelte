@@ -304,7 +304,10 @@
 			</div>
 		{:else}
 			{#each messages as m, index (m.id)}
-				<div class:message-enter={m.id === animatedMessageId}>
+				<div
+					class:message-enter={m.id === animatedMessageId}
+					class:message-target-highlight={m.id === highlightMessageId}
+				>
 					<Message
 						message={m}
 						onReply={(msg) => onReply?.(msg)}
@@ -393,6 +396,31 @@
 
 	.new-messages-bubble:hover {
 		background: var(--hover);
+	}
+
+	.message-target-highlight {
+		border-radius: 12px;
+		background: linear-gradient(90deg, rgba(10, 132, 255, 0.2), rgba(90, 200, 250, 0.08));
+		box-shadow:
+			inset 3px 0 0 rgba(10, 132, 255, 0.9),
+			0 0 0 1px rgba(10, 132, 255, 0.14);
+		animation: target-highlight-pulse 0.55s ease-out;
+	}
+
+	:global([data-theme='dark']) .message-target-highlight {
+		background: linear-gradient(90deg, rgba(50, 159, 226, 0.2), rgba(22, 83, 122, 0.08));
+		box-shadow:
+			inset 3px 0 0 rgba(91, 196, 255, 0.88),
+			0 0 0 1px rgba(91, 196, 255, 0.12);
+	}
+
+	@keyframes target-highlight-pulse {
+		from {
+			background-color: rgba(10, 132, 255, 0.34);
+		}
+		to {
+			background-color: transparent;
+		}
 	}
 
 	.last-read-divider {
