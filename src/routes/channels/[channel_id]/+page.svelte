@@ -86,26 +86,6 @@
 		});
 	});
 
-	// Carrega perfis dos usuários visíveis.
-	$effect(() => {
-		const seen = new Set<string>();
-
-		for (const m of messages) {
-			if (m.author_id) {
-				seen.add(m.author_id);
-			}
-		}
-
-		if (channel?.type === 'voice') {
-			for (const member of voiceStore.state.members) {
-				if (member.user_id) {
-					seen.add(member.user_id);
-				}
-			}
-		}
-
-		void usersStore.ensureProfiles([...seen]);
-	});
 
 	// Consome scroll target global.
 	$effect(() => {
