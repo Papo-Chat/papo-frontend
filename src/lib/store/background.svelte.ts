@@ -15,6 +15,7 @@ export const defaultBackground = 'linear-gradient(125deg, #062f75 0%, #0080ba 48
 
 const KEY = 'papo:background';
 const IMAGE_KEY = 'papo:user-image';
+const MOBILE_BG_QUERY = '(max-width: 700px)';
 
 // Custom (user-uploaded) background id. The image itself is stored as a data
 // URL in localStorage, separate from the preset list below.
@@ -86,6 +87,13 @@ function readUserImage(): string {
 	return window.localStorage.getItem(IMAGE_KEY) ?? '';
 }
 
+function customImageAllowed(): boolean {
+	if (typeof window === 'undefined') {
+		return true;
+	}
+	return !window.matchMedia(MOBILE_BG_QUERY).matches;
+}
+
 // Applies the selected background to <html>: presets via --user-background,
 // custom images as a data-URL image. The .has-user-image class makes CSS
 // stretch+fill the image (see theme.css).
@@ -95,6 +103,14 @@ function applyToDom(id: string): void {
 	}
 	const el = document.documentElement;
 	if (id === CUSTOM_BG_ID) {
+		// Custom wallpapers are intentionally disabled on mobile. Keep the
+		// desktop preference stored, but render the normal gradient there.
+		if (!customImageAllowed()) {
+			el.classList.remove('has-user-image');
+			el.style.removeProperty('--user-background');
+			return;
+		}
+
 		const url = readUserImage();
 		el.classList.toggle('has-user-image', Boolean(url));
 		if (url) {
@@ -113,13 +129,22 @@ function applyToDom(id: string): void {
 	el.classList.remove('has-user-image');
 }
 
-const initial = read();
-applyToDom(initial);
+let currentBackgroundId = read();
+applyToDom(currentBackgroundId);
 
-export const backgroundId = writable<string>(initial);
-export const userImageUrl = writable<string>(initial === CUSTOM_BG_ID ? readUserImage() : '');
+if (typeof window !== 'undefined') {
+	window.matchMedia(MOBILE_BG_QUERY).addEventListener('change', () => {
+		applyToDom(currentBackgroundId);
+	});
+}
+
+export const backgroundId = writable<string>(currentBackgroundId);
+export const userImageUrl = writable<string>(
+	currentBackgroundId === CUSTOM_BG_ID && customImageAllowed() ? readUserImage() : ''
+);
 
 export function setBackground(next: string): void {
+	currentBackgroundId = next;
 	backgroundId.set(next);
 	applyToDom(next);
 	if (typeof window !== 'undefined') {
@@ -136,6 +161,9 @@ export async function setUserBackground(file: File): Promise<string> {
 	}
 	if (typeof window === 'undefined') {
 		return 'ambiente sem navegador';
+	}
+	if (!customImageAllowed()) {
+		return 'imagem personalizada disponível apenas no desktop';
 	}
 
 	let dataUrl = '';
