@@ -414,6 +414,24 @@
 		0 0 12px rgba(42, 201, 133, 0.45);
 }
 
+.connection-dot-checking {
+	background: #e7a80b;
+	box-shadow:
+		0 0 0 4px rgba(231, 168, 11, 0.1),
+		0 0 12px rgba(231, 168, 11, 0.35);
+	animation: health-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes health-pulse {
+	0%,
+	100% {
+		opacity: 0.55;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+
 .auth-link {
 	font-size: 11px;
 	text-decoration: none;
