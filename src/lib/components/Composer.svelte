@@ -7,6 +7,7 @@
 	import Icon from './Icon.svelte';
 	import EmojiPicker from './EmojiPicker.svelte';
 	import Avatar from './Avatar.svelte';
+	import { onDestroy } from 'svelte';
 
 	let {
 		onSend,
@@ -40,6 +41,13 @@
 
 	let files = $state<File[]>([]);
 	let progress = $state(0);
+
+	// ── gravação de áudio (microfone) ──
+	let recording = $state(false);
+	let stopping = $state(false);
+	let recorder: MediaRecorder | null = null;
+	let stream: MediaStream | null = null;
+	let chunks: BlobPart[] = [];
 
 	const replyAuthor = $derived(
 		usersStore.state.byId.get(replyTo?.author_id ?? '')
@@ -152,6 +160,10 @@
 	}
 
 	function send(): void {
+		if (recording) {
+			return;
+		}
+
 		const t = text.trim();
 
 		if ((!t && files.length === 0) || disabled || sending) {
@@ -274,6 +286,145 @@
 
 		fileInput?.click();
 	}
+
+	// ── gravação de áudio (microfone) ──
+
+	const canCaptureAudio =
+		typeof navigator !== 'undefined' &&
+		typeof navigator.mediaDevices.getUserMedia === 'function';
+
+	function audioRecordingName(mime: string): string {
+		const now = new Date();
+		const p = (n: number) => String(n).padStart(2, '0');
+		const stamp = `${now.getFullYear()}${p(now.getMonth() + 1)}${p(
+			now.getDate()
+		)}_${p(now.getHours())}${p(now.getMinutes())}${p(
+			now.getSeconds()
+		)}`;
+
+		return `audio_${stamp}.${mime.includes('ogg') ? 'ogg' : 'webm'}`;
+	}
+
+	function cancelRecording(): void {
+		chunks = [];
+		if (stream) {
+			stream.getTracks().forEach((t) => t.stop());
+		}
+		stream = null;
+		recorder = null;
+		recording = false;
+		stopping = false;
+	}
+
+	function startRecording(): void {
+		if (recording || stopping) {
+			return;
+		}
+		error = null;
+
+		if (!canCaptureAudio) {
+			error = 'Gravação de áudio não suportada neste navegador.';
+			return;
+		}
+
+		navigator.mediaDevices
+			.getUserMedia({ audio: true })
+			.then((s) => {
+				if (recording || stopping) {
+					// A gravação foi interrompida antes de começar; libere o track.
+					s.getTracks().forEach((t) => t.stop());
+					return;
+				}
+
+				const rec = new MediaRecorder(s);
+				rec.ondataavailable = (e) => {
+					if (e.data.size > 0) {
+						chunks.push(e.data);
+					}
+				};
+				rec.onerror = () => {
+					cancelRecording();
+					error = 'Erro na gravação de áudio.';
+				};
+
+				stream = s;
+				chunks = [];
+				try {
+					rec.start(1000);
+				} catch {
+					cancelRecording();
+					error = 'Não foi possível iniciar a gravação.';
+					return;
+				}
+
+				recorder = rec;
+				recording = true;
+			})
+			.catch(() => {
+				// getUserMedia rejeitou (permissão negada ou sem suporte).
+				error =
+					'Permissão de microfone negada. Ative a permissão do navegador e tente de novo.';
+			});
+	}
+
+	function stopRecording(): void {
+		if (!recording || !recorder || stopping) {
+			return;
+		}
+
+		const rec = recorder;
+		stopping = true;
+
+		const onstop = () => {
+			stopping = false;
+			recording = false;
+			recorder = null;
+
+			const type = rec.mimeType || 'audio/webm';
+			const blob = new Blob(chunks, { type });
+			chunks = [];
+
+			if (stream) {
+				stream.getTracks().forEach((t) => t.stop());
+			}
+			stream = null;
+
+			if (blob.size === 0) {
+				error = 'Gravação vazia. Tente novamente.';
+				return;
+			}
+
+			const available = MAX_ATTACHMENTS - files.length;
+			if (available <= 0) {
+				error = `Máximo de ${MAX_ATTACHMENTS} anexos por mensagem.`;
+				return;
+			}
+
+			files = [
+				...files,
+				new File([blob], audioRecordingName(type), { type })
+			];
+		};
+
+		rec.onstop = onstop;
+		rec.stop();
+	}
+
+	function toggleRecording(): void {
+		if (recording) {
+			stopRecording();
+		} else {
+			startRecording();
+		}
+	}
+
+	onDestroy(() => {
+		if (stream) {
+			stream.getTracks().forEach((t) => t.stop());
+		}
+		stream = null;
+		recorder = null;
+	});
 </script>
 
 <div class="composer-area">
@@ -390,10 +541,12 @@
 			</button>
 
 			<button
-				class="composer-tool"
-				title="Microfone"
-				aria-label="Microfone"
+				class="composer-tool mic-tool"
+				class:recording={recording}
+				title={recording ? 'Parar gravação' : 'Gravar áudio'}
+				aria-label={recording ? 'Parar gravação' : 'Gravar áudio'}
 				{disabled}
+				onclick={toggleRecording}
 			>
 				<Icon
 					name="microphone"
@@ -448,11 +601,12 @@
 				</button>
 
 				<button
-					class="composer-tool mobile-action"
-					title="Microfone"
-					aria-label="Microfone"
+					class="composer-tool mobile-action mic-tool"
+					class:recording={recording}
+					title={recording ? 'Parar gravação' : 'Gravar áudio'}
+					aria-label={recording ? 'Parar gravação' : 'Gravar áudio'}
 					tabindex={mobileActionsOpen ? 0 : -1}
-					onclick={() => (mobileActionsOpen = false)}
+					onclick={toggleRecording}
 					{disabled}
 				>
 					<Icon
@@ -523,7 +677,11 @@
 		<button
 			class="send"
 			onclick={send}
-			disabled={disabled || (text.trim() === '' && files.length === 0)}
+			disabled={
+				disabled ||
+				recording ||
+				text.trim() === '' && files.length === 0
+			}
 		>
 			Enviar
 		</button>
@@ -957,4 +1115,40 @@
         opacity: 0.55;
         cursor: not-allowed;
     }
+
+	/* ── gravação de microfone ──────────────────────────────
+	     Estado de gravação do botão de microfone. Especificidade
+	     maior que .mobile-action e seus :hover (incluindo os
+	     variantes de tema escuro) para o fundo vermelho
+	     prevalecer em desktop, mobile e qualquer tema. */
+	button.composer-tool.mic-tool.recording {
+		background: linear-gradient(145deg, #ff96ab, #ff5a71);
+		border-color: #ff5a71;
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.55),
+			0 6px 14px rgba(255, 90, 113, 0.45);
+	}
+	button.composer-tool.mic-tool.recording:hover,
+	button.composer-tool.mic-tool.recording:active {
+		background: linear-gradient(145deg, #ff96ab, #ff5a71);
+	}
+	button.composer-tool.mic-tool.recording i {
+		color: #fff;
+		filter: none;
+		animation: mic-pulse 1.2s ease-in-out infinite;
+	}
+	@keyframes mic-pulse {
+		0%,
+		100% {
+			transform: scale(1);
+		}
+		50% {
+			transform: scale(1.15);
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		button.composer-tool.mic-tool.recording i {
+			animation: none;
+		}
+	}
 </style>

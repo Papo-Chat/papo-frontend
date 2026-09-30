@@ -81,7 +81,6 @@
 	<!-- Vídeo: player inline (o backend suporta Range requests). -->
 	<div class="attachment-media">
 		<video src={fullUrl} controls></video>
-		<span class="attachment-name">{name}</span>
 	</div>
 {:else if attachment.mime_type.startsWith('audio/')}
 	<!-- Áudio: player inline. -->
