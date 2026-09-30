@@ -30,11 +30,16 @@
 	const myRoleIds = $derived(new Set(sessionState.roles.map((r) => r.id)));
 	const myRoles = $derived(rolesStore.state.list.filter((r) => myRoleIds.has(r.id)));
 	const adminCtx = $derived({ roles: myRoles, isOwner });
-	const canOpenAdmin = $derived(
-		(!server && !!me) ||
-			can('manage_server', adminCtx) ||
-			can('manage_channels', adminCtx) ||
-			can('manage_roles', adminCtx)
+	const canManageServer = $derived((!server && !!me) || can('manage_server', adminCtx));
+	const canManageChannels = $derived(can('manage_channels', adminCtx));
+	const canManageRoles = $derived(can('manage_roles', adminCtx));
+	const canOpenAdmin = $derived(canManageServer || canManageChannels || canManageRoles);
+	const adminRoute = $derived(
+		canManageServer
+			? '/admin/server'
+			: canManageChannels
+				? '/admin/channels'
+				: '/admin/roles'
 	);
 
 	function closeDrawer(): void {
@@ -55,7 +60,7 @@
 	const shortcuts = $derived([
 		...(canOpenAdmin
 			? [{
-					to: '/admin/server',
+					to: adminRoute,
 					icon: 'shield-check',
 					variant: 'light' as const,
 					label: 'Administração'
