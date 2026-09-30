@@ -53,6 +53,8 @@
 	let pendingBottomFrame = 0;
 	let touchY: number | null = null;
 	let lastScrollTop = 0;
+	let scrollDirection: 'up' | 'down' | null = null;
+	let returningToLatest = false;
 
 	let animatedMessageId = $state<string | null>(null);
 	let lastMessageId = $state<string | null>(null);
@@ -232,7 +234,18 @@
 	}
 
 	function handleWheel(e: WheelEvent): void {
-		if (e.deltaY < 0) stopFollowingBottom();
+		if (e.deltaY < 0) {
+			scrollDirection = 'up';
+			stopFollowingBottom();
+			return;
+		}
+
+		if (e.deltaY > 0) {
+			scrollDirection = 'down';
+			if (hasMoreNewer && distanceFromBottom() <= 180) {
+				void returnToLatestFromScroll();
+			}
+		}
 	}
 
 	function handleTouchStart(e: TouchEvent): void {
@@ -241,11 +254,42 @@
 
 	function handleTouchMove(e: TouchEvent): void {
 		const nextY = e.touches[0]?.clientY ?? null;
-		if (touchY != null && nextY != null && nextY > touchY + 2) {
-			// Finger moving down means the scroll content is moving up.
-			stopFollowingBottom();
+		if (touchY != null && nextY != null) {
+			if (nextY > touchY + 2) {
+				// Finger moving down means the scroll content is moving up.
+				scrollDirection = 'up';
+				stopFollowingBottom();
+			} else if (nextY < touchY - 2) {
+				// Finger moving up means the scroll content is moving down.
+				scrollDirection = 'down';
+				if (hasMoreNewer && distanceFromBottom() <= 180) {
+					void returnToLatestFromScroll();
+				}
+			}
 		}
 		touchY = nextY;
+	}
+
+	async function returnToLatestFromScroll(): Promise<void> {
+		if (returningToLatest || !hasMoreNewer) return;
+
+		returningToLatest = true;
+		try {
+			await onJumpToLatest?.();
+			await tick();
+
+			stickToBottom = true;
+			visibleLastReadMessageId = null;
+			setUnreadCount(0);
+
+			requestAnimationFrame(() => {
+				scrollToBottom();
+				lastScrollTop = listEl?.scrollTop ?? 0;
+				onReachLatest?.(messages.at(-1) ?? null);
+			});
+		} finally {
+			returningToLatest = false;
+		}
 	}
 
 	function handleScroll(): void {
@@ -257,7 +301,14 @@
 		lastScrollTop = currentScrollTop;
 
 		if (movedUp) {
+			scrollDirection = 'up';
 			stopFollowingBottom();
+		} else if (movedDown) {
+			scrollDirection = 'down';
+			if (hasMoreNewer && distanceFromBottom() <= 180) {
+				void returnToLatestFromScroll();
+				return;
+			}
 		}
 
 		const atBottom = isAtBottom();
@@ -325,7 +376,11 @@
 			// Short pages or unusual media heights can leave the top sentinel
 			// inside the preload zone. Continue automatically until there is
 			// enough history above the viewport or history is exhausted.
-			if (hasMoreOlder && topSentinelNearViewport()) {
+			if (
+				hasMoreOlder &&
+				scrollDirection !== 'down' &&
+				topSentinelNearViewport()
+			) {
 				queueMicrotask(() => void loadOlder());
 			}
 		});
@@ -418,7 +473,10 @@
 
 		const observer = new IntersectionObserver(
 			(entries) => {
-				if (entries.some((entry) => entry.isIntersecting)) {
+				if (
+					scrollDirection !== 'down' &&
+					entries.some((entry) => entry.isIntersecting)
+				) {
 					void loadOlder();
 				}
 			},
