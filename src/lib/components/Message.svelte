@@ -175,6 +175,7 @@
 >
 		<Avatar
 			user={author}
+			userId={message.author_id}
 			size={39}
 			ariaLabel={author ? `Ver perfil de ${name}` : undefined}
 			onClick={() => {
@@ -209,7 +210,7 @@
 						aria-label="Ir para a mensagem original"
 						onclick={jumpToReply}
 					>
-						<Avatar user={replyAuthor} size={18} />
+						<Avatar user={replyAuthor} userId={msgReply?.author_id ?? null} size={18} />
 						{replyAuthor.nickname || replyAuthor.username}
 
 						{#if msgReply}
