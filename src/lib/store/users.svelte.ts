@@ -57,6 +57,7 @@ export const state = $state({
         hasMore: false,
         cursor: null as KeysetCursor | null,
         loading: false,
+        fullyLoaded: false,
         // Guards against concurrent load/loadMore (P1.11).
         loadGeneration: 0
     }
@@ -168,6 +169,7 @@ async function listLoad(q?: { since?: string; last_id?: string }): Promise<void>
         }
         state.list.hasMore = res.has_more;
         state.list.cursor = nextCursor(res.users) ?? null;
+        state.list.fullyLoaded = !res.has_more;
         for (const u of res.users) {
             state.byId.set(u.id, u);
         }
@@ -180,6 +182,55 @@ async function listLoad(q?: { since?: string; last_id?: string }): Promise<void>
 
 export function loadList(): Promise<void> {
     return listLoad();
+}
+
+export async function loadAll(): Promise<void> {
+    const gen = (state.list.loadGeneration += 1);
+    state.list.loading = true;
+    state.list.fullyLoaded = false;
+
+    const all: UserSummary[] = [];
+    const seen = new Set<string>();
+    let cursor: KeysetCursor | null = null;
+    let hasMore = true;
+
+    try {
+        while (hasMore) {
+            const res = await api.users.list(
+                cursor ? { since: cursor.since, last_id: cursor.last_id } : undefined
+            );
+            if (state.list.loadGeneration !== gen) return;
+
+            for (const user of res.users) {
+                state.byId.set(user.id, user);
+                if (!seen.has(user.id)) {
+                    seen.add(user.id);
+                    all.push(user);
+                }
+            }
+
+            // Publish each page so Members/search/admin progressively fill
+            // without waiting for very large servers to finish completely.
+            state.list.items = [...all];
+            state.list.hasMore = res.has_more;
+            cursor = nextCursor(res.users) ?? null;
+            state.list.cursor = cursor;
+
+            if (!res.has_more || !cursor || res.users.length === 0) {
+                hasMore = false;
+            }
+        }
+
+        if (state.list.loadGeneration === gen) {
+            state.list.hasMore = false;
+            state.list.cursor = null;
+            state.list.fullyLoaded = true;
+        }
+    } finally {
+        if (state.list.loadGeneration === gen) {
+            state.list.loading = false;
+        }
+    }
 }
 
 export function loadMore(): void {
@@ -610,6 +661,7 @@ export function reset(): void {
         hasMore: false,
         cursor: null,
         loading: false,
+        fullyLoaded: false,
         loadGeneration: nextGeneration
     };
 }
