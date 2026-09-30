@@ -683,3 +683,62 @@
 		flex-direction: column;
 	}
 }
+
+
+/* AUTH LIGHTWEIGHT / FLAT
+   Matches the low-cost Aero rendering path used automatically on mobile. */
+html[data-ui-flat] .auth-shell,
+html[data-ui-flat] .auth-card {
+	backdrop-filter: none !important;
+	-webkit-backdrop-filter: none !important;
+}
+
+html[data-ui-flat] .auth-shell {
+	background: linear-gradient(145deg, rgba(235, 248, 255, 0.98), rgba(207, 234, 247, 0.96));
+	box-shadow: 0 10px 28px rgba(3, 39, 72, 0.16);
+}
+
+html[data-ui-flat] .auth-shell::before,
+html[data-ui-flat] .auth-card::before {
+	display: none;
+}
+
+html[data-ui-flat] .brand-panel {
+	background: linear-gradient(160deg, rgba(221, 243, 254, 0.98), rgba(190, 226, 243, 0.96));
+}
+
+html[data-ui-flat] .auth-panel {
+	background: linear-gradient(180deg, rgba(249, 253, 255, 0.98), rgba(229, 244, 251, 0.98));
+}
+
+html[data-ui-flat] .auth-card {
+	background: linear-gradient(145deg, rgba(252, 254, 255, 0.99), rgba(220, 240, 250, 0.98));
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.9),
+		0 8px 24px rgba(18, 68, 102, 0.12);
+}
+
+html[data-ui-flat][data-theme='dark'] .auth-shell {
+	background: linear-gradient(145deg, rgba(18, 46, 63, 0.99), rgba(7, 29, 43, 0.99));
+	box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+
+html[data-ui-flat][data-theme='dark'] .brand-panel {
+	background: linear-gradient(160deg, rgba(24, 59, 80, 0.99), rgba(10, 37, 53, 0.99));
+}
+
+html[data-ui-flat][data-theme='dark'] .auth-panel {
+	background: linear-gradient(180deg, rgba(14, 39, 55, 0.99), rgba(7, 28, 42, 0.99));
+}
+
+html[data-ui-flat][data-theme='dark'] .auth-card {
+	background: linear-gradient(145deg, rgba(29, 58, 76, 0.99), rgba(10, 34, 49, 0.99));
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.08),
+		0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+html[data-ui-mobile] .auth-shell,
+html[data-ui-mobile] .auth-card {
+	box-shadow: none;
+}
