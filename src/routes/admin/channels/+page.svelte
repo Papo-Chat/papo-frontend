@@ -136,6 +136,26 @@
 		}
 	}
 
+	async function moveChannel(channel: Channel, delta: -1 | 1): Promise<void> {
+		const index = channels.findIndex((c) => c.id === channel.id);
+		const target = channels[index + delta];
+		if (!target || saving) return;
+
+		saving = true;
+		error = null;
+		try {
+			await channelsStore.changePosition(channel.id, {
+				old_position: channel.position,
+				new_position: target.position
+			});
+			selectedId = channel.id;
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Erro ao reordenar canal.';
+		} finally {
+			saving = false;
+		}
+	}
+
 	async function togglePermission(
 		roleId: string,
 		key: keyof ChannelPermission,
@@ -217,13 +237,33 @@
 								</div>
 								<span class="channel-row-type">{channel.position}</span>
 							</button>
-							<button
-								class="channel-row-del"
-								aria-label={`Remover canal ${channel.name}`}
-								onclick={() => void removeChannel(channel.id)}
-							>
-								<Icon name="trash" variant="light" size={14} />
-							</button>
+							<div class="channel-row-actions">
+								<button
+									class="channel-row-move"
+									aria-label={`Mover ${channel.name} para cima`}
+									title="Mover para cima"
+									disabled={channels[0]?.id === channel.id || saving}
+									onclick={() => void moveChannel(channel, -1)}
+								>
+									<Icon name="caret-up" variant="light" size={14} />
+								</button>
+								<button
+									class="channel-row-move"
+									aria-label={`Mover ${channel.name} para baixo`}
+									title="Mover para baixo"
+									disabled={channels[channels.length - 1]?.id === channel.id || saving}
+									onclick={() => void moveChannel(channel, 1)}
+								>
+									<Icon name="caret-down" variant="light" size={14} />
+								</button>
+								<button
+									class="channel-row-del"
+									aria-label={`Remover canal ${channel.name}`}
+									onclick={() => void removeChannel(channel.id)}
+								>
+									<Icon name="trash" variant="light" size={14} />
+								</button>
+							</div>
 						</div>
 					{/each}
 				{/if}
@@ -293,7 +333,11 @@
 	.channel-row-type { color:var(--muted-soft); font-size:10px; }
 	.type-badge { font-size:9px; font-weight:800; text-transform:uppercase; padding:2px 6px; border-radius:6px; background:rgba(255,255,255,.4); color:var(--muted); }
 	.type-badge.voice { background:rgba(240,61,94,.18); color:#f03d5e; }
-	.channel-row-del { display:grid; place-items:center; width:28px; height:28px; border:0; border-radius:8px; background:transparent; cursor:pointer; opacity:.55; }
+	.channel-row-actions { display:flex; align-items:center; gap:2px; }
+	.channel-row-move,
+	.channel-row-del { display:grid; place-items:center; width:28px; height:28px; border:0; border-radius:8px; background:transparent; cursor:pointer; opacity:.55; color:var(--text); }
+	.channel-row-move:hover:not(:disabled) { opacity:1; background:rgba(100,196,250,.14); color:var(--link); }
+	.channel-row-move:disabled { opacity:.18; cursor:default; }
 	.channel-row-del:hover { opacity:1; background:rgba(240,61,94,.14); color:#f03d5e; }
 	.permissions-block { margin-top:18px; }
 	.permissions-block > label { display:block; margin-bottom:8px; }
