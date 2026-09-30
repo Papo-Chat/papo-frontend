@@ -294,6 +294,7 @@
 
 	const canCaptureAudio =
 		typeof navigator !== 'undefined' &&
+		!!navigator.mediaDevices &&
 		typeof navigator.mediaDevices.getUserMedia === 'function';
 
 	function audioRecordingName(mime: string): string {
@@ -337,7 +338,10 @@
 		const rec = recorder;
 		chunks = [];
 		if (rec && rec.state !== 'inactive') {
-			rec.onstop = () => cleanupRecording();
+			rec.onstop = () => {
+				chunks = [];
+				cleanupRecording();
+			};
 			try {
 				rec.stop();
 				return;
