@@ -9,6 +9,10 @@
 	let name = $state('');
 	let color = $state('#9b5de5');
 	let filter = $state('');
+	let saving = $state(false);
+	let success = $state('');
+	let error = $state<string | null>(null);
+	let feedbackTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const palette = ['#e7a80b', '#30d158', '#0a84ff', '#9b5de5', '#ff5d63', '#5ac8fa'];
 
@@ -36,24 +40,35 @@
 		creating = false;
 	}
 
-	function create(): void {
+	async function create(): Promise<void> {
 		const n = name.trim();
-		if (!n) return;
-		// New role starts with no permissions; edit them on the role detail page.
-		rolesStore.create({
-			name: n,
-			color,
-			permissions: {
-				manage_server: false,
-				manage_channels: false,
-				manage_roles: false,
-				ban_members: false,
-				pin_message: false,
-				everyone_message: false,
-				send_attachment: false
-			}
-		});
-		closeCreate();
+		if (!n || saving) return;
+		saving = true;
+		error = null;
+		success = '';
+		try {
+			await rolesStore.create({
+				name: n,
+				color,
+				permissions: {
+					manage_server: false,
+					manage_channels: false,
+					manage_roles: false,
+					ban_members: false,
+					pin_message: false,
+					everyone_message: false,
+					send_attachment: false
+				}
+			});
+			closeCreate();
+			success = 'Role criado.';
+			if (feedbackTimer) clearTimeout(feedbackTimer);
+			feedbackTimer = setTimeout(() => (success = ''), 1800);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Erro ao criar Role.';
+		} finally {
+			saving = false;
+		}
 	}
 </script>
 
@@ -74,6 +89,12 @@
 		</div>
 	</header>
 
+	{#if error}
+		<div class="role-feedback error" role="alert">{error}</div>
+	{:else if success}
+		<div class="role-feedback success" aria-live="polite">{success}</div>
+	{/if}
+
 	{#if creating}
 		<div class="new-role">
 			<input
@@ -92,8 +113,10 @@
 					></button>
 				{/each}
 			</div>
-			<button class="admin-btn" onclick={create}>Criar</button>
-			<button class="admin-btn ghost" onclick={closeCreate}>Cancelar</button>
+			<button class="admin-btn" onclick={create} disabled={saving || !name.trim()}>
+				{saving ? 'Criando…' : 'Criar'}
+			</button>
+			<button class="admin-btn ghost" onclick={closeCreate} disabled={saving}>Cancelar</button>
 		</div>
 	{/if}
 
@@ -213,6 +236,21 @@
 	.chip {
 		transition: transform 0.14s var(--ease);
 	}
+	.role-feedback {
+		margin-bottom: 10px;
+		padding: 8px 12px;
+		border-radius: 10px;
+		font-size: 12px;
+	}
+	.role-feedback.success {
+		background: rgba(36, 201, 130, 0.1);
+		color: #199966;
+	}
+	.role-feedback.error {
+		background: rgba(220, 40, 40, 0.1);
+		color: #c43a46;
+	}
+
 	.admin-btn.ghost.small {
 		height: 32px;
 		padding: 0 10px;
