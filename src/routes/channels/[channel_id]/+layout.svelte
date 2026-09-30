@@ -25,14 +25,14 @@
 <div class="app-shell">
 	{#if state.channelsDrawerOpen}
 		<button
-			class="mobile-overlay"
+			class="mobile-overlay channels-overlay"
 			aria-hidden="true"
 			onclick={() => (state.channelsDrawerOpen = false)}
 		></button>
 	{/if}
 	{#if state.membersDrawerOpen}
 		<button
-			class="mobile-overlay"
+			class="mobile-overlay members-overlay"
 			aria-hidden="true"
 			onclick={() => (state.membersDrawerOpen = false)}
 		></button>
