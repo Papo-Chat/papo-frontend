@@ -218,7 +218,7 @@ export function seedMe(me: {
         created_at: me.created_at,
         roles: me.roles
     };
-    state.byId.set(me.id, summary);
+    syncSummary(summary);
 }
 
 // ── profiles (lazy + bounded hot cache) ──────────────────
@@ -523,7 +523,7 @@ export function handlePresenceUpdate(ev: {
         if ('typing' in ev) {
             next.typing = ev.typing ?? null;
         }
-        state.byId.set(user_id, next);
+        syncSummary(next);
     }
     // The backend exposes `typing` as the channel id while typing and null
     // when typing stops. Apply it to the ephemeral typing map as well.
