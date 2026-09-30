@@ -3,6 +3,7 @@
 	import '$lib/styles/theme.css';
 	import '$lib/styles/aero.css';
 	import '$lib/styles/auth.css';
+	import '$lib/store/performance.svelte';
 	// Phosphor icon font (light + duotone variants used throughout).
 	import '@phosphor-icons/web/light';
 	import '@phosphor-icons/web/duotone';
