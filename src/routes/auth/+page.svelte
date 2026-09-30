@@ -3,6 +3,7 @@
 	import AuthField from '$lib/components/AuthField.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import { api, ApiError } from '$lib/api';
+	import * as healthStore from '$lib/store/health.svelte';
 
 	let username = $state('');
 	let password = $state('');
@@ -12,10 +13,16 @@
 
 	async function login(): Promise<void> {
 		error = null;
-		if (busy) {
+		if (busy || healthStore.state.status !== 'online') {
 			return;
 		}
 		busy = true;
+		const healthy = await healthStore.check();
+		if (!healthy) {
+			error = 'Servidor indisponível no momento.';
+			busy = false;
+			return;
+		}
 		try {
 			// A senha do servidor só é exigida quando o servidor existe e não
 			// é público (GET /server é público; 404 → null → bootstrap, em que
@@ -84,7 +91,12 @@
 		<p class="form-error" role="alert">{error}</p>
 	{/if}
 
-	<button class="submit" type="button" disabled={busy} onclick={login}>
+	<button
+		class="submit"
+		type="button"
+		disabled={busy || healthStore.state.status !== 'online'}
+		onclick={login}
+	>
 		Entrar
 		<i class="ph-light ph-arrow-right"></i>
 	</button>
@@ -97,8 +109,16 @@
 
 <div class="auth-bottom">
 	<span class="connection">
-		<span class="connection-dot"></span>
-		servidor disponível
+		<span
+			class="connection-dot"
+			class:connection-dot-offline={healthStore.state.status === 'offline'}
+			class:connection-dot-checking={healthStore.state.status === 'checking'}
+		></span>
+		{healthStore.state.status === 'online'
+			? 'servidor disponível'
+			: healthStore.state.status === 'offline'
+				? 'servidor indisponível'
+				: 'verificando servidor…'}
 	</span>
 	<span>Papo Client V1</span>
 </div>
