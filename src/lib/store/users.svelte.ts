@@ -243,6 +243,14 @@ function summaryFromProfile(p: UserProfile): UserSummary {
     };
 }
 
+function syncSummary(summary: UserSummary): void {
+    state.byId.set(summary.id, summary);
+    const index = state.list.items.findIndex((u) => u.id === summary.id);
+    if (index >= 0) {
+        state.list.items = state.list.items.map((u, i) => (i === index ? summary : u));
+    }
+}
+
 function trackProfileRequest(id: string, request: Promise<UserProfile | null>): void {
     profileInFlight.set(id, request);
     request.then(
@@ -283,7 +291,7 @@ export async function ensureProfile(id: string): Promise<UserProfile> {
         cacheProfile(profile);
         // Seed the summary even when the user is unknown — a new author / a
         // profile fetched directly must still appear in the summaries map.
-        state.byId.set(id, summaryFromProfile(profile));
+        syncSummary(summaryFromProfile(profile));
         evictProfiles();
         return profile;
     });
@@ -320,7 +328,7 @@ export async function ensureProfiles(ids: string[]): Promise<UserProfile[]> {
             }
             for (const p of res.profiles) {
                 cacheProfile(p);
-                state.byId.set(p.id, summaryFromProfile(p));
+                syncSummary(summaryFromProfile(p));
             }
         });
 
