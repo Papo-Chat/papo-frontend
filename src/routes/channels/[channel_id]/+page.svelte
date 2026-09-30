@@ -46,6 +46,7 @@
 	const loading = $derived(!!ch && ch.loading);
 	const hasMoreNewer = $derived(!!ch && ch.hasMoreNewer);
 	const hasMoreOlder = $derived(!!ch && ch.hasMoreOlder);
+	const joinNotice=$derived(usersStore.state.joinNotice?{id:usersStore.state.joinNotice.id,name:usersStore.state.byId.get(usersStore.state.joinNotice.userId)?.nickname||usersStore.state.byId.get(usersStore.state.joinNotice.userId)?.username||'Novo membro'}:null);
 
 	// Indicador de digitando.
 	const typingIds = $derived(
@@ -192,19 +193,21 @@
 	/>
 
 	{#if channel.type === 'voice'}
-		<VoiceRoom {channel} />
+		<div class="voice-channel-stack"><VoiceRoom {channel} /><div class="voice-chat-bar"><Composer onSend={SendMsg} channelId={channel.id} replyTo={null} disabled={!messagesStore.getChannel(channel.id)} /></div></div>
 	{:else}
-		<Chat
+		{#key channel.id}<Chat
 			{messages}
 			{loading}
 			{hasMoreNewer}
 			{hasMoreOlder}
 			{highlightMessageId}
+			{joinNotice}
 			{onReply}
 			onJumpToLatest={() => messagesStore.setLatest(channel.id)}
+			onJumpToLastRead={() => channel.last_read_message ? messagesStore.gotoMessage(channel.id, channel.last_read_message, channel.last_read_at) : Promise.resolve(false)}
 			onLoadMoreOlder={() => messagesStore.loadMoreOlder(channel.id)}
 			lastReadMessageId={channel.last_read_message}
-		/>
+		/>{/key}
 
 		<div class="composer-area">
 			{#if typingIds.length > 0}
@@ -349,6 +352,7 @@
 		font-size: 14px;
 	}
 
+	.voice-channel-stack{display:flex;flex:1 1 0;min-height:0;flex-direction:column;overflow-y:auto}.voice-chat-bar{position:sticky;bottom:0;z-index:10;padding:0 12px 12px;background:linear-gradient(180deg,transparent,var(--surface) 28%)}
 	.composer-area {
 		position: relative;
 		display: flex;
