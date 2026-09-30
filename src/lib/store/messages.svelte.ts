@@ -260,6 +260,7 @@ export function mergeFetchedMessage(
 	ch: ChannelMessagesState
 ): MessageWithAttachment | null {
 	const normalizedIncoming = coerceMessage(incoming);
+	const normalizedExisting = existing ? coerceMessage(existing) : undefined;
 	if (ch.deletedMessageIds.has(normalizedIncoming.id)) {
 		return null;
 	}
@@ -269,13 +270,13 @@ export function mergeFetchedMessage(
 			!isPreviewRemoved(ch, normalizedIncoming.id, p.id)
 		)
 	};
-	if (!existing) {
+	if (!normalizedExisting) {
 		// Not in the local cache: insert the REST message as-is.
 		return incomingSafe;
 	}
 	// Exists locally: never blind-overwrite. Preserve WS deltas.
-	const previewKey = (pid: string) => `${existing.id}:${pid}`;
-	const keptPreviews = existing.previews.filter((p) => !ch.previewTombstones.has(previewKey(p.id)));
+	const previewKey = (pid: string) => `${normalizedExisting.id}:${pid}`;
+	const keptPreviews = normalizedExisting.previews.filter((p) => !ch.previewTombstones.has(previewKey(p.id)));
 	const keptPreviewIds = new SvelteSet(keptPreviews.map((p) => p.id));
 	const mergedPreviews: LinkPreview[] = [
 		...keptPreviews,
@@ -283,7 +284,7 @@ export function mergeFetchedMessage(
 	];
 	// Attachments: preserve a local (WS-moderation) status over a stale REST.
 	const mergedAttachments = incomingSafe.attachments.map((a) => {
-		const local = existing.attachments.find((la) => la.id === a.id);
+		const local = normalizedExisting.attachments.find((la) => la.id === a.id);
 		if (local && local.moderation_status !== a.moderation_status) {
 			return { ...a, moderation_status: local.moderation_status };
 		}
@@ -291,20 +292,20 @@ export function mergeFetchedMessage(
 	});
 	const merged: MessageWithAttachment = {
 		...incomingSafe,
-		reactions: existing.reactions,
-		user_reactions: existing.user_reactions,
+		reactions: normalizedExisting.reactions,
+		user_reactions: normalizedExisting.user_reactions,
 		previews: mergedPreviews,
 		attachments: mergedAttachments
 	};
 	// Preserve a local edit over a stale REST snapshot.
 	const existingEditIsNewer =
-		existing.edited_at !== null &&
+		normalizedExisting.edited_at !== null &&
 		(incomingSafe.edited_at === null ||
-			Date.parse(existing.edited_at) > Date.parse(incomingSafe.edited_at));
+			Date.parse(normalizedExisting.edited_at) > Date.parse(incomingSafe.edited_at));
 
 	if (existingEditIsNewer) {
-		merged.content = existing.content;
-		merged.edited_at = existing.edited_at;
+		merged.content = normalizedExisting.content;
+		merged.edited_at = normalizedExisting.edited_at;
 	}
 	return merged;
 }
@@ -680,10 +681,10 @@ export function mergePreview(
 			fetched_at: preview.fetched_at
 		};
 
-		const exists = msg.previews.some((existing) => existing.id === preview.id);
+		const exists = msg.previews.some((existing) => normalizedExisting.id === preview.id);
 
 		const nextPreviews = exists
-			? msg.previews.map((existing) => (existing.id === preview.id ? p : existing))
+			? msg.previews.map((existing) => (normalizedExisting.id === preview.id ? p : existing))
 			: [...msg.previews, p];
 
 		previewCache.set(preview.id, preview);
