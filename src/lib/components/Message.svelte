@@ -146,7 +146,7 @@
 	// original, se ela estiver no histórico carregado do canal.
 	function jumpToReply(): void {
 		if (message.reply_to) {
-			setScrollTarget(message.reply_to);
+			setScrollTarget(message.reply_to, msgReply?.created_at ?? null);
 		}
 	}
 

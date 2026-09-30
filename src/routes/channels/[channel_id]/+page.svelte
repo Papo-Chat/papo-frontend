@@ -46,6 +46,7 @@
 
 	const loading = $derived(!!ch && ch.loading);
 	const hasMoreNewer = $derived(!!ch && ch.hasMoreNewer);
+	const hasMoreOlder = $derived(!!ch && ch.hasMoreOlder);
 
 	// Indicador de digitando.
 	const typingIds = $derived(
@@ -107,31 +108,31 @@
 		void usersStore.ensureProfiles([...seen]);
 	});
 
-	// Consome scroll target global.
+	// Consome scroll target global: load the message into the window (paging
+	// towards older if it isn't visible yet), then scroll + highlight.
 	$effect(() => {
 		const target = uiState.scrollToMessageId;
 
 		if (!target) return;
 
 		uiState.scrollToMessageId = null;
+		if (!channel) return;
 
-		if (channel && target === channel.id) {
-			return;
-		}
+		const { messageId, createdAt } = target;
 
-		if (!ch) return;
+		void messagesStore
+			.gotoMessage(channel.id, messageId, createdAt)
+			.then((found) => {
+				if (!found) return;
 
-		const exists = ch.ids.some((id) => id === target);
+				highlightMessageId = messageId;
 
-		if (!exists) return;
-
-		highlightMessageId = target;
-
-		queueMicrotask(() => {
-			setTimeout(() => {
-				highlightMessageId = null;
-			}, 2500);
-		});
+				queueMicrotask(() => {
+					setTimeout(() => {
+						highlightMessageId = null;
+					}, 2500);
+				});
+			});
 	});
 
 	function SendMsg(
@@ -196,7 +197,7 @@
 		}
 
 		// Outro canal: navega e destaca ali.
-		setScrollTarget(msgId);
+		setScrollTarget(msgId, result.created_at);
 		goto(`/channels/${result.channel_id}`);
 	}
 </script>
@@ -218,8 +219,11 @@
 			{messages}
 			{loading}
 			{hasMoreNewer}
+			{hasMoreOlder}
 			{highlightMessageId}
 			{onReply}
+			onJumpToLatest={() => messagesStore.setLatest(channel.id)}
+			onLoadMoreOlder={() => messagesStore.loadMoreOlder(channel.id)}
 			lastReadMessageId={channel.last_read_message}
 		/>
 

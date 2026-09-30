@@ -28,7 +28,7 @@
 	}
 
 	function openPin(m: MessageWithAttachment): void {
-		setScrollTarget(m.id);
+		setScrollTarget(m.id, m.created_at);
 		goto(`/channels/${m.channel_id}`);
 		close();
 	}

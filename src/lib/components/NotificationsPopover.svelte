@@ -38,7 +38,7 @@
 
 	function openNotification(n: NotificationSummary): void {
 		notificationsStore.markRead([n.id]);
-		setScrollTarget(n.message_id);
+		setScrollTarget(n.message_id, n.created_at);
 		goto(`/channels/${n.channel_id}`);
 		close();
 	}

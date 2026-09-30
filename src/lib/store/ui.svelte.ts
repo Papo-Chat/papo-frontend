@@ -12,9 +12,11 @@ export const state = $state({
 	profileOpen: false,
 	profileUser: null as UserSummary | null,
 	// Scroll/highlight target for "go to message" (search/notifications/pins
-	// clicks). The channel page reads it once, scrolls + highlights, then
-	// clears it.
-	scrollToMessageId: null as string | null
+	// clicks). The channel page reads it once, loads the message into the
+	// window if needed, scrolls + highlights, then clears it.
+	scrollToMessageId: null as
+		| { messageId: string; createdAt: string | null }
+		| null
 });
 
 export function openProfile(user: UserSummary): void {
@@ -28,6 +30,6 @@ export function closeProfile(): void {
 }
 
 // Set a message the channel page should scroll to / highlight.
-export function setScrollTarget(messageId: string | null): void {
-	state.scrollToMessageId = messageId;
+export function setScrollTarget(messageId: string, createdAt: string | null): void {
+	state.scrollToMessageId = { messageId, createdAt };
 }

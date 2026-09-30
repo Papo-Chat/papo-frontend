@@ -71,6 +71,42 @@ function deletePendingPreview(messageId: string, previewId: string): void {
 	}
 }
 
+// When messages leave the window (trim), release their client-side resources so
+// they don't leak in the module-level caches.
+//
+// - previews (image_data, unbounded): drop from previewCache/pendingPreviews,
+//   unless another message still in the window references the same preview id.
+// - attachments/thumbnails: plain server URLs — nothing held in memory.
+// - reactions / user_reactions: fields on the message object, freed with it.
+// - reaction user lists (Reactions.svelte `cached`): component-local $state,
+//   freed when the message's <Reactions> unmounts from the list.
+function releaseMessageResources(
+	byId: SvelteMap<string, MessageWithAttachment>,
+	dropped: MessageWithAttachment[]
+): void {
+	if (dropped.length === 0) {
+		return;
+	}
+
+	// Preview ids still referenced by messages kept in the window.
+	const keptPreviewIds = new Set<string>();
+	for (const m of byId.values()) {
+		for (const p of m.previews) {
+			keptPreviewIds.add(p.id);
+		}
+	}
+
+	for (const m of dropped) {
+		// Drop any not-yet-applied previews for this message.
+		pendingPreviews.delete(m.id);
+		for (const p of m.previews) {
+			if (!keptPreviewIds.has(p.id)) {
+				previewCache.delete(p.id);
+			}
+		}
+	}
+}
+
 // ── state ─────────────────────────────────────────────────
 
 function trimLatestWindow(
@@ -92,9 +128,13 @@ function trimLatestWindow(
 	const ids = sortedIds(byId);
 	const excess = ids.length - MAX_WINDOW;
 
+	const dropped: MessageWithAttachment[] = [];
 	for (const id of ids.slice(0, excess)) {
+		const m = byId.get(id);
+		if (m) dropped.push(m);
 		byId.delete(id);
 	}
+	releaseMessageResources(byId, dropped);
 
 	const keptIds = sortedIds(byId);
 	const oldestId = keptIds[0];
@@ -960,9 +1000,13 @@ async function _fetchPage(
 				trimmedNewer = true;
 			}
 
+			const dropped: MessageWithAttachment[] = [];
 			for (const id of drop) {
+				const m = newByd.get(id);
+				if (m) dropped.push(m);
 				newByd.delete(id);
 			}
+			releaseMessageResources(newByd, dropped);
 		}
 		state.channels.set(channelId, {
 			...ch2,
@@ -1003,8 +1047,12 @@ export function getPreview(previewId: string): LinkPreviewWithImage | null {
 	return previewCache.get(previewId) ?? null;
 }
 
-export function load(channelId: string): void {
-	// Fresh load: latest 100, anchored at the newest message.
+// In-flight fresh loads, keyed by channel: dedupes concurrent callers and
+// lets gotoMessage await the initial page.
+const _freshInflight = new SvelteMap<string, Promise<void>>();
+
+// Fresh load: latest 100, anchored at the newest message. Awaits the fetch.
+async function _freshLoad(channelId: string): Promise<void> {
 	if (!state.channels.has(channelId)) {
 		state.channels.set(channelId, newChannelState());
 	}
@@ -1015,37 +1063,125 @@ export function load(channelId: string): void {
 		windowMode: 'latest',
 		hasMoreNewer: false
 	});
-	_fetchPage(channelId);
+	await _fetchPage(channelId);
+}
+
+// Idempotent tracked fresh load: resolves once the channel has (or already
+// had) an initial page. Used by load()/setLatest()/ensureLoaded()/gotoMessage.
+function _freshLoadTracked(channelId: string): Promise<void> {
+	const ch = state.channels.get(channelId);
+	if (ch && ch.loaded && !ch.loading) {
+		return Promise.resolve();
+	}
+	const existing = _freshInflight.get(channelId);
+	if (existing) {
+		return existing;
+	}
+	const p = _freshLoad(channelId).finally(() => {
+		if (_freshInflight.get(channelId) === p) {
+			_freshInflight.delete(channelId);
+		}
+	});
+	_freshInflight.set(channelId, p);
+	return p;
+}
+
+export function load(channelId: string): void {
+	// Fire-and-forget wrapper for the page effect.
+	_freshLoadTracked(channelId).catch(() => {});
 }
 
 // Idempotent initial load: used by the page effect. Skips when the channel
 // already has a page in flight or already loaded, so an effect re-run cannot
 // re-trigger a fresh fetch. `load()`/`setLatest()` stay for explicit refreshes.
-export function ensureLoaded(channelId: string): void {
-	const ch = state.channels.get(channelId);
-	if (ch && (ch.loaded || ch.loading)) {
-		return;
-	}
-	load(channelId);
+export function ensureLoaded(channelId: string): Promise<void> {
+	return _freshLoadTracked(channelId).catch(() => {});
 }
 
-export function loadMoreOlder(channelId: string): void {
+// Navigate to older messages: fetch the next page towards older. Resolves when
+// the page is in the window (so callers can scroll-compensate the prepend).
+export function loadMoreOlder(channelId: string): Promise<void> {
 	const ch = state.channels.get(channelId);
 	// Guard: no in-flight page + a cursor to continue from (P1.11).
 	if (!ch || ch.loading || !ch.cursorOlder) {
-		return;
+		return Promise.resolve();
 	}
 	// Navigating up → historical window.
 	state.channels.set(channelId, { ...ch, windowMode: 'historical' });
-	_fetchPage(channelId, {
+	return _fetchPage(channelId, {
 		since: ch.cursorOlder.since,
 		last_id: ch.cursorOlder.last_id
-	});
+	}).catch(() => {});
 }
 
 // Navigate back to the newest message: reconcile via REST (fresh latest page).
-export function setLatest(channelId: string): void {
-	load(channelId);
+// Resolves once the latest page is in the window (so callers can scroll after).
+export function setLatest(channelId: string): Promise<void> {
+	return _freshLoadTracked(channelId).catch(() => {});
+}
+
+// Navigate to a specific message: load pages until it is in the window.
+// Returns true when the message ends up in `byId` (the caller scrolls to it).
+// `createdAt` (the target's created_at, or a close approximation) picks the
+// direction: if the target is newer than the window's newest message, jump to
+// the newest first, then page towards older from the top. Otherwise page
+// towards older from `cursorOlder`.
+export async function gotoMessage(
+	channelId: string,
+	messageId: string,
+	createdAt: string | null
+): Promise<boolean> {
+	await ensureLoaded(channelId);
+
+	const ch = state.channels.get(channelId);
+	if (!ch) {
+		return false;
+	}
+	if (ch.byId.has(messageId)) {
+		return true;
+	}
+
+	// Direction: is the target newer than the window's newest message?
+	const ids = ch.ids;
+	const newest =
+		ids.length > 0 ? ch.byId.get(ids[ids.length - 1]) ?? null : null;
+
+	const targetIsNewer =
+		newest !== null &&
+		((createdAt && createdAt > newest.created_at) ||
+			(createdAt === newest.created_at && messageId > newest.id));
+
+	if (targetIsNewer) {
+		// Jump to the newest, then page towards older from the top.
+		await _freshLoadTracked(channelId);
+		const ch2 = state.channels.get(channelId);
+		if (ch2 && ch2.byId.has(messageId)) {
+			return true;
+		}
+	}
+
+	// Page towards older until the message appears or the history is exhausted.
+	while (true) {
+		const c = state.channels.get(channelId);
+		if (!c || !c.hasMoreOlder || !c.cursorOlder) {
+			return false;
+		}
+		const cursor = c.cursorOlder;
+		// Navigating up → historical window.
+		state.channels.set(channelId, { ...c, windowMode: 'historical' });
+		try {
+			await _fetchPage(channelId, {
+				since: cursor.since,
+				last_id: cursor.last_id
+			});
+		} catch {
+			return false;
+		}
+		const c2 = state.channels.get(channelId);
+		if (c2 && c2.byId.has(messageId)) {
+			return true;
+		}
+	}
 }
 
 export function send(payload: {

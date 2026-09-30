@@ -9,7 +9,9 @@
 		searchActive = false,
 		loading = false,
 		hasMoreNewer = false,
+		hasMoreOlder = false,
 		onJumpToLatest,
+		onLoadMoreOlder,
 		highlightMessageId = null,
 		lastReadMessageId = null,
 		scrollToLatestToken = 0,
@@ -20,7 +22,9 @@
 		searchActive?: boolean;
 		loading?: boolean;
 		hasMoreNewer?: boolean;
+		hasMoreOlder?: boolean;
 		onJumpToLatest?: () => void | Promise<void>;
+		onLoadMoreOlder?: () => void | Promise<void>;
 		highlightMessageId?: string | null;
 		lastReadMessageId?: string | null;
 		scrollToLatestToken?: number;
@@ -32,6 +36,7 @@
 	let initialScrollDone = $state(false);
 	let stickToBottom = $state(true);
 	let unreadCount = $state(0);
+	let loadingOlder = $state(false);
 
 	let animatedMessageId = $state<string | null>(null);
 	let lastMessageId = $state<string | null>(null);
@@ -91,19 +96,54 @@
 	function handleScroll() {
 		if (!listEl || !initialScrollDone || suppressScrollHandler) return;
 
-		const distance =
-			listEl.scrollHeight -
-			listEl.scrollTop -
-			listEl.clientHeight;
+		const distanceFromTop = listEl.scrollTop;
+		const distanceFromBottom =
+			listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight;
 
 		const wasAtBottom = stickToBottom;
 
-		stickToBottom = distance < 120;
+		stickToBottom = distanceFromBottom < 120;
 
 		if (!wasAtBottom && stickToBottom) {
 			setUnreadCount(0);
 			visibleLastReadMessageId = null;
 		}
+
+		// Infinite scroll: load older messages when close to the top of the
+		// list and not anchored to the bottom.
+		if (distanceFromTop < 200 && !stickToBottom) {
+			void loadOlder();
+		}
+	}
+
+	// Loads the next older page and keeps the viewport pinned (scroll
+	// compensation for the content prepended above the current view).
+	async function loadOlder(): Promise<void> {
+		if (loadingOlder || !hasMoreOlder || !listEl) return;
+		loadingOlder = true;
+		const oldScrollTop = listEl.scrollTop;
+		const oldScrollHeight = listEl.scrollHeight;
+		try {
+			await onLoadMoreOlder?.();
+			// Wait for the new messages to render, then compensate the scroll.
+			await tick();
+		} catch {
+			loadingOlder = false;
+			return;
+		}
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				if (!listEl) {
+					loadingOlder = false;
+					return;
+				}
+				const added = listEl.scrollHeight - oldScrollHeight;
+				if (added > 0) {
+					listEl.scrollTop = oldScrollTop + added;
+				}
+				loadingOlder = false;
+			});
+		});
 	}
 
 	// Pai pediu explicitamente para ir ao final.
@@ -230,6 +270,10 @@
 </script>
 
 <div class="chat-wrapper">
+	{#if loadingOlder}
+		<div class="older-loading" aria-hidden="true">Carregando…</div>
+	{/if}
+
 	<div
 		class="chat"
 		class:ready={messages.length === 0 || initialScrollDone}
@@ -300,6 +344,23 @@
 		height: 100%;
 		min-height: 0;
 		overflow-y: auto;
+	}
+
+	.older-loading {
+		position: absolute;
+		top: 8px;
+		left: 0;
+		right: 0;
+		z-index: 5;
+
+		display: flex;
+		align-items: center;
+		justify-content: center;
+
+		font-size: 13px;
+		font-weight: 600;
+		color: var(--muted-soft);
+		pointer-events: none;
 	}
 
 	.new-messages-bubble {
