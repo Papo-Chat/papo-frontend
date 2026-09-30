@@ -218,7 +218,7 @@ export function seedMe(me: {
         created_at: me.created_at,
         roles: me.roles
     };
-    state.byId.set(me.id, summary);
+    syncSummary(summary);
 }
 
 // ── profiles (lazy + bounded hot cache) ──────────────────
@@ -241,6 +241,14 @@ function summaryFromProfile(p: UserProfile): UserSummary {
         created_at: p.created_at,
         roles: p.roles
     };
+}
+
+function syncSummary(summary: UserSummary): void {
+    state.byId.set(summary.id, summary);
+    const index = state.list.items.findIndex((u) => u.id === summary.id);
+    if (index >= 0) {
+        state.list.items = state.list.items.map((u, i) => (i === index ? summary : u));
+    }
 }
 
 function trackProfileRequest(id: string, request: Promise<UserProfile | null>): void {
@@ -283,7 +291,7 @@ export async function ensureProfile(id: string): Promise<UserProfile> {
         cacheProfile(profile);
         // Seed the summary even when the user is unknown — a new author / a
         // profile fetched directly must still appear in the summaries map.
-        state.byId.set(id, summaryFromProfile(profile));
+        syncSummary(summaryFromProfile(profile));
         evictProfiles();
         return profile;
     });
@@ -320,7 +328,7 @@ export async function ensureProfiles(ids: string[]): Promise<UserProfile[]> {
             }
             for (const p of res.profiles) {
                 cacheProfile(p);
-                state.byId.set(p.id, summaryFromProfile(p));
+                syncSummary(summaryFromProfile(p));
             }
         });
 
@@ -515,7 +523,7 @@ export function handlePresenceUpdate(ev: {
         if ('typing' in ev) {
             next.typing = ev.typing ?? null;
         }
-        state.byId.set(user_id, next);
+        syncSummary(next);
     }
     // The backend exposes `typing` as the channel id while typing and null
     // when typing stops. Apply it to the ephemeral typing map as well.
@@ -592,14 +600,8 @@ export function reset(): void {
 // Ban / unban. The API does not return the resulting ban state; it is
 // applied locally only after the server confirms success.
 
-export function setBanState(userId: string, ban: boolean): void {
-    api.users
-        .ban({ user_id: userId, ban_state: ban })
-        .then(() => {
-            if (ban) state.bannedIds.add(userId);
-            else state.bannedIds.delete(userId);
-        })
-        .catch((err) => {
-            console.error('failha ao alterar estado de ban:', err);
-        });
+export async function setBanState(userId: string, ban: boolean): Promise<void> {
+    await api.users.ban({ user_id: userId, ban_state: ban });
+    if (ban) state.bannedIds.add(userId);
+    else state.bannedIds.delete(userId);
 }

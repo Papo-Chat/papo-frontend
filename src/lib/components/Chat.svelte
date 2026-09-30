@@ -407,6 +407,23 @@
 		animation: target-highlight-pulse 0.55s ease-out;
 	}
 
+	.message-target-highlight :global(.attachment-image img),
+	.message-target-highlight :global(.attachment-media),
+	.message-target-highlight :global(.attachment-file) {
+		box-shadow:
+			0 0 0 2px rgba(10, 132, 255, 0.72),
+			0 0 0 5px rgba(10, 132, 255, 0.12);
+		border-radius: 11px;
+	}
+
+	:global([data-theme='dark']) .message-target-highlight :global(.attachment-image img),
+	:global([data-theme='dark']) .message-target-highlight :global(.attachment-media),
+	:global([data-theme='dark']) .message-target-highlight :global(.attachment-file) {
+		box-shadow:
+			0 0 0 2px rgba(91, 196, 255, 0.78),
+			0 0 0 5px rgba(91, 196, 255, 0.1);
+	}
+
 	:global([data-theme='dark']) .message-target-highlight {
 		background: linear-gradient(90deg, rgba(50, 159, 226, 0.2), rgba(22, 83, 122, 0.08));
 		box-shadow:

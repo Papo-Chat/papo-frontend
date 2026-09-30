@@ -16,6 +16,8 @@
     let bannerImg: { base64: string; mime: string } | null = $state(null);
     let avatarError = $state('');
     let bannerError = $state('');
+    let removeAvatar = $state(false);
+    let removeBanner = $state(false);
     let saving = $state(false);
     let showSaving = $state(false);
     let saved = $state(false);
@@ -28,6 +30,7 @@
     // usa o valor já persistido no perfil. O acesso aos $state nulos é feito
     // em funções regulares; o $derived mantém a reatividade.
     function previewAvatar(): string {
+        if (removeAvatar) return '';
         if (avatarImg) {
             return blobToUrl(avatarImg.base64, mimeToFormat(avatarImg.mime));
         }
@@ -38,6 +41,7 @@
     }
 
     function previewBanner(): string {
+        if (removeBanner) return '';
         if (bannerImg) {
             return blobToUrl(bannerImg.base64, mimeToFormat(bannerImg.mime));
         }
@@ -93,6 +97,7 @@
         if (!file) return;
         try {
             avatarImg = await fileToBase64(file, 'avatar');
+            removeAvatar = false;
         } catch (err) {
             avatarError = (err as Error).message;
             avatarImg = null;
@@ -106,6 +111,7 @@
         if (!file) return;
         try {
             bannerImg = await fileToBase64(file, 'banner');
+            removeBanner = false;
         } catch (err) {
             bannerError = (err as Error).message;
             bannerImg = null;
@@ -135,13 +141,17 @@
                 typing: null
             });
 
-            if (avatarImg) {
+            if (removeAvatar) {
+                await api.users.updateAvatar(id, { avatar: '', avatar_format: '' });
+            } else if (avatarImg) {
                 await api.users.updateAvatar(id, {
                     avatar: avatarImg.base64,
                     avatar_format: mimeToFormat(avatarImg.mime)
                 });
             }
-            if (bannerImg) {
+            if (removeBanner) {
+                await api.users.updateBanner(id, { banner: '', banner_format: '' });
+            } else if (bannerImg) {
                 await api.users.updateBanner(id, {
                     banner: bannerImg.base64,
                     banner_format: mimeToFormat(bannerImg.mime)
@@ -153,7 +163,7 @@
             const fresh = await api.users.profile(id);
             profile = fresh;
             usersStore.state.profiles.set(id, fresh);
-            usersStore.state.byId.set(id, {
+            const summary = {
                 id: fresh.id,
                 username: fresh.username,
                 nickname: fresh.nickname,
@@ -163,10 +173,16 @@
                 status_updated_at: fresh.status_updated_at,
                 created_at: fresh.created_at,
                 roles: fresh.roles
-            } as UserSummary);
+            } as UserSummary;
+            usersStore.state.byId.set(id, summary);
+            usersStore.state.list.items = usersStore.state.list.items.map((u) =>
+                u.id === id ? summary : u
+            );
 
             avatarImg = null;
             bannerImg = null;
+            removeAvatar = false;
+            removeBanner = false;
             saved = true;
             savedTimer = setTimeout(() => {
                 saved = false;
@@ -194,6 +210,7 @@
                     onclick={() => {
                         bannerImg = null;
                         bannerError = '';
+                        removeBanner = true;
                     }}
                     aria-label="Remover capa"
                 >
@@ -203,11 +220,28 @@
         {/if}
 
         <div class="profile-preview">
-            {#if avatarSrc}
-                <img class="avatar avatar-custom" src={avatarSrc} alt={displayName} />
-            {:else}
-                <Avatar user={profile ?? null} size={64} />
-            {/if}
+            <div class="avatar-preview-wrap">
+                {#if avatarSrc}
+                    <img class="avatar avatar-custom" src={avatarSrc} alt={displayName} />
+                {:else}
+                    <Avatar user={removeAvatar ? null : (profile ?? null)} size={64} />
+                {/if}
+                {#if !removeAvatar && (avatarImg || profile?.avatar_blob)}
+                    <button
+                        class="avatar-reset"
+                        type="button"
+                        aria-label="Remover avatar"
+                        title="Remover avatar"
+                        onclick={() => {
+                            avatarImg = null;
+                            avatarError = '';
+                            removeAvatar = true;
+                        }}
+                    >
+                        <Icon name="x" variant="light" size={12} />
+                    </button>
+                {/if}
+            </div>
             <div class="profile-preview-info">
                 <h3>{displayName}</h3>
                 <span class="preview-user">@{atUsername}</span>
@@ -330,7 +364,8 @@
         display: block;
     }
 
-    .banner-reset {
+    .banner-reset,
+    .avatar-reset {
         position: absolute;
         top: 6px;
         right: 6px;
@@ -344,8 +379,25 @@
         place-items: center;
     }
 
-    :global([data-theme='dark']) .banner-reset {
+    :global([data-theme='dark']) .banner-reset,
+    :global([data-theme='dark']) .avatar-reset {
         background: rgba(255, 255, 255, 0.15);
+    }
+
+    .avatar-preview-wrap {
+        position: relative;
+        width: 68px;
+        height: 68px;
+        display: grid;
+        place-items: center;
+    }
+
+    .avatar-reset {
+        top: -2px;
+        right: -2px;
+        width: 22px;
+        height: 22px;
+        padding: 0;
     }
 
     .profile-preview {

@@ -33,55 +33,55 @@ export async function load(): Promise<void> {
 	state.loaded = true;
 }
 
-export function create(req: {
+export async function create(req: {
 	name: string;
 	color: string | null;
 	permissions: RolePermissions;
-}): void {
+}): Promise<Role> {
 	const epoch = currentSessionEpoch();
-	api.roles.create(req).then((role) => {
-		if (!isCurrentSessionEpoch(epoch)) {
-			throw new Error('stale session');
-		}
-		state.byId.set(role.id, role);
-		const list = [...state.list, role];
-		state.list = list;
-	});
+	const role = await api.roles.create(req);
+	if (!isCurrentSessionEpoch(epoch)) {
+		throw new Error('stale session');
+	}
+	state.byId.set(role.id, role);
+	state.list = [...state.list, role];
+	return role;
 }
 
-export function update(
+export async function update(
 	id: string,
 	req: { name: string; color: string | null; permissions: RolePermissions }
-): void {
+): Promise<Role> {
 	const epoch = currentSessionEpoch();
-	api.roles.update(id, req).then((role) => {
-		if (!isCurrentSessionEpoch(epoch)) {
-			throw new Error('stale session');
-		}
-		state.byId.set(role.id, role);
-		const list = state.list.map((r) => (r.id === role.id ? role : r));
-		state.list = list;
-	});
+	const role = await api.roles.update(id, req);
+	if (!isCurrentSessionEpoch(epoch)) {
+		throw new Error('stale session');
+	}
+	state.byId.set(role.id, role);
+	state.list = state.list.map((r) => (r.id === role.id ? role : r));
+	return role;
 }
 
-export function remove(id: string): void {
+export async function remove(id: string): Promise<void> {
 	const epoch = currentSessionEpoch();
-	api.roles.remove(id).then(() => {
-		if (!isCurrentSessionEpoch(epoch)) {
-			throw new Error('stale session');
-		}
-		state.byId.delete(id);
-		const list = state.list.filter((r) => r.id !== id);
-		state.list = list;
-	});
+	await api.roles.remove(id);
+	if (!isCurrentSessionEpoch(epoch)) {
+		throw new Error('stale session');
+	}
+	state.byId.delete(id);
+	state.list = state.list.filter((r) => r.id !== id);
 }
 
-export function assign(userId: string, roleId: string): void {
-	api.users.assignRole(userId, { role_id: roleId });
+export function assign(userId: string, roleId: string): Promise<{
+	user_id: string;
+	role_id: string;
+	assigned_at: string;
+}> {
+	return api.users.assignRole(userId, { role_id: roleId });
 }
 
-export function unassign(userId: string, roleId: string): void {
-	api.users.unassignRole(userId, roleId);
+export function unassign(userId: string, roleId: string): Promise<void> {
+	return api.users.unassignRole(userId, roleId);
 }
 
 // Re-export the pure permission helpers (so they are also available from the

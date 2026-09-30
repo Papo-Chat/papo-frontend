@@ -19,6 +19,7 @@
 	let creating = $state(true);
 	let saving = $state(false);
 	let saved = $state(false);
+	let savedMessage = $state('');
 	let error = $state<string | null>(null);
 	let seeded = $state(false);
 
@@ -83,8 +84,10 @@
 		iconFormat = '';
 	}
 
-	function save(): void {
+	async function save(): Promise<void> {
+		if (saving || !canSave) return;
 		error = null;
+		saved = false;
 		saving = true;
 		const req = {
 			name: name.trim(),
@@ -93,22 +96,26 @@
 			public: public_,
 			password: isPrivate ? password : null
 		};
-		const run = creating
-			? serverStore.create(req)
-			: serverStore.update(req);
-		run
-			.then(() => {
-				saved = true;
-				queueMicrotask(() => {
-					setTimeout(() => (saved = false), 2000);
-				});
-			})
-			.catch((err: unknown) => {
-				error = err instanceof Error ? err.message : 'Erro ao salvar o servidor.';
-			})
-			.finally(() => {
-				saving = false;
-			});
+		try {
+			const wasCreating = creating;
+			const next = wasCreating
+				? await serverStore.create(req)
+				: await serverStore.update(req);
+
+			name = next.name;
+			public_ = next.public;
+			iconBlob = next.icon_blob ?? '';
+			iconFormat = next.icon_format;
+			password = '';
+			creating = false;
+			savedMessage = wasCreating ? 'Servidor criado.' : 'Alterações salvas.';
+			saved = true;
+			setTimeout(() => (saved = false), 2000);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Erro ao salvar o servidor.';
+		} finally {
+			saving = false;
+		}
 	}
 </script>
 
@@ -260,13 +267,13 @@
 					<span>{error}</span>
 				</div>
 			{:else if saved}
-				<span class="saved">{creating ? 'Servidor criado' : 'Alterações salvas'}</span>
+				<span class="saved">{savedMessage}</span>
 			{/if}
 
 			<div class="server-actions">
 				<button class="admin-btn" onclick={save} disabled={saving || !canSave}>
 					<Icon name="check" variant="light" />
-					{creating ? 'Criar servidor' : 'Salvar alterações'}
+					{saving ? 'Salvando…' : creating ? 'Criar servidor' : 'Salvar alterações'}
 				</button>
 			</div>
 		</div>

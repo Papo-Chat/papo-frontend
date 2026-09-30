@@ -22,7 +22,9 @@
 	let channelPerms = $state<Record<string, ChannelPermission>>({});
 	let loadingPerms = $state(false);
 	let saving = $state(false);
+	let success = $state('');
 	let error = $state<string | null>(null);
+	let feedbackTimer: ReturnType<typeof setTimeout> | null = null;
 	let permGeneration = 0;
 
 	const channels = $derived(
@@ -85,6 +87,7 @@
 		if (!name || saving) return;
 		saving = true;
 		error = null;
+		success = '';
 		try {
 			const channel = await channelsStore.create({
 				name,
@@ -97,6 +100,9 @@
 			newType = 'text';
 			newTopic = '';
 			creating = false;
+			success = 'Canal criado.';
+			if (feedbackTimer) clearTimeout(feedbackTimer);
+			feedbackTimer = setTimeout(() => (success = ''), 1800);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Erro ao criar canal.';
 		} finally {
@@ -110,11 +116,15 @@
 		if (!name) return;
 		saving = true;
 		error = null;
+		success = '';
 		try {
 			await channelsStore.update(selected.id, {
 				name,
 				topic: selected.type === 'category' ? null : editTopic.trim() || null
 			});
+			success = 'Canal salvo.';
+			if (feedbackTimer) clearTimeout(feedbackTimer);
+			feedbackTimer = setTimeout(() => (success = ''), 1800);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Erro ao salvar canal.';
 		} finally {
@@ -126,11 +136,39 @@
 		if (saving) return;
 		saving = true;
 		error = null;
+		success = '';
 		try {
 			await channelsStore.remove(id);
 			if (selectedId === id) selectedId = channelsStore.state.ordered[0] ?? null;
+			success = 'Canal removido.';
+			if (feedbackTimer) clearTimeout(feedbackTimer);
+			feedbackTimer = setTimeout(() => (success = ''), 1800);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Erro ao remover canal.';
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function moveChannel(channel: Channel, delta: -1 | 1): Promise<void> {
+		const index = channels.findIndex((c) => c.id === channel.id);
+		const target = channels[index + delta];
+		if (!target || saving) return;
+
+		saving = true;
+		error = null;
+		success = '';
+		try {
+			await channelsStore.changePosition(channel.id, {
+				old_position: channel.position,
+				new_position: target.position
+			});
+			selectedId = channel.id;
+			success = 'Ordem dos canais atualizada.';
+			if (feedbackTimer) clearTimeout(feedbackTimer);
+			feedbackTimer = setTimeout(() => (success = ''), 1800);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Erro ao reordenar canal.';
 		} finally {
 			saving = false;
 		}
@@ -152,6 +190,9 @@
 		channelPerms = { ...channelPerms, [roleId]: next };
 		try {
 			await channelsStore.setRolePermissions(selected.id, roleId, next);
+			success = 'Permissão atualizada.';
+			if (feedbackTimer) clearTimeout(feedbackTimer);
+			feedbackTimer = setTimeout(() => (success = ''), 1800);
 		} catch (err) {
 			channelPerms = { ...channelPerms, [roleId]: before };
 			error = err instanceof Error ? err.message : 'Erro ao atualizar permissão.';
@@ -178,6 +219,8 @@
 
 	{#if error}
 		<div class="admin-error" role="alert">{error}</div>
+	{:else if success}
+		<div class="admin-success" aria-live="polite">{success}</div>
 	{/if}
 
 	{#if creating}
@@ -191,7 +234,9 @@
 			{#if newType !== 'category'}
 				<input class="admin-input" placeholder="tópico (opcional)" bind:value={newTopic} />
 			{/if}
-			<button class="admin-btn" onclick={addChannel} disabled={saving}>Criar</button>
+			<button class="admin-btn" onclick={addChannel} disabled={saving || !newName.trim()}>
+				{saving ? 'Criando…' : 'Criar'}
+			</button>
 		</div>
 	{/if}
 
@@ -217,13 +262,33 @@
 								</div>
 								<span class="channel-row-type">{channel.position}</span>
 							</button>
-							<button
-								class="channel-row-del"
-								aria-label={`Remover canal ${channel.name}`}
-								onclick={() => void removeChannel(channel.id)}
-							>
-								<Icon name="trash" variant="light" size={14} />
-							</button>
+							<div class="channel-row-actions">
+								<button
+									class="channel-row-move"
+									aria-label={`Mover ${channel.name} para cima`}
+									title="Mover para cima"
+									disabled={channels[0]?.id === channel.id || saving}
+									onclick={() => void moveChannel(channel, -1)}
+								>
+									<Icon name="caret-up" variant="light" size={14} />
+								</button>
+								<button
+									class="channel-row-move"
+									aria-label={`Mover ${channel.name} para baixo`}
+									title="Mover para baixo"
+									disabled={channels[channels.length - 1]?.id === channel.id || saving}
+									onclick={() => void moveChannel(channel, 1)}
+								>
+									<Icon name="caret-down" variant="light" size={14} />
+								</button>
+								<button
+									class="channel-row-del"
+									aria-label={`Remover canal ${channel.name}`}
+									onclick={() => void removeChannel(channel.id)}
+								>
+									<Icon name="trash" variant="light" size={14} />
+								</button>
+							</div>
 						</div>
 					{/each}
 				{/if}
@@ -248,7 +313,9 @@
 						</div>
 					{/if}
 
-					<button class="admin-btn" onclick={saveChannel} disabled={saving}>Salvar canal</button>
+					<button class="admin-btn" onclick={saveChannel} disabled={saving || !editName.trim()}>
+						{saving ? 'Salvando…' : 'Salvar canal'}
+					</button>
 
 					{#if selected.type !== 'category'}
 						<div class="admin-field permissions-block">
@@ -293,12 +360,19 @@
 	.channel-row-type { color:var(--muted-soft); font-size:10px; }
 	.type-badge { font-size:9px; font-weight:800; text-transform:uppercase; padding:2px 6px; border-radius:6px; background:rgba(255,255,255,.4); color:var(--muted); }
 	.type-badge.voice { background:rgba(240,61,94,.18); color:#f03d5e; }
-	.channel-row-del { display:grid; place-items:center; width:28px; height:28px; border:0; border-radius:8px; background:transparent; cursor:pointer; opacity:.55; }
+	.channel-row-actions { display:flex; align-items:center; gap:2px; }
+	.channel-row-move,
+	.channel-row-del { display:grid; place-items:center; width:28px; height:28px; border:0; border-radius:8px; background:transparent; cursor:pointer; opacity:.55; color:var(--text); }
+	.channel-row-move:hover:not(:disabled) { opacity:1; background:rgba(100,196,250,.14); color:var(--link); }
+	.channel-row-move:disabled { opacity:.18; cursor:default; }
 	.channel-row-del:hover { opacity:1; background:rgba(240,61,94,.14); color:#f03d5e; }
 	.permissions-block { margin-top:18px; }
 	.permissions-block > label { display:block; margin-bottom:8px; }
 	.empty-edit { display:grid; place-items:center; min-height:220px; }
 	.empty { color:var(--muted-soft); font-size:13px; }
-	.admin-error { margin-bottom:10px; padding:8px 12px; border-radius:10px; background:rgba(220,40,40,.1); color:#c43a46; font-size:12px; }
+	.admin-error,
+	.admin-success { margin-bottom:10px; padding:8px 12px; border-radius:10px; font-size:12px; }
+	.admin-error { background:rgba(220,40,40,.1); color:#c43a46; }
+	.admin-success { background:rgba(36,201,130,.1); color:#199966; }
 	@media (max-width:900px) { .channels-grid { grid-template-columns:1fr; } }
 </style>

@@ -114,7 +114,18 @@ export async function create(req: {
 	type: ChannelType;
 	topic: string | null;
 }): Promise<Channel> {
+	const epoch = currentSessionEpoch();
 	const channel = await api.channels.create(req);
+	if (!isCurrentSessionEpoch(epoch)) {
+		throw new Error('stale session');
+	}
+	state.byId.set(channel.id, channel);
+	if (!state.ordered.includes(channel.id)) {
+		state.ordered = [...state.ordered, channel.id];
+	}
+	state.unread.set(channel.id, { has: false, count: 0 });
+	rebuildOrdered();
+	// Keep a delayed authoritative reseed for any server-side side effects.
 	reseedChannels.run();
 	return channel;
 }
@@ -133,18 +144,19 @@ export async function update(
 	return channel;
 }
 
-export function changePosition(
+export async function changePosition(
 	id: string,
 	req: { old_position: number; new_position: number }
-): void {
+): Promise<Channel> {
 	const epoch = currentSessionEpoch();
-	api.channels.changePosition(id, req).then((c) => {
-		if (!isCurrentSessionEpoch(epoch)) {
-			throw new Error('stale session');
-		}
-		state.byId.set(c.id, c);
-		rebuildOrdered();
-	});
+	const channel = await api.channels.changePosition(id, req);
+	if (!isCurrentSessionEpoch(epoch)) {
+		throw new Error('stale session');
+	}
+	// Positions of sibling channels may also shift server-side, so reseed the
+	// ordered list after the mutation instead of patching only one row.
+	await load();
+	return state.byId.get(channel.id) ?? channel;
 }
 
 // Centralized local drop of a channel (REST delete + WS channel_delete both
@@ -207,19 +219,33 @@ export async function setChannelNotification(
 		throw new Error('usuário não autenticado');
 	}
 
-	const setting = await api.channels.setChannelUserSetting(channelId, userId, {
-		notification_settings
-	});
-
-	const channel = state.byId.get(channelId);
-	if (channel) {
+	const before = state.byId.get(channelId);
+	if (before) {
 		state.byId.set(channelId, {
-			...channel,
-			notification_settings: setting.notification_settings
+			...before,
+			notification_settings
 		});
 	}
 
-	return setting;
+	try {
+		const setting = await api.channels.setChannelUserSetting(channelId, userId, {
+			notification_settings
+		});
+
+		const current = state.byId.get(channelId);
+		if (current) {
+			state.byId.set(channelId, {
+				...current,
+				notification_settings: setting.notification_settings
+			});
+		}
+		return setting;
+	} catch (err) {
+		if (before) {
+			state.byId.set(channelId, before);
+		}
+		throw err;
+	}
 }
 
 export async function setAllChannelNotifications(

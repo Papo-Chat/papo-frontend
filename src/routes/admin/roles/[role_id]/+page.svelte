@@ -20,6 +20,10 @@
 	});
 	let name = $state('');
 	let color = $state('#9b5de5');
+	let saving = $state(false);
+	let saved = $state(false);
+	let error = $state<string | null>(null);
+	let savedTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const palette = ['#e7a80b', '#30d158', '#0a84ff', '#9b5de5', '#ff5d63', '#5ac8fa'];
 
@@ -41,14 +45,24 @@
 		{ key: 'send_attachment' as const, label: 'Enviar anexos' }
 	];
 
-	function save(): void {
+	async function save(): Promise<void> {
 		const n = name.trim();
-		if (!n) return;
-		rolesStore.update(roleId, { name: n, color, permissions: perms });
+		if (!n || saving) return;
+		saving = true;
+		saved = false;
+		error = null;
+		try {
+			await rolesStore.update(roleId, { name: n, color, permissions: { ...perms } });
+			saved = true;
+			if (savedTimer) clearTimeout(savedTimer);
+			savedTimer = setTimeout(() => (saved = false), 1800);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Erro ao salvar Role.';
+		} finally {
+			saving = false;
+		}
 	}
 </script>
-
->
 
 <div class="role-edit-page">
 	{#if role}
@@ -109,10 +123,16 @@
 			</div>
 		</div>
 
+		{#if error}
+			<div class="role-feedback error" role="alert">{error}</div>
+		{:else if saved}
+			<div class="role-feedback success" aria-live="polite">Alterações salvas.</div>
+		{/if}
+
 		<div class="role-actions">
-			<button class="admin-btn" onclick={save}>
+			<button class="admin-btn" onclick={save} disabled={saving || !name.trim()}>
 				<Icon name="check" variant="light" />
-				Salvar alterações
+				{saving ? 'Salvando…' : 'Salvar alterações'}
 			</button>
 			<a class="admin-btn ghost" href="/admin/roles">Cancelar</a>
 		</div>
@@ -137,6 +157,21 @@
 		margin: 0;
 		font-size: 20px;
 	}
+	.role-feedback {
+		margin-top: 14px;
+		padding: 8px 12px;
+		border-radius: 10px;
+		font-size: 12px;
+	}
+	.role-feedback.success {
+		background: rgba(36, 201, 130, 0.1);
+		color: #199966;
+	}
+	.role-feedback.error {
+		background: rgba(220, 40, 40, 0.1);
+		color: #c43a46;
+	}
+
 	.role-actions {
 		display: flex;
 		align-items: center;

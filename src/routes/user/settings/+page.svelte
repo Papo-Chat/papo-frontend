@@ -8,7 +8,10 @@
 	let seededVersion = $state(-1);
 	let saving = $state(false);
 	let saved = $state(false);
+	let channelSaved = $state(false);
 	let error = $state<string | null>(null);
+	let savedTimer: ReturnType<typeof setTimeout> | null = null;
+	let channelSavedTimer: ReturnType<typeof setTimeout> | null = null;
 	let allNotificationSetting = $state<NotificationSettings>('only_mentions');
 	let applyingAll = $state(false);
 	let channelSaving = $state(new Set<string>());
@@ -48,7 +51,8 @@
 				display: { ...config.display }
 			});
 			saved = true;
-			setTimeout(() => (saved = false), 1800);
+			if (savedTimer) clearTimeout(savedTimer);
+			savedTimer = setTimeout(() => (saved = false), 1800);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Erro ao salvar configurações.';
 		} finally {
@@ -65,6 +69,9 @@
 		error = null;
 		try {
 			await channelsStore.setChannelNotification(channelId, value);
+			channelSaved = true;
+			if (channelSavedTimer) clearTimeout(channelSavedTimer);
+			channelSavedTimer = setTimeout(() => (channelSaved = false), 1800);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Erro ao atualizar notificações do canal.';
 		} finally {
@@ -80,6 +87,9 @@
 		error = null;
 		try {
 			await channelsStore.setAllChannelNotifications(allNotificationSetting);
+			channelSaved = true;
+			if (channelSavedTimer) clearTimeout(channelSavedTimer);
+			channelSavedTimer = setTimeout(() => (channelSaved = false), 1800);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Erro ao atualizar todos os canais.';
 		} finally {
@@ -150,6 +160,9 @@
 					</button>
 				</div>
 			</div>
+			{#if channelSaved}
+				<div class="channel-saved" aria-live="polite">Notificações atualizadas.</div>
+			{/if}
 			<div class="admin-card-body channel-notification-list">
 				{#if channelsStore.state.loading && channels.length === 0}
 					<div class="empty">Carregando canais…</div>
@@ -244,6 +257,7 @@
 	.notification-bulk { display:flex; gap:8px; align-items:center; margin-left:auto; }
 	.notification-bulk .admin-select { width:170px; height:38px; font-size:13px; }
 	.notification-bulk .admin-btn { height:38px; }
+	.channel-saved { margin:0 14px 8px; font-size:12px; font-weight:700; color:#24c982; }
 	.channel-notification-list { display:grid; gap:4px; max-height:380px; overflow-y:auto; }
 	.channel-notification-row { display:flex; align-items:center; gap:12px; padding:9px 8px; border-radius:10px; }
 	.channel-notification-row:hover { background:rgba(255,255,255,.24); }

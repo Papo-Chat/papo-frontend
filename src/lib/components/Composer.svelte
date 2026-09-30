@@ -48,6 +48,9 @@
 	let recorder: MediaRecorder | null = null;
 	let stream: MediaStream | null = null;
 	let chunks: BlobPart[] = [];
+	let recordingElapsed = $state(0);
+	let recordingStartedAt = 0;
+	let recordingTimer: ReturnType<typeof setInterval> | null = null;
 
 	const replyAuthor = $derived(
 		usersStore.state.byId.get(replyTo?.author_id ?? '')
@@ -291,6 +294,7 @@
 
 	const canCaptureAudio =
 		typeof navigator !== 'undefined' &&
+		!!navigator.mediaDevices &&
 		typeof navigator.mediaDevices.getUserMedia === 'function';
 
 	function audioRecordingName(mime: string): string {
@@ -305,8 +309,20 @@
 		return `audio_${stamp}.${mime.includes('ogg') ? 'ogg' : 'webm'}`;
 	}
 
-	function cancelRecording(): void {
-		chunks = [];
+	function clearRecordingTimer(): void {
+		if (recordingTimer) {
+			clearInterval(recordingTimer);
+			recordingTimer = null;
+		}
+	}
+
+	function formatRecordingTime(ms: number): string {
+		const total = Math.floor(ms / 1000);
+		return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+	}
+
+	function cleanupRecording(): void {
+		clearRecordingTimer();
 		if (stream) {
 			stream.getTracks().forEach((t) => t.stop());
 		}
@@ -314,6 +330,26 @@
 		recorder = null;
 		recording = false;
 		stopping = false;
+		recordingStartedAt = 0;
+		recordingElapsed = 0;
+	}
+
+	function cancelRecording(): void {
+		const rec = recorder;
+		chunks = [];
+		if (rec && rec.state !== 'inactive') {
+			rec.onstop = () => {
+				chunks = [];
+				cleanupRecording();
+			};
+			try {
+				rec.stop();
+				return;
+			} catch {
+				// fall through to local cleanup
+			}
+		}
+		cleanupRecording();
 	}
 
 	function startRecording(): void {
@@ -359,6 +395,13 @@
 
 				recorder = rec;
 				recording = true;
+				recordingStartedAt = Date.now();
+				recordingElapsed = 0;
+				clearRecordingTimer();
+				recordingTimer = setInterval(() => {
+					recordingElapsed = Date.now() - recordingStartedAt;
+				}, 250);
+				mobileActionsOpen = false;
 			})
 			.catch(() => {
 				// getUserMedia rejeitou (permissão negada ou sem suporte).
@@ -367,58 +410,60 @@
 			});
 	}
 
-	function stopRecording(): void {
-		if (!recording || !recorder || stopping) {
+	function sendRecording(): void {
+		if (!recording || !recorder || stopping || sending) {
 			return;
 		}
 
 		const rec = recorder;
 		stopping = true;
+		clearRecordingTimer();
 
-		const onstop = () => {
-			stopping = false;
-			recording = false;
-			recorder = null;
-
+		rec.onstop = () => {
 			const type = rec.mimeType || 'audio/webm';
 			const blob = new Blob(chunks, { type });
 			chunks = [];
-
-			if (stream) {
-				stream.getTracks().forEach((t) => t.stop());
-			}
-			stream = null;
+			cleanupRecording();
 
 			if (blob.size === 0) {
 				error = 'Gravação vazia. Tente novamente.';
 				return;
 			}
 
-			const available = MAX_ATTACHMENTS - files.length;
-			if (available <= 0) {
-				error = `Máximo de ${MAX_ATTACHMENTS} anexos por mensagem.`;
-				return;
-			}
+			const file = new File([blob], audioRecordingName(type), { type });
+			error = null;
+			sending = true;
+			progress = 0;
 
-			files = [
-				...files,
-				new File([blob], audioRecordingName(type), { type })
-			];
+			Promise.resolve(
+				onSend?.(null, [file], (percent: number) => {
+					progress = percent;
+				})
+			)
+				.then(() => {
+					emojiOpen = false;
+					mobileActionsOpen = false;
+				})
+				.catch((err: unknown) => {
+					// Keep the recording as a normal attachment if direct send fails.
+					files = [...files, file];
+					error = err instanceof Error ? err.message : 'Erro ao enviar a gravação.';
+				})
+				.finally(() => {
+					sending = false;
+				});
 		};
 
-		rec.onstop = onstop;
-		rec.stop();
-	}
-
-	function toggleRecording(): void {
-		if (recording) {
-			stopRecording();
-		} else {
-			startRecording();
+		try {
+			rec.stop();
+		} catch {
+			stopping = false;
+			error = 'Não foi possível finalizar a gravação.';
 		}
 	}
 
 	onDestroy(() => {
+		clearRecordingTimer();
 		if (stream) {
 			stream.getTracks().forEach((t) => t.stop());
 		}
@@ -526,6 +571,31 @@
 	{/if}
 
 	<footer class="composer">
+		{#if recording || stopping}
+			<div class="audio-recorder" aria-live="polite">
+				<span class="recording-dot" aria-hidden="true"></span>
+				<span class="recording-time">{formatRecordingTime(recordingElapsed)}</span>
+				<span class="recording-label">{stopping ? 'Finalizando…' : 'Gravando áudio'}</span>
+				<button
+					class="recording-btn cancel"
+					type="button"
+					onclick={cancelRecording}
+					disabled={stopping || sending}
+				>
+					<Icon name="trash" variant="light" size={15} />
+					Cancelar
+				</button>
+				<button
+					class="recording-btn send-recording"
+					type="button"
+					onclick={sendRecording}
+					disabled={stopping || sending}
+				>
+					<Icon name="paper-plane-tilt" variant="light" size={15} />
+					Enviar
+				</button>
+			</div>
+		{:else}
 		<div class="composer-tools-desktop">
 			<button
 				class="composer-tool"
@@ -543,10 +613,10 @@
 			<button
 				class="composer-tool mic-tool"
 				class:recording={recording}
-				title={recording ? 'Parar gravação' : 'Gravar áudio'}
-				aria-label={recording ? 'Parar gravação' : 'Gravar áudio'}
+				title="Gravar áudio"
+				aria-label="Gravar áudio"
 				{disabled}
-				onclick={toggleRecording}
+				onclick={startRecording}
 			>
 				<Icon
 					name="microphone"
@@ -554,23 +624,25 @@
 				/>
 			</button>
 
-			<button
-				class="composer-tool emoji-btn"
-				title="Emojis"
-				aria-label="Emojis"
-				onclick={toggleEmoji}
-				{disabled}
-			>
-				<Icon
-					name="smiley"
-					variant="light"
-				/>
+			<div class="emoji-btn-wrap">
+				<button
+					class="composer-tool emoji-btn"
+					title="Emojis"
+					aria-label="Emojis"
+					onclick={toggleEmoji}
+					{disabled}
+				>
+					<Icon
+						name="smiley"
+						variant="light"
+					/>
+				</button>
 
 				<EmojiPicker
 					bind:open={emojiOpen}
 					onPick={onPickEmoji}
 				/>
-			</button>
+			</div>
 		</div>
 
 		<div
@@ -581,32 +653,34 @@
 				class="mobile-action-menu"
 				aria-hidden={!mobileActionsOpen}
 			>
-				<button
-					class="composer-tool mobile-action emoji-btn"
-					title="Emojis"
-					aria-label="Emojis"
-					tabindex={mobileActionsOpen ? 0 : -1}
-					onclick={toggleMobileEmoji}
-					{disabled}
-				>
-					<Icon
-						name="smiley"
-						variant="light"
-					/>
+				<div class="mobile-action emoji-mobile-wrap">
+					<button
+						class="composer-tool emoji-btn"
+						title="Emojis"
+						aria-label="Emojis"
+						tabindex={mobileActionsOpen ? 0 : -1}
+						onclick={toggleMobileEmoji}
+						{disabled}
+					>
+						<Icon
+							name="smiley"
+							variant="light"
+						/>
+					</button>
 
 					<EmojiPicker
 						bind:open={emojiOpen}
 						onPick={onPickEmoji}
 					/>
-				</button>
+				</div>
 
 				<button
 					class="composer-tool mobile-action mic-tool"
 					class:recording={recording}
-					title={recording ? 'Parar gravação' : 'Gravar áudio'}
-					aria-label={recording ? 'Parar gravação' : 'Gravar áudio'}
+					title="Gravar áudio"
+					aria-label="Gravar áudio"
 					tabindex={mobileActionsOpen ? 0 : -1}
-					onclick={toggleRecording}
+					onclick={startRecording}
 					{disabled}
 				>
 					<Icon
@@ -679,16 +753,88 @@
 			onclick={send}
 			disabled={
 				disabled ||
-				recording ||
 				text.trim() === '' && files.length === 0
 			}
 		>
 			Enviar
 		</button>
+		{/if}
 	</footer>
 </div>
 
 <style>
+	.audio-recorder {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 5px 7px 5px 10px;
+		border: 1px solid rgba(255, 90, 113, 0.3);
+		border-radius: 14px;
+		background: linear-gradient(145deg, rgba(255, 90, 113, 0.12), rgba(255, 255, 255, 0.18));
+	}
+
+	.recording-dot {
+		width: 8px;
+		height: 8px;
+		flex: 0 0 auto;
+		border-radius: 50%;
+		background: #ff5a71;
+		box-shadow: 0 0 0 4px rgba(255, 90, 113, 0.12);
+		animation: mic-pulse 1.2s ease-in-out infinite;
+	}
+
+	.recording-time {
+		font-size: 12px;
+		font-weight: 800;
+		font-variant-numeric: tabular-nums;
+		color: var(--text-primary);
+	}
+
+	.recording-label {
+		flex: 1;
+		min-width: 0;
+		font-size: 12px;
+		color: var(--muted-soft);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.recording-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 5px;
+		height: 30px;
+		padding: 0 9px;
+		border-radius: 9px;
+		border: 1px solid var(--border);
+		background: var(--surface);
+		color: var(--text-primary);
+		font: inherit;
+		font-size: 11px;
+		font-weight: 700;
+		cursor: pointer;
+	}
+
+	.recording-btn.cancel:hover {
+		color: #d6423e;
+		background: rgba(214, 66, 62, 0.09);
+	}
+
+	.recording-btn.send-recording {
+		color: #fff;
+		border-color: rgba(10, 115, 214, 0.45);
+		background: linear-gradient(180deg, #54aaf2, #0a73d6);
+	}
+
+	.recording-btn:disabled {
+		opacity: 0.55;
+		cursor: wait;
+	}
+
 	button.composer-tool {
 		font: inherit;
 		-webkit-appearance: none;
@@ -704,6 +850,12 @@
 		font: inherit;
 		-webkit-appearance: none;
 		appearance: none;
+	}
+
+	.emoji-btn-wrap,
+	.emoji-mobile-wrap {
+		position: relative;
+		display: inline-flex;
 	}
 
 	.composer-tool.emoji-btn {
@@ -901,6 +1053,17 @@
 	}
 
 	@media (max-width: 768px) {
+		.audio-recorder {
+			width: 100%;
+			padding-left: 9px;
+		}
+		.recording-label {
+			display: none;
+		}
+		.recording-btn {
+			padding-inline: 8px;
+		}
+
 		.composer {
 			display: flex;
 			align-items: center;

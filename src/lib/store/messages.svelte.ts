@@ -1193,15 +1193,32 @@ export function send(payload: {
 	onProgress?: (percent: number) => void;
 }): Promise<MessageWithAttachment> {
 	const { onProgress, ...msgPayload } = payload;
-	return api.messages.send(msgPayload, onProgress);
+	return api.messages.send(msgPayload, onProgress).then((message) => {
+		upsertMessage(state, message.channel_id, message);
+		return message;
+	});
 }
 
 export function edit(messageId: string, content: string): Promise<MessageWithAttachment> {
-	return api.messages.edit(messageId, { content: content });
+	return api.messages.edit(messageId, { content }).then((message) => {
+		upsertMessage(state, message.channel_id, message);
+		return message;
+	});
 }
 
-export function remove(messageId: string): Promise<void> {
-	return api.messages.remove(messageId);
+export async function remove(messageId: string): Promise<void> {
+	let channelId: string | null = null;
+	for (const [id, channel] of state.channels) {
+		if (channel.byId.has(messageId)) {
+			channelId = id;
+			break;
+		}
+	}
+
+	await api.messages.remove(messageId);
+	if (channelId) {
+		removeMessage(state, channelId, messageId);
+	}
 }
 
 export function pin(
@@ -1213,11 +1230,16 @@ export function pin(
 	pinned_by: string | null;
 	pinned_at: string;
 }> {
-	return api.messages.pin(channelId, messageId);
+	return api.messages.pin(channelId, messageId).then((result) => {
+		patchPinned(state, messageId, true);
+		return result;
+	});
 }
 
 export function unpin(channelId: string, messageId: string): Promise<void> {
-	return api.messages.unpin(channelId, messageId);
+	return api.messages.unpin(channelId, messageId).then(() => {
+		patchPinned(state, messageId, false);
+	});
 }
 // DROP-IN: substitua updateUserReactions(), react() e unreact() por este bloco.
 //
