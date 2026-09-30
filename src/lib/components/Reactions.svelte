@@ -2,6 +2,7 @@
 	import type { MessageUserReaction, MessageReactionSummary, UserSummary } from '$lib/types';
 	import * as messagesStore from '$lib/store/messages.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
+	import { meId } from '$lib/store/session.svelte';
 	import type { EmojiOption } from '$lib/utils/emojis';
 	import { mergeGroups, type KeysetCursor } from '$lib/utils/keyset';
 
@@ -78,21 +79,64 @@
 		loadingUsers = false;
 	}
 
+	function patchCachedMine(r: MessageReactionSummary, remove: boolean): void {
+		if (!cached) return;
+
+		const mine = meId();
+		if (!mine) return;
+
+		const key = reactionKey(r.emoji_id ?? null, r.unicode ?? null);
+		const group = cached.reactions.find(
+			(g) => reactionKey(g.emoji_id, g.unicode) === key
+		);
+		if (!group) return;
+
+		const hasMine = group.users.some((u) => u.user_id === mine);
+
+		if (remove) {
+			if (!hasMine) return;
+			group.users = group.users.filter((u) => u.user_id !== mine);
+			group.count = Math.max(0, group.count - 1);
+		} else {
+			if (hasMine) return;
+			group.users = [
+				{
+					id: `local:${mine}:${Date.now()}`,
+					user_id: mine,
+					created_at: new Date().toISOString()
+				},
+				...group.users
+			];
+			group.count += 1;
+		}
+
+		cached = {
+			reactions: cached.reactions.map((g) =>
+				reactionKey(g.emoji_id, g.unicode) === key ? { ...g, users: [...g.users] } : g
+			)
+		};
+	}
+
 	function togglePill(r: MessageReactionSummary): void {
 		const already = isMine(r);
-		invalidateUsersCache();
+		const req = {
+			emoji_id: r.emoji_id ?? null,
+			unicode: r.unicode ?? null
+		};
 
-		if (already) {
-			void messagesStore.unreact(channelId, messageId, {
-				emoji_id: r.emoji_id ?? null,
-				unicode: r.unicode ?? null
-			});
-		} else {
-			void messagesStore.react(channelId, messageId, {
-				emoji_id: r.emoji_id ?? null,
-				unicode: r.unicode ?? null
-			});
-		}
+		// Keep an open mobile popover stable: update its cached user list
+		// optimistically instead of clearing/remounting it.
+		patchCachedMine(r, already);
+
+		const request = already
+			? messagesStore.unreact(channelId, messageId, req)
+			: messagesStore.react(channelId, messageId, req);
+
+		void request.catch(() => {
+			// messagesStore rolls back the message counters; mirror that rollback
+			// in the open reaction-user list.
+			patchCachedMine(r, !already);
+		});
 	}
 
 	function onPick(emoji: EmojiOption): void {

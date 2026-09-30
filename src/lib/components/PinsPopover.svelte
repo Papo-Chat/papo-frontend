@@ -67,7 +67,7 @@
 					{@const author = usersStore.state.byId.get(m.author_id ?? '')}
 					{#if author}
 						<div
-							class="popover-item"
+							class="popover-item pin-item"
 							role="button"
 							tabindex={0}
 							onclick={() => openPin(m)}
@@ -79,19 +79,20 @@
 							}}
 						>
 							<Avatar user={author} size={34} />
-							<div>
+							<div class="pin-main">
 								<div class="meta">
 									<span class="name">{author.nickname || author.username}</span>
 									<span class="time">{formatTime(m.created_at)}</span>
 								</div>
 								{#if m.content}
-									<div class="content">{m.content}</div>
+									<div class="content pin-content">{m.content}</div>
 								{:else}
 									{#if m.previews.length}
-										<div class="content">{m.previews[0].title}</div>
+										<div class="content pin-content">{m.previews[0].title}</div>
 									{/if}
 								{/if}
 							</div>
+							<span class="pin-badge" aria-hidden="true"><Icon name="push-pin" variant="duotone" size={13} /></span>
 						</div>
 					{/if}
 				{/each}
@@ -108,3 +109,67 @@
 		</div>
 	</div>
 {/if}
+
+
+<style>
+	.pins-popover .popover-body {
+		justify-items: stretch;
+	}
+
+	.pin-item {
+		position: relative;
+		width: 100%;
+		box-sizing: border-box;
+		align-items: flex-start;
+		padding-right: 38px;
+		cursor: pointer;
+		background: linear-gradient(145deg, rgba(255, 246, 211, 0.2), rgba(255, 226, 128, 0.08));
+		border-color: rgba(224, 174, 55, 0.2);
+	}
+
+	.pin-main {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.pin-content {
+		display: -webkit-box;
+		overflow: hidden;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		line-height: 1.42;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 3;
+	}
+
+	.pin-badge {
+		position: absolute;
+		top: 10px;
+		right: 10px;
+		display: grid;
+		place-items: center;
+		width: 22px;
+		height: 22px;
+		border-radius: 8px;
+		color: #a87500;
+		background: rgba(231, 168, 11, 0.14);
+		border: 1px solid rgba(231, 168, 11, 0.22);
+	}
+
+	.pin-item:hover,
+	.pin-item:focus-visible {
+		background: linear-gradient(145deg, rgba(255, 244, 199, 0.34), rgba(244, 198, 71, 0.14));
+		border-color: rgba(224, 174, 55, 0.36);
+		outline: none;
+	}
+
+	:global([data-theme='dark']) .pin-item {
+		background: linear-gradient(145deg, rgba(201, 150, 34, 0.12), rgba(105, 78, 13, 0.08));
+		border-color: rgba(235, 190, 78, 0.16);
+	}
+
+	:global([data-theme='dark']) .pin-badge {
+		color: #ffd66d;
+		background: rgba(231, 168, 11, 0.14);
+	}
+</style>
