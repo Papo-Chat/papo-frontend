@@ -44,21 +44,105 @@
 
 	let files = $state<File[]>([]);
 	let progress = $state(0);
-	type MentionOption={kind:'user'|'everyone';id:string;label:string;value:string};
-	let mentionOpen=$state(false); let mentionStart=$state(-1); let mentionQuery=$state(''); let mentionIndex=$state(0);
-	const myRoleIds=$derived(new Set(sessionState.roles.map((r)=>r.id)));
-	const myRoles=$derived(rolesStore.state.list.filter((r)=>myRoleIds.has(r.id)));
-	const canMentionEveryone=$derived(rolesStore.can('everyone_message',{roles:myRoles,isOwner:!!sessionState.userId&&serverState.server?.owner_id===sessionState.userId}));
-	function mentionOptions():MentionOption[]{
-		if(!mentionOpen)return[]; const q=mentionQuery.toLowerCase(); const out:MentionOption[]=[];
-		if(canMentionEveryone&&'everyone'.startsWith(q))out.push({kind:'everyone',id:'everyone',label:'everyone',value:'@everyone'});
-		for(const u of [...usersStore.state.byId.values()].filter((u)=>(u.nickname||u.username).toLowerCase().includes(q)||u.username.toLowerCase().includes(q)).slice(0,8-out.length))out.push({kind:'user',id:u.id,label:u.nickname||u.username,value:`@mention(<@${u.id}>)`});
+	type MentionOption = {
+		kind: 'user' | 'everyone';
+		id: string;
+		label: string;
+		username: string;
+	};
+	const selectedMentions = new Map<string, string>();
+	let mentionOpen = $state(false);
+	let mentionStart = $state(-1);
+	let mentionQuery = $state('');
+	let mentionIndex = $state(0);
+
+	const myRoleIds = $derived(new Set(sessionState.roles.map((r) => r.id)));
+	const myRoles = $derived(rolesStore.state.list.filter((r) => myRoleIds.has(r.id)));
+	const canMentionEveryone = $derived(
+		rolesStore.can('everyone_message', {
+			roles: myRoles,
+			isOwner: !!sessionState.userId && serverState.server?.owner_id === sessionState.userId
+		})
+	);
+
+	function mentionOptions(): MentionOption[] {
+		if (!mentionOpen) return [];
+		const q = mentionQuery.toLowerCase();
+		const out: MentionOption[] = [];
+
+		if (canMentionEveryone && 'everyone'.startsWith(q)) {
+			out.push({ kind: 'everyone', id: 'everyone', label: 'everyone', username: 'everyone' });
+		}
+
+		for (const u of [...usersStore.state.byId.values()]
+			.filter((u) => {
+				const display = (u.nickname || u.username).toLowerCase();
+				return display.includes(q) || u.username.toLowerCase().includes(q);
+			})
+			.slice(0, 8 - out.length)) {
+			out.push({
+				kind: 'user',
+				id: u.id,
+				label: u.nickname || u.username,
+				username: u.username
+			});
+		}
 		return out;
 	}
-	const mentionItems=$derived(mentionOptions());
-	function closeMentions(){mentionOpen=false;mentionStart=-1;mentionQuery='';mentionIndex=0;}
-	function refreshMentions(){const cursor=inputEl?.selectionStart??text.length;const before=text.slice(0,cursor);const m=before.match(/(?:^|\s)@([^\s@()]*)$/);if(!m){closeMentions();return;}mentionStart=before.length-m[1].length-1;mentionQuery=m[1];mentionOpen=true;mentionIndex=0;}
-	function insertMention(option:MentionOption){if(mentionStart<0)return;const cursor=inputEl?.selectionStart??text.length;const value=`${option.value} `;text=text.slice(0,mentionStart)+value+text.slice(cursor);const next=mentionStart+value.length;closeMentions();queueMicrotask(()=>{if(!inputEl)return;inputEl.selectionStart=next;inputEl.selectionEnd=next;inputEl.focus();resizeInput();notifyTyping();});}
+
+	const mentionItems = $derived(mentionOptions());
+
+	function closeMentions(): void {
+		mentionOpen = false;
+		mentionStart = -1;
+		mentionQuery = '';
+		mentionIndex = 0;
+	}
+
+	function refreshMentions(): void {
+		const cursor = inputEl?.selectionStart ?? text.length;
+		const before = text.slice(0, cursor);
+		const m = before.match(/(?:^|\s)@([^\s@()]*)$/);
+		if (!m) {
+			closeMentions();
+			return;
+		}
+		mentionStart = before.length - m[1].length - 1;
+		mentionQuery = m[1];
+		mentionOpen = true;
+		mentionIndex = 0;
+	}
+
+	function serializeMentions(value: string): string {
+		let serialized = value;
+		for (const [username, userId] of selectedMentions) {
+			serialized = serialized.replaceAll(`@${username}`, `@mention(<@${userId}>)`);
+		}
+		return serialized;
+	}
+
+	function insertMention(option: MentionOption): void {
+		if (mentionStart < 0) return;
+		const cursor = inputEl?.selectionStart ?? text.length;
+		const readable = `@${option.username} `;
+
+		if (option.kind === 'user') {
+			selectedMentions.set(option.username, option.id);
+		}
+
+		text = text.slice(0, mentionStart) + readable + text.slice(cursor);
+		const next = mentionStart + readable.length;
+		closeMentions();
+
+		queueMicrotask(() => {
+			if (!inputEl) return;
+			inputEl.selectionStart = next;
+			inputEl.selectionEnd = next;
+			inputEl.focus();
+			resizeInput();
+			notifyTyping();
+		});
+	}
 
 	// ── gravação de áudio (microfone) ──
 	let recording = $state(false);
@@ -186,6 +270,7 @@
 		}
 
 		const t = text.trim();
+		const wireText = t ? serializeMentions(t) : '';
 
 		if ((!t && files.length === 0) || disabled || sending) {
 			return;
@@ -196,7 +281,7 @@
 		progress = 0;
 
 		onSend?.(
-			t || null,
+			wireText || null,
 			files,
 			(percent: number) => {
 				progress = percent;
@@ -205,8 +290,10 @@
 			.then(() => {
 				text = '';
 				files = [];
+				selectedMentions.clear();
 				emojiOpen = false;
 				mobileActionsOpen = false;
+				closeMentions();
 
 				resetInputHeight();
 			})
@@ -747,9 +834,26 @@
         <div class="input">
 			{#if mentionOpen && mentionItems.length}
 				<div class="mention-menu" role="listbox">
-					{#each mentionItems as option,index (option.kind+option.id)}
-						<button type="button" class:active={index===mentionIndex} onmousedown={(e)=>e.preventDefault()} onclick={()=>insertMention(option)}>
-							{#if option.kind==='user'}<Avatar user={usersStore.state.byId.get(option.id)} size={22} />{:else}<strong>@</strong>{/if}<span>@{option.label}</span>
+					{#each mentionItems as option, index (option.kind + option.id)}
+						<button
+							type="button"
+							class:active={index === mentionIndex}
+							onmousedown={(e) => e.preventDefault()}
+							onclick={() => insertMention(option)}
+						>
+							{#if option.kind === 'user'}
+								<Avatar user={usersStore.state.byId.get(option.id)} size={24} />
+								<span class="mention-option-copy">
+									<strong>{option.label}</strong>
+									<small>@{option.username}</small>
+								</span>
+							{:else}
+								<span class="mention-everyone-icon">@</span>
+								<span class="mention-option-copy">
+									<strong>@everyone</strong>
+									<small>Mencionar todos</small>
+								</span>
+							{/if}
 						</button>
 					{/each}
 				</div>
@@ -1343,5 +1447,107 @@
 			animation: none;
 		}
 	}
-	.input{position:relative}.mention-menu{position:absolute;left:0;bottom:calc(100% + 7px);z-index:70;display:flex;flex-direction:column;gap:2px;width:min(320px,78vw);max-height:250px;overflow:auto;padding:5px;border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:0 10px 28px rgb(0 0 0/.18)}.mention-menu button{display:flex;align-items:center;gap:7px;width:100%;padding:6px 8px;border:0;border-radius:8px;background:transparent;color:var(--text-primary);font:inherit;text-align:left;cursor:pointer}.mention-menu button:hover,.mention-menu button.active{background:var(--hover)}
+	.input {
+		position: relative;
+	}
+
+	.mention-menu {
+		position: absolute;
+		left: 0;
+		bottom: calc(100% + 8px);
+		z-index: 70;
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+		width: min(340px, 82vw);
+		max-height: 270px;
+		overflow: auto;
+		padding: 6px;
+		border: 1px solid rgba(126, 178, 211, 0.42);
+		border-radius: 14px;
+		background: linear-gradient(145deg, rgba(251, 254, 255, 0.99), rgba(229, 244, 252, 0.985));
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.95),
+			0 14px 34px rgba(14, 62, 94, 0.22);
+	}
+
+	.mention-menu button {
+		display: flex;
+		align-items: center;
+		gap: 9px;
+		width: 100%;
+		min-height: 42px;
+		padding: 6px 9px;
+		border: 1px solid transparent;
+		border-radius: 10px;
+		background: transparent;
+		color: var(--text-primary);
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.mention-menu button:hover,
+	.mention-menu button.active {
+		border-color: rgba(99, 174, 220, 0.2);
+		background: rgba(102, 193, 243, 0.16);
+	}
+
+	.mention-option-copy {
+		display: flex;
+		min-width: 0;
+		flex-direction: column;
+		gap: 1px;
+	}
+
+	.mention-option-copy strong {
+		overflow: hidden;
+		color: var(--text-primary);
+		font-size: 13px;
+		font-weight: 750;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.mention-option-copy small {
+		color: var(--muted-soft);
+		font-size: 11px;
+		font-weight: 500;
+	}
+
+	.mention-everyone-icon {
+		display: grid;
+		width: 24px;
+		height: 24px;
+		flex: 0 0 24px;
+		place-items: center;
+		border-radius: 50%;
+		background: rgba(39, 151, 220, 0.15);
+		color: var(--link);
+		font-weight: 800;
+	}
+
+	:global(html[data-theme='dark']) .mention-menu {
+		border-color: rgba(156, 210, 242, 0.18);
+		background: linear-gradient(145deg, rgba(31, 59, 77, 0.995), rgba(10, 34, 49, 0.995));
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.08),
+			0 14px 34px rgba(0, 0, 0, 0.38);
+	}
+
+	:global(html[data-theme='dark']) .mention-menu button:hover,
+	:global(html[data-theme='dark']) .mention-menu button.active {
+		border-color: rgba(122, 201, 245, 0.15);
+		background: rgba(89, 181, 232, 0.16);
+	}
+
+	:global(html[data-ui-flat]) .mention-menu {
+		background: #eef8fd;
+		box-shadow: 0 7px 18px rgba(20, 73, 106, 0.14);
+	}
+
+	:global(html[data-ui-flat][data-theme='dark']) .mention-menu {
+		background: #153447;
+		box-shadow: 0 7px 18px rgba(0, 0, 0, 0.28);
+	}
 </style>
