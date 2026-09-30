@@ -890,14 +890,16 @@ export function evict(channelId: string): void {
 
 	// Global preview tombstones are keyed as messageId:previewId. They only
 	// need to survive while the channel window can still receive a stale page.
+	const channelPreviewTombstones = new Set(ch.previewTombstones);
 	for (const key of [...previewTombstones]) {
 		const messageId = key.split(':', 1)[0];
-		if (droppedById.has(messageId)) {
+		if (droppedById.has(messageId) || channelPreviewTombstones.has(key)) {
 			previewTombstones.delete(key);
 		}
 	}
 
 	freshGuards.delete(channelId);
+	_freshInflight.delete(channelId);
 	state.channels.delete(channelId);
 }
 
@@ -1542,6 +1544,7 @@ export function reset(): void {
 
 	previewRequests.clear();
 	freshGuards.clear();
+	_freshInflight.clear();
 	state.channels.clear();
 	pendingPreviews.clear();
 	previewCache.clear();
