@@ -36,7 +36,8 @@
 	let text = $state('');
 	let error: string | null = $state(null);
 	let sending = $state(false);
-	let emojiOpen = $state(false);
+	let desktopEmojiOpen = $state(false);
+	let mobileEmojiOpen = $state(false);
 	let mobileActionsOpen = $state(false);
 
 	let inputEl: HTMLTextAreaElement | null = null;
@@ -58,12 +59,12 @@
 
 	const myRoleIds = $derived(new Set(sessionState.roles.map((r) => r.id)));
 	const myRoles = $derived(rolesStore.state.list.filter((r) => myRoleIds.has(r.id)));
-	const canMentionEveryone = $derived(
-		rolesStore.can('everyone_message', {
-			roles: myRoles,
-			isOwner: !!sessionState.userId && serverState.server?.owner_id === sessionState.userId
-		})
-	);
+	const permissionContext = $derived({
+		roles: myRoles,
+		isOwner: !!sessionState.userId && serverState.server?.owner_id === sessionState.userId
+	});
+	const canMentionEveryone = $derived(rolesStore.can('everyone_message', permissionContext));
+	const canSendAttachment = $derived(rolesStore.can('send_attachment', permissionContext));
 
 	function mentionOptions(): MentionOption[] {
 		if (!mentionOpen) return [];
@@ -190,6 +191,15 @@
 		files = files.filter((_, i) => i !== index);
 	}
 
+	$effect(() => {
+		if (!error) return;
+		const current = error;
+		const timer = setTimeout(() => {
+			if (error === current) error = null;
+		}, 4500);
+		return () => clearTimeout(timer);
+	});
+
 	// Typing signal (WS).
 	const sendTypingSignal = throttle(() => {
 		if (channelId && text.length > 0) {
@@ -291,7 +301,8 @@
 				text = '';
 				files = [];
 				selectedMentions.clear();
-				emojiOpen = false;
+				desktopEmojiOpen = false;
+				mobileEmojiOpen = false;
 				mobileActionsOpen = false;
 				closeMentions();
 
@@ -334,7 +345,8 @@
 
 	function toggleEmoji(): void {
 		if (!disabled) {
-			emojiOpen = !emojiOpen;
+			desktopEmojiOpen = !desktopEmojiOpen;
+			mobileEmojiOpen = false;
 		}
 	}
 
@@ -344,14 +356,15 @@
 		mobileActionsOpen = !mobileActionsOpen;
 
 		if (!mobileActionsOpen) {
-			emojiOpen = false;
+			mobileEmojiOpen = false;
 		}
 	}
 
 	function toggleMobileEmoji(): void {
 		if (disabled) return;
 
-		emojiOpen = !emojiOpen;
+		mobileEmojiOpen = !mobileEmojiOpen;
+		desktopEmojiOpen = false;
 		mobileActionsOpen = true;
 	}
 
@@ -391,8 +404,10 @@
 	}
 
 	function openFilePicker(): void {
+		if (!canSendAttachment) return;
 		mobileActionsOpen = false;
-		emojiOpen = false;
+		desktopEmojiOpen = false;
+		mobileEmojiOpen = false;
 
 		fileInput?.click();
 	}
@@ -460,7 +475,7 @@
 	}
 
 	function startRecording(): void {
-		if (recording || stopping) {
+		if (!canSendAttachment || recording || stopping) {
 			return;
 		}
 		error = null;
@@ -548,7 +563,8 @@
 				})
 			)
 				.then(() => {
-					emojiOpen = false;
+					desktopEmojiOpen = false;
+				mobileEmojiOpen = false;
 					mobileActionsOpen = false;
 				})
 				.catch((err: unknown) => {
@@ -680,8 +696,10 @@
 	<footer class="composer">
 		{#if recording || stopping}
 			<div class="audio-recorder" aria-live="polite">
-				<span class="recording-dot" aria-hidden="true"></span>
-				<span class="recording-time">{formatRecordingTime(recordingElapsed)}</span>
+				<span class="recording-status">
+					<span class="recording-dot" aria-hidden="true"></span>
+					<span class="recording-time">{formatRecordingTime(recordingElapsed)}</span>
+				</span>
 				<span class="recording-label">{stopping ? 'Finalizando…' : 'Gravando áudio'}</span>
 				<button
 					class="recording-btn cancel"
@@ -704,32 +722,28 @@
 			</div>
 		{:else}
 		<div class="composer-tools-desktop">
-			<button
-				class="composer-tool"
-				title="Anexo"
-				aria-label="Anexo"
-				{disabled}
-				onclick={openFilePicker}
-			>
-				<Icon
-					name="paperclip"
-					variant="light"
-				/>
-			</button>
+			{#if canSendAttachment}
+				<button
+					class="composer-tool"
+					title="Anexo"
+					aria-label="Anexo"
+					{disabled}
+					onclick={openFilePicker}
+				>
+					<Icon name="paperclip" variant="light" />
+				</button>
 
-			<button
-				class="composer-tool mic-tool"
-				class:recording={recording}
-				title="Gravar áudio"
-				aria-label="Gravar áudio"
-				{disabled}
-				onclick={startRecording}
-			>
-				<Icon
-					name="microphone"
-					variant="light"
-				/>
-			</button>
+				<button
+					class="composer-tool mic-tool"
+					class:recording={recording}
+					title="Gravar áudio"
+					aria-label="Gravar áudio"
+					{disabled}
+					onclick={startRecording}
+				>
+					<Icon name="microphone" variant="light" />
+				</button>
+			{/if}
 
 			<div class="emoji-btn-wrap">
 				<button
@@ -746,7 +760,7 @@
 				</button>
 
 				<EmojiPicker
-					bind:open={emojiOpen}
+					bind:open={desktopEmojiOpen}
 					onPick={onPickEmoji}
 				/>
 			</div>
@@ -776,39 +790,35 @@
 					</button>
 
 					<EmojiPicker
-						bind:open={emojiOpen}
+						bind:open={mobileEmojiOpen}
 						onPick={onPickEmoji}
 					/>
 				</div>
 
-				<button
-					class="composer-tool mobile-action mic-tool"
-					class:recording={recording}
-					title="Gravar áudio"
-					aria-label="Gravar áudio"
-					tabindex={mobileActionsOpen ? 0 : -1}
-					onclick={startRecording}
-					{disabled}
-				>
-					<Icon
-						name="microphone"
-						variant="light"
-					/>
-				</button>
+				{#if canSendAttachment}
+					<button
+						class="composer-tool mobile-action mic-tool"
+						class:recording={recording}
+						title="Gravar áudio"
+						aria-label="Gravar áudio"
+						tabindex={mobileActionsOpen ? 0 : -1}
+						onclick={startRecording}
+						{disabled}
+					>
+						<Icon name="microphone" variant="light" />
+					</button>
 
-				<button
-					class="composer-tool mobile-action"
-					title="Anexo"
-					aria-label="Anexo"
-					tabindex={mobileActionsOpen ? 0 : -1}
-					onclick={openFilePicker}
-					{disabled}
-				>
-					<Icon
-						name="paperclip"
-						variant="light"
-					/>
-				</button>
+					<button
+						class="composer-tool mobile-action"
+						title="Anexo"
+						aria-label="Anexo"
+						tabindex={mobileActionsOpen ? 0 : -1}
+						onclick={openFilePicker}
+						{disabled}
+					>
+						<Icon name="paperclip" variant="light" />
+					</button>
+				{/if}
 			</div>
 
 			<button
@@ -871,6 +881,7 @@
             ></textarea>
         </div>
 
+		{#if canSendAttachment}
 		<input
 			type="file"
 			multiple
@@ -880,6 +891,7 @@
 			bind:this={fileInput}
 			onchange={onFilesSelected}
 		/>
+		{/if}
 
 		<button
 			class="send"
@@ -906,6 +918,18 @@
 		border: 1px solid rgba(255, 90, 113, 0.3);
 		border-radius: 14px;
 		background: linear-gradient(145deg, rgba(255, 90, 113, 0.12), rgba(255, 255, 255, 0.18));
+	}
+
+	.recording-status {
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
+		flex: 0 0 auto;
+		height: 30px;
+		padding: 0 9px;
+		border-radius: 9px;
+		background: rgba(255, 90, 113, 0.12);
+		border: 1px solid rgba(255, 90, 113, 0.24);
 	}
 
 	.recording-dot {
