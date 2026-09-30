@@ -13,6 +13,7 @@ import type { Emoji } from '$lib/types';
 import type { Tokens } from 'marked';
 
 type EmojiNameMap = Map<string, Emoji>;
+export interface MessageMarkdownOptions { mentions?: ReadonlyMap<string, string>; highlightEveryone?: boolean; }
 type TextToken = { kind: 'text'; value: string };
 type EmojiToken = { kind: 'emoji'; name: string; emoji: Emoji };
 
@@ -87,7 +88,8 @@ function isSafeHref(href: string): boolean {
 function makeRenderer(
 	nameMap: EmojiNameMap,
 	hasText: boolean,
-	urlFn: (emoji: Emoji) => string
+	urlFn: (emoji: Emoji) => string,
+	options: MessageMarkdownOptions
 ): Renderer {
 	const r = new marked.Renderer({});
 	// No support for raw HTML: discard all block and inline tags.
@@ -116,7 +118,20 @@ function makeRenderer(
 		if ('escaped' in token && token.escaped) {
 			return '';
 		}
-		const { tokens } = tokenize(token.text, nameMap);
+		const mentionPattern = /@mention\(<@([0-9a-fA-F-]{16,})>\)|@everyone\b/g;
+		let source = token.text;
+		const placeholders = new Map<string, string>();
+		source = source.replace(mentionPattern, (raw, userId: string | undefined) => {
+			const key = `MENTIONTOKEN${placeholders.size}TOKEN`;
+			if (userId) {
+				const label = options.mentions?.get(userId) ?? 'usuário';
+				placeholders.set(key, `<button type="button" class="message-mention" data-mention-user-id="${escapeText(userId)}">@${escapeText(label)}</button>`);
+			} else {
+				placeholders.set(key, options.highlightEveryone ? '<span class="message-mention message-mention-everyone">@everyone</span>' : '@everyone');
+			}
+			return key;
+		});
+		const { tokens } = tokenize(source, nameMap);
 		return tokens
 			.map((t) => {
 				if (t.kind === 'emoji') {
@@ -132,7 +147,9 @@ function makeRenderer(
 					}
 					return `:${t.name}:`;
 				}
-				return escapeText(t.value);
+				let value = escapeText(t.value);
+				for (const [key, html] of placeholders) value = value.replaceAll(key, html);
+				return value;
 			})
 			.join('');
 	};
@@ -142,7 +159,8 @@ function makeRenderer(
 export function renderMessageMarkdown(
 	content: string,
 	nameMap: EmojiNameMap,
-	urlFn: (emoji: Emoji) => string = emojiUrl
+	urlFn: (emoji: Emoji) => string = emojiUrl,
+	options: MessageMarkdownOptions = {}
 ): string {
 	if (!content) {
 		return '';
@@ -153,6 +171,6 @@ export function renderMessageMarkdown(
 		async: false,
 		gfm: true,
 		breaks: true,
-		renderer: makeRenderer(nameMap, hasText, urlFn)
+		renderer: makeRenderer(nameMap, hasText, urlFn, options)
 	});
 }
