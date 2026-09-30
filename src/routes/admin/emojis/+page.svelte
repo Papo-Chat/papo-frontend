@@ -9,7 +9,9 @@
 	let selectedFile: File | null = $state(null);
 	let filter = $state('');
 	let saving = $state(false);
+	let success = $state('');
 	let error = $state<string | null>(null);
+	let feedbackTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const emojis = $derived(emojisStore.state.list);
 	const visibleEmojis = $derived(
@@ -30,6 +32,7 @@
 		if (!n || !selectedFile || saving) return;
 		saving = true;
 		error = null;
+		success = '';
 		try {
 			const image = await fileToBase64(selectedFile, 'emoji');
 			await emojisStore.create({
@@ -40,6 +43,9 @@
 			name = '';
 			selectedFile = null;
 			creating = false;
+			success = 'Emoji criado.';
+			if (feedbackTimer) clearTimeout(feedbackTimer);
+			feedbackTimer = setTimeout(() => (success = ''), 1800);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Erro ao criar emoji.';
 		} finally {
@@ -50,8 +56,12 @@
 	async function remove(id: string): Promise<void> {
 		if (saving) return;
 		error = null;
+		success = '';
 		try {
 			await emojisStore.remove(id);
+			success = 'Emoji removido.';
+			if (feedbackTimer) clearTimeout(feedbackTimer);
+			feedbackTimer = setTimeout(() => (success = ''), 1800);
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'Erro ao remover emoji.';
 		}
@@ -85,7 +95,9 @@
 
 	{#if error}
 		<div class="emoji-error" role="alert">{error}</div>
-	{/if}
+	{:else if success}
+		<div class="emoji-success" aria-live="polite">{success}</div>
+	{/if>
 
 	{#if creating}
 		<div class="new-emoji">
@@ -180,6 +192,9 @@
 	.emoji-remove { flex:none; display:grid; place-items:center; width:30px; height:30px; border:0; border-radius:8px; background:transparent; color:var(--text); cursor:pointer; opacity:.55; }
 	.emoji-remove:hover { opacity:1; background:rgba(240,61,94,.14); color:#f03d5e; }
 	.empty, .loading-more { padding:18px; color:var(--muted-soft); font-size:13px; text-align:center; }
-	.emoji-error { margin-bottom:10px; padding:8px 12px; border-radius:10px; background:rgba(220,40,40,.1); color:#c43a46; font-size:12px; }
+	.emoji-error,
+	.emoji-success { margin-bottom:10px; padding:8px 12px; border-radius:10px; font-size:12px; }
+	.emoji-error { background:rgba(220,40,40,.1); color:#c43a46; }
+	.emoji-success { background:rgba(36,201,130,.1); color:#199966; }
 	:global([data-theme='dark']) .emoji-cell { background:rgba(119,194,235,.06); border-color:rgba(182,224,250,.14); }
 </style>
