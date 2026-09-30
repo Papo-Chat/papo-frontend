@@ -4,10 +4,29 @@
 	// mockup channel/mockup buttons were dropped).
 	import { goto } from '$app/navigation';
 	import { state as serverState } from '$lib/store/server.svelte';
+	import { state as sessionState, meId } from '$lib/store/session.svelte';
+	import * as rolesStore from '$lib/store/roles.svelte';
+	import { can } from '$lib/store/roles.svelte';
 	import Icon from './Icon.svelte';
 	import ServerIcon from './ServerIcon.svelte';
 
 	const server = $derived(serverState.server);
+	const me = $derived(meId());
+	const isOwner = $derived(!!me && server?.owner_id === me);
+	const myRoleIds = $derived(new Set(sessionState.roles.map((r) => r.id)));
+	const myRoles = $derived(rolesStore.state.list.filter((r) => myRoleIds.has(r.id)));
+	const adminCtx = $derived({ roles: myRoles, isOwner });
+	const canManageServer = $derived((!server && !!me) || can('manage_server', adminCtx));
+	const canManageChannels = $derived(can('manage_channels', adminCtx));
+	const canManageRoles = $derived(can('manage_roles', adminCtx));
+	const canOpenAdmin = $derived(canManageServer || canManageChannels || canManageRoles);
+	const adminRoute = $derived(
+		canManageServer
+			? '/admin/server'
+			: canManageChannels
+				? '/admin/channels'
+				: '/admin/roles'
+	);
 </script>
 
 <aside class="rail">
@@ -20,14 +39,16 @@
 		/>
 	</div>
 
-	<button
-		class="rail-btn"
-		title="Administração"
-		aria-label="Administração"
-		onclick={() => goto('/admin/server')}
-	>
-		<Icon name="shield-check" variant="light" />
-	</button>
+	{#if canOpenAdmin}
+		<button
+			class="rail-btn"
+			title="Administração"
+			aria-label="Administração"
+			onclick={() => goto(adminRoute)}
+		>
+			<Icon name="shield-check" variant="light" />
+		</button>
+	{/if}
 
 	<div class="rail-spacer"></div>
 
