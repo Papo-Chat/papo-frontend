@@ -4,7 +4,7 @@ import { SvelteMap } from 'svelte/reactivity';
 import { api } from '../api';
 import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
 import { nextCursor } from '../utils/keyset';
-import { blobToUrl } from '../utils/media';
+import { formatToMime } from '../utils/media';
 import type { Emoji, KeysetCursor } from '../types';
 
 export const state = $state({
@@ -152,12 +152,14 @@ export async function remove(id: string): Promise<void> {
 	state.list = state.list.filter((e) => e.id !== id);
 }
 
-// base64 → objectURL (cached).
+// Emojis stay in memory for the whole session, so a data URL is a better
+// fit than the shared object-URL LRU. Object URLs can be revoked while an
+// <img> is still mounted when a server has many custom emojis.
 export function emojiUrl(emoji: Emoji): string {
 	if (!emoji.image_blob) {
 		return '';
 	}
-	return blobToUrl(emoji.image_blob, emoji.format);
+	return `data:${formatToMime(emoji.format)};base64,${emoji.image_blob}`;
 }
 
 // Full reset (logout / 401 / account switch).
