@@ -728,7 +728,8 @@ button.name:focus-visible {
 
 /* mensagem fixada: destaque dourado (token --gold). A transição de
  * border-color/box-shadow da .bubble anima a mudança ao fixar/desfixar. */
-.bubble.pinned {
+.bubble.pinned,
+.message:hover .bubble.pinned {
 	border-color: var(--gold);
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, 0.9),
@@ -2265,7 +2266,8 @@ button.name:focus-visible {
 		0 14px 30px rgba(0, 0, 0, 0.3),
 		0 0 22px rgba(95, 211, 255, 0.08);
 }
-[data-theme='dark'] .bubble.pinned {
+[data-theme='dark'] .bubble.pinned,
+[data-theme='dark'] .message:hover .bubble.pinned {
 	border-color: var(--gold);
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, 0.16),

@@ -259,20 +259,24 @@ export function mergeFetchedMessage(
 	incoming: MessageWithAttachment,
 	ch: ChannelMessagesState
 ): MessageWithAttachment | null {
-	if (ch.deletedMessageIds.has(incoming.id)) {
+	const normalizedIncoming = coerceMessage(incoming);
+	const normalizedExisting = existing ? coerceMessage(existing) : undefined;
+	if (ch.deletedMessageIds.has(normalizedIncoming.id)) {
 		return null;
 	}
 	const incomingSafe: MessageWithAttachment = {
-		...incoming,
-		previews: incoming.previews.filter((p) => !isPreviewRemoved(ch, incoming.id, p.id))
+		...normalizedIncoming,
+		previews: normalizedIncoming.previews.filter((p) =>
+			!isPreviewRemoved(ch, normalizedIncoming.id, p.id)
+		)
 	};
-	if (!existing) {
+	if (!normalizedExisting) {
 		// Not in the local cache: insert the REST message as-is.
 		return incomingSafe;
 	}
 	// Exists locally: never blind-overwrite. Preserve WS deltas.
-	const previewKey = (pid: string) => `${existing.id}:${pid}`;
-	const keptPreviews = existing.previews.filter((p) => !ch.previewTombstones.has(previewKey(p.id)));
+	const previewKey = (pid: string) => `${normalizedExisting.id}:${pid}`;
+	const keptPreviews = normalizedExisting.previews.filter((p) => !ch.previewTombstones.has(previewKey(p.id)));
 	const keptPreviewIds = new SvelteSet(keptPreviews.map((p) => p.id));
 	const mergedPreviews: LinkPreview[] = [
 		...keptPreviews,
@@ -280,7 +284,7 @@ export function mergeFetchedMessage(
 	];
 	// Attachments: preserve a local (WS-moderation) status over a stale REST.
 	const mergedAttachments = incomingSafe.attachments.map((a) => {
-		const local = existing.attachments.find((la) => la.id === a.id);
+		const local = normalizedExisting.attachments.find((la) => la.id === a.id);
 		if (local && local.moderation_status !== a.moderation_status) {
 			return { ...a, moderation_status: local.moderation_status };
 		}
@@ -288,20 +292,20 @@ export function mergeFetchedMessage(
 	});
 	const merged: MessageWithAttachment = {
 		...incomingSafe,
-		reactions: existing.reactions,
-		user_reactions: existing.user_reactions,
+		reactions: normalizedExisting.reactions,
+		user_reactions: normalizedExisting.user_reactions,
 		previews: mergedPreviews,
 		attachments: mergedAttachments
 	};
 	// Preserve a local edit over a stale REST snapshot.
 	const existingEditIsNewer =
-		existing.edited_at !== null &&
+		normalizedExisting.edited_at !== null &&
 		(incomingSafe.edited_at === null ||
-			Date.parse(existing.edited_at) > Date.parse(incomingSafe.edited_at));
+			Date.parse(normalizedExisting.edited_at) > Date.parse(incomingSafe.edited_at));
 
 	if (existingEditIsNewer) {
-		merged.content = existing.content;
-		merged.edited_at = existing.edited_at;
+		merged.content = normalizedExisting.content;
+		merged.edited_at = normalizedExisting.edited_at;
 	}
 	return merged;
 }
@@ -313,16 +317,17 @@ export function upsertMessage(
 	channelId: string,
 	msg: MessageWithAttachment
 ): void {
+	const safeMessage = coerceMessage(msg);
 	const ch = state.channels.get(channelId);
 	let inserted = false;
 	if (ch) {
-		const merged = mergeFetchedMessage(ch.byId.get(msg.id), msg, ch);
+		const merged = mergeFetchedMessage(ch.byId.get(safeMessage.id), safeMessage, ch);
 		if (merged) {
 			const newByd = new SvelteMap<string, MessageWithAttachment>();
 			for (const [id, m] of ch.byId) {
 				newByd.set(id, m);
 			}
-			newByd.set(msg.id, merged);
+			newByd.set(safeMessage.id, merged);
 
 			const trimmed =
 				ch.windowMode === 'latest'
@@ -345,15 +350,15 @@ export function upsertMessage(
 	} else {
 		// No channel state yet: create it and insert.
 		const c = newChannelState();
-		c.byId.set(msg.id, msg);
-		c.ids = [msg.id];
+		c.byId.set(safeMessage.id, safeMessage);
+		c.ids = [safeMessage.id];
 		c.loaded = true;
 		state.channels.set(channelId, c);
 		inserted = true;
 	}
 	// Apply any preview that resolved before the message arrived (P0.5).
 	if (inserted) {
-		applyPendingPreview(state, msg.id);
+		applyPendingPreview(state, safeMessage.id);
 	}
 }
 
