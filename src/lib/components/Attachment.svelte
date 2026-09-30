@@ -246,15 +246,17 @@
 
 	.attachment-audio {
 		display: grid;
-		grid-template-columns: 26px minmax(70px, 120px) auto;
+		grid-template-columns: 24px minmax(64px, 100px) auto;
 		align-items: center;
-		gap: 6px;
-		width: fit-content;
-		max-width: min(100%, 260px);
+		gap: 5px;
+		width: min(220px, 100%);
+		max-width: 220px;
+		margin: 4px auto;
 		padding: 4px 6px;
 		border: 1px solid var(--border);
 		border-radius: 9px;
 		background: var(--surface);
+		box-sizing: border-box;
 	}
 
 	.attachment-audio audio {
@@ -264,8 +266,8 @@
 	.audio-play {
 		display: grid;
 		place-items: center;
-		width: 26px;
-		height: 26px;
+		width: 24px;
+		height: 24px;
 		padding: 0;
 		border: 0;
 		border-radius: 8px;
@@ -273,12 +275,12 @@
 		color: var(--text-primary);
 		cursor: pointer;
 		font: inherit;
-		font-size: 11px;
+		font-size: 10px;
 	}
 
 	.audio-progress {
 		width: 100%;
-		min-width: 70px;
+		min-width: 64px;
 		accent-color: var(--link);
 	}
 
