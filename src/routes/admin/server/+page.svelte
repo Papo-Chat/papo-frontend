@@ -83,8 +83,10 @@
 		iconFormat = '';
 	}
 
-	function save(): void {
+	async function save(): Promise<void> {
+		if (saving || !canSave) return;
 		error = null;
+		saved = false;
 		saving = true;
 		const req = {
 			name: name.trim(),
@@ -93,22 +95,25 @@
 			public: public_,
 			password: isPrivate ? password : null
 		};
-		const run = creating
-			? serverStore.create(req)
-			: serverStore.update(req);
-		run
-			.then(() => {
-				saved = true;
-				queueMicrotask(() => {
-					setTimeout(() => (saved = false), 2000);
-				});
-			})
-			.catch((err: unknown) => {
-				error = err instanceof Error ? err.message : 'Erro ao salvar o servidor.';
-			})
-			.finally(() => {
-				saving = false;
-			});
+		try {
+			const wasCreating = creating;
+			const next = wasCreating
+				? await serverStore.create(req)
+				: await serverStore.update(req);
+
+			name = next.name;
+			public_ = next.public;
+			iconBlob = next.icon_blob ?? '';
+			iconFormat = next.icon_format;
+			password = '';
+			creating = false;
+			saved = true;
+			setTimeout(() => (saved = false), 2000);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Erro ao salvar o servidor.';
+		} finally {
+			saving = false;
+		}
 	}
 </script>
 
@@ -266,7 +271,7 @@
 			<div class="server-actions">
 				<button class="admin-btn" onclick={save} disabled={saving || !canSave}>
 					<Icon name="check" variant="light" />
-					{creating ? 'Criar servidor' : 'Salvar alterações'}
+					{saving ? 'Salvando…' : creating ? 'Criar servidor' : 'Salvar alterações'}
 				</button>
 			</div>
 		</div>
