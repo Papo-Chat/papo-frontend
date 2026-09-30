@@ -97,7 +97,7 @@
 		<div class="emoji-error" role="alert">{error}</div>
 	{:else if success}
 		<div class="emoji-success" aria-live="polite">{success}</div>
-	{/if>
+	{/if}
 
 	{#if creating}
 		<div class="new-emoji">
