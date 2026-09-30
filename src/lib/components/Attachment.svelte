@@ -4,7 +4,10 @@
 	import { attachmentUrl, attachmentThumbnailUrl, fetchMediaBlob } from '$lib/utils/media';
 	import { formatBytes, isImageMime } from '$lib/utils/text';
 
-	let { attachment } = $props<{ attachment: MessageAttachment }>();
+	let { attachment, pinned = false } = $props<{
+		attachment: MessageAttachment;
+		pinned?: boolean;
+	}>();
 
 	let lightboxOpen = $state(false);
 	let lightbox: HTMLDialogElement | undefined = $state();
@@ -116,6 +119,7 @@
 	<button
 		type="button"
 		class="attachment-image"
+		class:pinned-attachment={pinned}
 		aria-label={`Abrir ${name} em tela cheia`}
 		onclick={openLightbox}
 	>
@@ -152,13 +156,13 @@
 {/if}
 {:else if (attachment.mime_type.startsWith('video/') || attachment.mime_type.startsWith('application/octet-stream')) }
 	<!-- Vídeo: player inline (o backend suporta Range requests). -->
-	<div class="attachment-media">
+	<div class="attachment-media" class:pinned-attachment={pinned}>
 		<video src={fullUrl} controls></video>
 	</div>
 {:else if attachment.mime_type.startsWith('audio/')}
 	<!-- Áudio: player compacto. Áudios pequenos são baixados inteiros para
 	     blob local, evitando Range/206 e metadados de duração instáveis. -->
-	<div class="attachment-media attachment-audio">
+	<div class="attachment-media attachment-audio" class:pinned-attachment={pinned} title={name}>
 		<audio
 			bind:this={audioEl}
 			src={audioSrc || fullUrl}
@@ -191,11 +195,10 @@
 			{formatAudioTime(audioCurrent)}
 			<span class="audio-duration">/ {audioDuration > 0 ? formatAudioTime(audioDuration) : (audioLoading ? '…' : '--:--')}</span>
 		</span>
-		<span class="attachment-name" title={name}>{name}</span>
 	</div>
 {:else}
 	<!-- Arquivo: chip de download. -->
-	<a class="attachment-file pill"  href={fullUrl} download={name} target="_blank" rel="noopener">
+	<a class="attachment-file pill" class:pinned-attachment={pinned} href={fullUrl} download={name} target="_blank" rel="noopener">
 		<span class="attachment-icon">📎</span>
 		<span class="attachment-name">{name}</span>
 		{#if attachment.size_bytes > 0}
@@ -244,14 +247,14 @@
 
 	.attachment-audio {
 		display: grid;
-		grid-template-columns: 30px minmax(80px, 180px) auto;
+		grid-template-columns: 26px minmax(70px, 120px) auto;
 		align-items: center;
-		gap: 7px;
+		gap: 6px;
 		width: fit-content;
-		max-width: min(100%, 360px);
-		padding: 6px 8px;
+		max-width: min(100%, 260px);
+		padding: 4px 6px;
 		border: 1px solid var(--border);
-		border-radius: 10px;
+		border-radius: 9px;
 		background: var(--surface);
 	}
 
@@ -262,8 +265,8 @@
 	.audio-play {
 		display: grid;
 		place-items: center;
-		width: 30px;
-		height: 30px;
+		width: 26px;
+		height: 26px;
 		padding: 0;
 		border: 0;
 		border-radius: 8px;
@@ -276,7 +279,7 @@
 
 	.audio-progress {
 		width: 100%;
-		min-width: 80px;
+		min-width: 70px;
 		accent-color: var(--link);
 	}
 
@@ -291,14 +294,12 @@
 		color: var(--muted-soft);
 	}
 
-	.attachment-audio .attachment-name {
-		grid-column: 2 / -1;
-		margin-top: -3px;
-		max-width: 230px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
+	.pinned-attachment {
+		box-shadow:
+			0 0 0 2px color-mix(in srgb, var(--gold) 78%, transparent),
+			0 0 0 5px color-mix(in srgb, var(--gold) 14%, transparent);
 	}
+
 	.attachment-name {
 		font-size: 12px;
 		color: var(--text-secondary);
