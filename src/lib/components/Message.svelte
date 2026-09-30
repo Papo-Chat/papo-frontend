@@ -240,6 +240,7 @@
 							type="button"
 							title="Desfixar mensagem"
 							aria-label="Desfixar mensagem"
+							disabled={!canPin}
 							onclick={togglePin}
 						>
 							<Icon name="pin" variant="duotone" />
@@ -442,7 +443,7 @@
 		gap: 4px;
 
 		margin-left: auto;
-		height: 20px;
+		height: 28px;
 		flex-shrink: 0;
 
 		/* deixa a toolbar como último item da linha */
@@ -504,7 +505,11 @@
 		background: rgba(231, 168, 11, 0.12);
 		border-color: rgba(231, 168, 11, 0.22);
 	}
-	.pinned-action:hover {
+	.pinned-action:disabled {
+		cursor: default;
+		opacity: 0.72;
+	}
+	.pinned-action:hover:not(:disabled) {
 		background: rgba(231, 168, 11, 0.2);
 		color: #8a6100;
 	}
