@@ -11,9 +11,11 @@
 		hasMoreNewer = false,
 		hasMoreOlder = false,
 		onJumpToLatest,
+		onJumpToLastRead,
 		onLoadMoreOlder,
 		highlightMessageId = null,
 		lastReadMessageId = null,
+		joinNotice = null,
 		scrollToLatestToken = 0,
 		onUnreadCountChange
 	} = $props<{
@@ -24,9 +26,11 @@
 		hasMoreNewer?: boolean;
 		hasMoreOlder?: boolean;
 		onJumpToLatest?: () => void | Promise<void>;
+		onJumpToLastRead?: () => void | Promise<boolean>;
 		onLoadMoreOlder?: () => void | Promise<void>;
 		highlightMessageId?: string | null;
 		lastReadMessageId?: string | null;
+		joinNotice?: { id: number; name: string } | null;
 		scrollToLatestToken?: number;
 		onUnreadCountChange?: (count: number) => void;
 	}>();
@@ -36,6 +40,7 @@
 	let initialScrollDone = $state(false);
 	let stickToBottom = $state(true);
 	let unreadCount = $state(0);
+	let initialUnreadSeeded = $state(false);
 	let loadingOlder = $state(false);
 
 	let animatedMessageId = $state<string | null>(null);
@@ -92,6 +97,8 @@
 			});
 		});
 	}
+
+	async function jumpToUnread(){if(!visibleLastReadMessageId){await jumpToLatest();return;}let target=listEl?.querySelector<HTMLElement>(`[data-message-id="${visibleLastReadMessageId}"]`);if(!target&&onJumpToLastRead){await onJumpToLastRead();await tick();target=listEl?.querySelector<HTMLElement>(`[data-message-id="${visibleLastReadMessageId}"]`)??null;}if(!target){await jumpToLatest();return;}target.scrollIntoView({block:'center',behavior:'auto'});stickToBottom=false;}
 
 	function handleScroll() {
 		if (!listEl || !initialScrollDone || suppressScrollHandler) return;
@@ -171,6 +178,8 @@
 			});
 		})();
 	});
+
+	$effect(()=>{if(loading||!initialScrollDone||initialUnreadSeeded)return;initialUnreadSeeded=true;if(!lastReadMessageId)return;const idx=messages.findIndex((m)=>m.id===lastReadMessageId);setUnreadCount(idx>=0?Math.max(0,messages.length-idx-1):messages.length);});
 
 	// Detecta mensagem nova.
 	$effect(() => {
@@ -322,12 +331,14 @@
 		{/if}
 	</div>
 
+	{#if joinNotice}{#key joinNotice.id}<div class="join-notice" role="status">{joinNotice.name} entrou no servidor</div>{/key}{/if}
+
 	{#if unreadCount > 0}
 		<button
 			class="new-messages-bubble"
-			onclick={jumpToLatest}
+			onclick={jumpToUnread}
 		>
-			↓ {unreadCount}
+			↑ {unreadCount}
 			{unreadCount === 1
 				? 'nova mensagem'
 				: 'novas mensagens'}
@@ -394,9 +405,8 @@
 		white-space: nowrap;
 	}
 
-	.new-messages-bubble:hover {
-		background: var(--hover);
-	}
+	.new-messages-bubble:hover { background: var(--hover); }
+	.join-notice{position:absolute;left:50%;bottom:52px;z-index:21;transform:translateX(-50%);padding:7px 12px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text-primary);font-size:12px;font-weight:650;box-shadow:0 4px 14px rgb(0 0 0/.16);white-space:nowrap;pointer-events:none;animation:join-life 4.5s ease forwards}@keyframes join-life{0%{opacity:0}10%,80%{opacity:1}100%{opacity:0}}
 
 	.message-target-highlight {
 		border-radius: 12px;
