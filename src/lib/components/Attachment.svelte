@@ -119,15 +119,14 @@
 	<button
 		type="button"
 		class="attachment-image"
-		class:pinned-attachment={pinned}
 		aria-label={`Abrir ${name} em tela cheia`}
 		onclick={openLightbox}
 	>
 		<!-- Nos nao animamos gifs reprocessados, entao usamos o original -->
 		{#if isImage.isGif}
-			<img src={fullUrl} alt={name} loading="lazy" />
+			<img src={fullUrl} alt={name} loading="lazy" class:pinned-attachment={pinned} />
 		{:else}
-			<img src={thumbUrl} alt={name} loading="lazy" />
+			<img src={thumbUrl} alt={name} loading="lazy" class:pinned-attachment={pinned} />
 		{/if}
 	</button>
 
@@ -156,8 +155,8 @@
 {/if}
 {:else if (attachment.mime_type.startsWith('video/') || attachment.mime_type.startsWith('application/octet-stream')) }
 	<!-- Vídeo: player inline (o backend suporta Range requests). -->
-	<div class="attachment-media" class:pinned-attachment={pinned}>
-		<video src={fullUrl} controls></video>
+	<div class="attachment-media">
+		<video src={fullUrl} controls class:pinned-attachment={pinned}></video>
 	</div>
 {:else if attachment.mime_type.startsWith('audio/')}
 	<!-- Áudio: player compacto. Áudios pequenos são baixados inteiros para
