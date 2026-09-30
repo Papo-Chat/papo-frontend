@@ -53,9 +53,9 @@
 
 <aside class="members {drawerOpen ? 'open' : ''}">
 	<MobilePanelHead icon="users-three" title="Membros" onClose={closeDrawer} />
-	<div class="status-picker" aria-label="Seu status">
+	<div class="status-picker" aria-label="Status">
 		<div class="status-picker-head">
-			<span class="status-picker-title">Seu status</span>
+			<span class="status-picker-title">Status</span>
 			<span class="status-current">
 				<span class="status-dot {myStatus}"></span>
 				{myStatus === 'away' ? 'Ausente' : myStatus === 'busy' ? 'Ocupado' : 'Online'}
@@ -104,21 +104,26 @@
 
 <style>
 	.status-picker {
+		top: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
 		margin: 0 0 12px;
-		padding: 10px;
-		border: 1px solid rgba(255, 255, 255, 0.68);
+		padding: 16px 4px; /* Aumenta o espaço interno, deixando a caixa mais "gorda" e preenchendo o topo */
 		border-radius: 15px;
 		background:
-			radial-gradient(circle at 12% -28%, rgba(255, 255, 255, 0.7), transparent 44%),
-			linear-gradient(145deg, rgba(246, 252, 255, 0.72), rgba(215, 238, 250, 0.55));
+		radial-gradient(circle at 12% -28%, rgba(255, 255, 255, 0.7), transparent 44%),
+		linear-gradient(145deg, rgba(246, 252, 255, 0.72), rgba(215, 238, 250, 0.55));
+		border: 1px solid rgba(255, 255, 255, 0.68);
 		box-shadow:
 			inset 0 1px 0 rgba(255, 255, 255, 0.9),
 			0 7px 18px rgba(22, 77, 112, 0.08);
 		backdrop-filter: blur(12px) saturate(120%);
 		-webkit-backdrop-filter: blur(12px) saturate(120%);
+
+		width: 100%;
+		margin-bottom: 16px; /* Empurra a barra de pesquisa um pouco mais para baixo */
+		box-sizing: border-box;
 	}
 
 	.status-picker-head {
@@ -148,14 +153,13 @@
 	.status-actions {
 		display: grid;
 		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 5px;
+		gap: 2px;
 	}
 
 	.status-actions button {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		gap: 5px;
 		min-width: 0;
 		height: 31px;
 		padding: 0 6px;

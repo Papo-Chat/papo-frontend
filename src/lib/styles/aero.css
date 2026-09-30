@@ -1203,7 +1203,7 @@ button.name:focus-visible {
    ───────────────────────────────────────────────────────────────────── */
 
 .members {
-	padding: 52px 14px 16px;
+	padding: 16px 16px 16px;
 	border-left: 1px solid rgba(82, 138, 174, 0.15);
 	background:
 		radial-gradient(circle at 12% -18%, rgba(255, 255, 255, 0.2), transparent 38%),

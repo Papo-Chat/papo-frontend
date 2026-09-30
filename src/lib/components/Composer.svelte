@@ -915,9 +915,6 @@
 		align-items: center;
 		gap: 8px;
 		padding: 5px 7px 5px 10px;
-		border: 1px solid rgba(255, 90, 113, 0.3);
-		border-radius: 14px;
-		background: linear-gradient(145deg, rgba(255, 90, 113, 0.12), rgba(255, 255, 255, 0.18));
 	}
 
 	.recording-status {
