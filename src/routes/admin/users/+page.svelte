@@ -11,6 +11,26 @@
 	import Avatar from '$lib/components/Avatar.svelte';
 
 	let filter = $state('');
+	let actionSuccess = $state('');
+	let actionError = $state<string | null>(null);
+	let busyUsers = $state(new Set<string>());
+	let feedbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function setFeedback(success: string, error: string | null = null): void {
+		actionSuccess = error ? '' : success;
+		actionError = error;
+		if (feedbackTimer) clearTimeout(feedbackTimer);
+		if (!error && success) {
+			feedbackTimer = setTimeout(() => (actionSuccess = ''), 1800);
+		}
+	}
+
+	function setUserBusy(userId: string, busy: boolean): void {
+		const next = new Set(busyUsers);
+		if (busy) next.add(userId);
+		else next.delete(userId);
+		busyUsers = next;
+	}
 
 	const me = $derived(meId());
 	const isOwner = $derived(!!me && serverState.server?.owner_id === me);
@@ -78,17 +98,31 @@
 		return usersStore.state.bannedIds.has(id);
 	}
 
-	function toggleBan(u: UserSummary): void {
-		// The API returns no resulting ban state; the store updates the
-		// client cache on success, so the UI reflects the action once the
-		// request resolves.
-		usersStore.setBanState(u.id, !isBanned(u.id));
+	async function toggleBan(u: UserSummary): Promise<void> {
+		if (busyUsers.has(u.id)) return;
+		setUserBusy(u.id, true);
+		actionError = null;
+		actionSuccess = '';
+		const nextBan = !isBanned(u.id);
+		try {
+			await usersStore.setBanState(u.id, nextBan);
+			setFeedback(nextBan ? 'Usuário banido.' : 'Usuário desbanido.');
+		} catch (err) {
+			setFeedback('', err instanceof Error ? err.message : 'Erro ao alterar banimento.');
+		} finally {
+			setUserBusy(u.id, false);
+		}
 	}
 
 	async function assignRole(userId: string, roleId: string): Promise<void> {
 		const role = rolesStore.state.byId.get(roleId);
 		const current = usersStore.state.list.items.find((u) => u.id === userId);
 		if (!current || !role || current.roles.some((r) => r.id === roleId)) return;
+
+		if (busyUsers.has(userId)) return;
+		setUserBusy(userId, true);
+		actionError = null;
+		actionSuccess = '';
 
 		const before = current.roles;
 		const next = { ...current, roles: [...before, role] };
@@ -99,18 +133,25 @@
 
 		try {
 			await rolesStore.assign(userId, roleId);
-		} catch {
+			setFeedback('Role atribuída.');
+		} catch (err) {
 			const rollback = { ...next, roles: before };
 			usersStore.state.list.items = usersStore.state.list.items.map((u) =>
 				u.id === userId ? rollback : u
 			);
 			usersStore.state.byId.set(userId, rollback);
+			setFeedback('', err instanceof Error ? err.message : 'Erro ao atribuir Role.');
+		} finally {
+			setUserBusy(userId, false);
 		}
 	}
 
 	async function removeRole(userId: string, roleId: string): Promise<void> {
 		const current = usersStore.state.list.items.find((u) => u.id === userId);
-		if (!current) return;
+		if (!current || busyUsers.has(userId)) return;
+		setUserBusy(userId, true);
+		actionError = null;
+		actionSuccess = '';
 
 		const before = current.roles;
 		const next = { ...current, roles: before.filter((r) => r.id !== roleId) };
@@ -121,12 +162,16 @@
 
 		try {
 			await rolesStore.unassign(userId, roleId);
-		} catch {
+			setFeedback('Role removida.');
+		} catch (err) {
 			const rollback = { ...next, roles: before };
 			usersStore.state.list.items = usersStore.state.list.items.map((u) =>
 				u.id === userId ? rollback : u
 			);
 			usersStore.state.byId.set(userId, rollback);
+			setFeedback('', err instanceof Error ? err.message : 'Erro ao remover Role.');
+		} finally {
+			setUserBusy(userId, false);
 		}
 	}
 	function statusDotClass(id: string): string {
@@ -158,6 +203,12 @@
 		</div>
 	</header>
 
+	{#if actionError}
+		<div class="user-feedback error" role="alert">{actionError}</div>
+	{:else if actionSuccess}
+		<div class="user-feedback success" aria-live="polite">{actionSuccess}</div>
+	{/if}
+
 	{#if loading}
 		<div class="loading-hint">Carregando usuários…</div>
 	{/if}
@@ -173,7 +224,8 @@
 					<button
 						class="banned-item"
 						aria-label={`Desbanir ${u.nickname || u.username}`}
-						onclick={() => toggleBan(u)}
+						disabled={busyUsers.has(u.id)}
+						onclick={() => void toggleBan(u)}
 					>
 						{u.nickname || u.username}
 						<Icon name="arrow-clockwise" variant="light" size={14} />
@@ -204,6 +256,7 @@
 								<select
 									class="user-role-select"
 									aria-label={`Atribuir Role a ${u.nickname || u.username}`}
+									disabled={busyUsers.has(u.id)}
 									onchange={(e) => {
 										const sel = e.target as HTMLSelectElement;
 										const val = sel.value;
@@ -226,7 +279,8 @@
 										<button
 											class="chip-x"
 											aria-label={`Remover Role ${r.name}`}
-											onclick={() => removeRole(u.id, r.id)}
+											disabled={busyUsers.has(u.id)}
+											onclick={() => void removeRole(u.id, r.id)}
 										>
 											×
 										</button>
@@ -239,7 +293,8 @@
 							<button
 								class="admin-btn ghost small"
 								aria-label={`Banir ${u.nickname || u.username}`}
-								onclick={() => toggleBan(u)}
+								disabled={busyUsers.has(u.id)}
+								onclick={() => void toggleBan(u)}
 							>
 								<Icon name="x-circle" variant="light" size={14} />
 								Banir
@@ -434,6 +489,21 @@
 		padding: 0 10px;
 		font-size: 12px;
 	}
+	.user-feedback {
+		margin-bottom: 10px;
+		padding: 8px 12px;
+		border-radius: 10px;
+		font-size: 12px;
+	}
+	.user-feedback.success {
+		background: rgba(36, 201, 130, 0.1);
+		color: #199966;
+	}
+	.user-feedback.error {
+		background: rgba(220, 40, 40, 0.1);
+		color: #c43a46;
+	}
+
 	.loading-hint {
 		text-align: center;
 		padding: 24px;
