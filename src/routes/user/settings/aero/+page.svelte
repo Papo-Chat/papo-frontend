@@ -69,7 +69,7 @@
 			<label class="performance-toggle">
 				<input
 					type="checkbox"
-					checked={$flatUi}
+					checked={$mobileFlatUi || $flatUi}
 					disabled={$mobileFlatUi}
 					onchange={(e) => setFlatUi((e.currentTarget as HTMLInputElement).checked)}
 				/>
