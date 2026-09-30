@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { MessageWithAttachment, RoleSummary } from '$lib/types';
-	import { openProfile } from '$lib/store/ui.svelte';
+	import { openProfile, setScrollTarget } from '$lib/store/ui.svelte';
 	import { meId, state as sessionState } from '$lib/store/session.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
 	import * as channelsStore from '$lib/store/channels.svelte';
@@ -15,6 +15,7 @@
 	import Attachment from './Attachment.svelte';
 	import FormattedMessage from './FormattedMessage.svelte';
 	import Icon from './Icon.svelte';
+	import { tick } from 'svelte';
 
 	let { message, onReply } = $props<{
 		message: MessageWithAttachment;
@@ -63,6 +64,13 @@
 	let isEditing = $state(false);
 	let editText = $state('');
 	let showDeleteConfirm = $state(false);
+	let deleteButton: HTMLButtonElement | null = null;
+
+	async function startDelete(): Promise<void> {
+		showDeleteConfirm = true;
+		await tick();
+		deleteButton?.focus();
+	}
 
 	// Ao toque (mobile), mantém as ações visíveis até o usuário tocar
 	// fora da mensagem.
@@ -101,7 +109,7 @@
 		showActions = false;
 	}
 
-	function handleEditKeydown(event) {
+	function handleEditKeydown(event:KeyboardEvent) {
 		if (event.key === 'Escape') cancelEdit();
 		if (
 		event.key === 'Enter' &&
@@ -134,6 +142,14 @@
 		showActions = false;
 	}
 
+	// O indicador de resposta ("responder a X") é clicável: leva à mensagem
+	// original, se ela estiver no histórico carregado do canal.
+	function jumpToReply(): void {
+		if (message.reply_to) {
+			setScrollTarget(message.reply_to);
+		}
+	}
+
 	function togglePin(): void {
 		if (isPinned) {
 			messagesStore.unpin(message.channel_id, message.id);
@@ -151,7 +167,6 @@
 	onpointerenter={onEnter}
 	onpointerleave={onLeave}
 >
-	<div class="message-enter">
 		<Avatar
 			user={author}
 			size={39}
@@ -162,11 +177,11 @@
 		/>
 		<div class="content">
 			<div class="meta">
-	<button
-		class="name"
-		style={roleColor ? `color:${roleColor}` : undefined}
-		aria-label={author ? `Ver perfil de ${name}` : undefined}
-		onclick={() => {
+		<button
+			class="name"
+			style={roleColor ? `color:${roleColor}` : undefined}
+			aria-label={author ? `Ver perfil de ${name}` : undefined}
+			onclick={() => {
 			if (author) openProfile(author);
 		}}
 	>
@@ -182,7 +197,12 @@
 
 			{#if message.reply_to}
 				{#if replyAuthor}
-					<span class="reply-from">
+					<button
+						class="reply-from"
+						type="button"
+						aria-label="Ir para a mensagem original"
+						onclick={jumpToReply}
+					>
 						<Avatar user={replyAuthor} size={18} />
 						{replyAuthor.nickname || replyAuthor.username}
 
@@ -198,12 +218,17 @@
 									</span>
 								{/if}
 							{/if}
-						{/if}	
-					</span>
+						{/if}
+					</button>
 				{:else}
-					<span class="reply-from">
+					<button
+						class="reply-from"
+						type="button"
+						aria-label="Ir para a mensagem original"
+						onclick={jumpToReply}
+					>
 						<i>Conteúdo Indisponível</i>
-					</span>
+					</button>
 				{/if}
 			{/if}
 
@@ -237,7 +262,7 @@
 							class="act-btn"
 							type="button"
 							title="Excluir"
-							onclick={() => (showDeleteConfirm = true)}
+							onclick={startDelete}
 						>
 							<Icon name="trash" variant="light" />
 						</button>
@@ -254,17 +279,19 @@
 							doEdit();
 						}}
 					>
-						<textarea
-							class="edit-input"
-							bind:value={editText}
-							aria-label="Editar mensagem"
-							placeholder="..."
-							onkeydown={handleEditKeydown}/>
+					<textarea
+						class="edit-input"
+						bind:value={editText}
+						aria-label="Editar mensagem"
+						placeholder="..."
+						autofocus
+						onkeydown={handleEditKeydown}
+					/>
 					</form>
 					<button class="confirm-btn" type="button" onclick={doEdit}> Enviar </button>
 				</div>
 			{:else if message.content}
-				<div class="bubble">
+				<div class="bubble {isPinned ? 'pinned' : ''}">
 					<FormattedMessage content={message.content} />
 				</div>
 				{#if message.previews.length}
@@ -288,7 +315,14 @@
 			{#if showDeleteConfirm}
 				<div class="delete-confirm" role="alert">
 					<span>Excluir mensagem?</span>
-					<button class="confirm-btn danger" type="button" onclick={doDelete}> Excluir </button>
+					<button
+						bind:this={deleteButton}
+						class="confirm-btn danger"
+						type="button"
+						onclick={doDelete}
+					>
+						Excluir
+					</button>
 					<button class="confirm-btn" type="button" onclick={cancelDelete}> Cancelar </button>
 				</div>
 			{:else}
@@ -302,7 +336,6 @@
 				{/if}
 			{/if}
 		</div>
-	</div>
 </article>
 
 <style>
@@ -417,6 +450,7 @@
 		align-items: center;
 		gap: 4px;
 		font-size: 12px;
+		font: inherit;
 		color: var(--muted);
 
 		margin: 0;
@@ -424,6 +458,16 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
+		text-align: left;
+		padding: 0;
+		border: none;
+		background: none;
+		cursor: pointer;
+		-webkit-appearance: none;
+		appearance: none;
+	}
+	.reply-from:hover {
+		color: var(--text);
 	}
 	.act-btn {
 		display: flex;

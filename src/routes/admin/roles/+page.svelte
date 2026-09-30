@@ -57,8 +57,6 @@
 	}
 </script>
 
->
-
 <div class="roles-page">
 	<header class="roles-head">
 		<h2>Roles</h2>

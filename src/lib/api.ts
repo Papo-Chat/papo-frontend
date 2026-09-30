@@ -147,6 +147,9 @@ type RequestOpts = {
 	// (login / login_server / register) where a 401 means "bad password",
 	// not an expired session.
 	authFailure?: 'ignore';
+	// Multipart upload progress (fetch has no `upload.onprogress`).
+	// Percent 0–100; only used when `body` is a FormData.
+	onProgress?: (percent: number) => void;
 };
 
 // Preserve AbortError as-is (navigation/cancel), instead of wrapping it in
@@ -156,7 +159,7 @@ function isAbortError(e: unknown): boolean {
 }
 
 async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
-	const { method = 'GET', body, query, signal, raw = false, authFailure } = opts;
+	const { method = 'GET', body, query, signal, raw = false, authFailure, onProgress } = opts;
 	const requestId = crypto.randomUUID();
 	const q = serializeQuery(query);
 
@@ -169,6 +172,53 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 	const isForm = body != null && body instanceof FormData;
 	if (body != null && method !== 'GET' && !isForm) {
 		headers['Content-Type'] = 'application/json';
+	}
+
+	// Upload progress: fetch has no `upload.onprogress`; for multipart
+	// requests with `onProgress`, use XHR. Same headers, same X-Request-ID
+	// and the same RFC 7807 error shape as the fetch branch.
+	if (isForm && onProgress) {
+		return new Promise<T>((resolve, reject) => {
+			const xhr = new XMLHttpRequest();
+			xhr.open(method, buildUrl(path, q), true);
+			for (const [k, v] of Object.entries(headers)) {
+				xhr.setRequestHeader(k, v);
+			}
+			if (xhr.upload) {
+				xhr.upload.onprogress = (e: ProgressEvent) => {
+					if (e.lengthComputable && e.total > 0) {
+						onProgress(Math.min(100, Math.round((e.loaded / e.total) * 100)));
+					}
+				};
+			}
+			xhr.onload = () => {
+				if (xhr.status === 204) {
+					resolve(undefined as T);
+					return;
+				}
+				let data: unknown;
+				try {
+					const ct = xhr.getResponseHeader('content-type') ?? '';
+					data = ct.includes('json')
+						? JSON.parse(xhr.responseText)
+						: { detail: String(xhr.statusText) };
+				} catch {
+					data = { detail: String(xhr.statusText) };
+				}
+				if (xhr.status >= 400) {
+					if (xhr.status === 401 && authFailure !== 'ignore' && unauthorizedHook) {
+						unauthorizedHook();
+					}
+					reject(new ApiError(data, requestId));
+					return;
+				}
+				resolve(JSON.parse(xhr.responseText) as T);
+			};
+			xhr.onerror = () => {
+				reject(new ApiError({ detail: 'Falha de rede ao enviar o anexo.' }, requestId));
+			};
+			xhr.send(body);
+		});
 	}
 
 	let res: Response;
@@ -499,8 +549,12 @@ export const messages = {
 		});
 	},
 	// Multipart POST /messages (F13): fields channel_id, content, reply_to?,
-	// and files under the repeated `attachments` field.
-	send(payload: MessageSendPayload): Promise<MessageWithAttachment> {
+	// and files under the repeated `attachments` field. `onProgress`
+	// reports multipart upload progress (0–100).
+	send(
+		payload: MessageSendPayload,
+		onProgress?: (percent: number) => void
+	): Promise<MessageWithAttachment> {
 		const form = new FormData();
 		form.append('channel_id', payload.channel_id);
 		if (payload.content != null) {
@@ -514,7 +568,8 @@ export const messages = {
 		}
 		return request<MessageWithAttachment>('/messages', {
 			method: 'POST',
-			body: form
+			body: form,
+			onProgress
 		});
 	},
 	edit(messageId: string, req: { content: string }): Promise<MessageWithAttachment> {

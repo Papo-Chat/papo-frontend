@@ -1,335 +1,773 @@
 <script lang="ts">
-	// Busca real (POST /search, debounced) sobre todos os canais legíveis.
-	// Clique num resultado dispara onResultClick; a página decide destacar
-	// localmente ou navegar (com scroll target).
-	import { api } from '$lib/api';
-	import * as usersStore from '$lib/store/users.svelte';
-	import type { SearchRequest, SearchResult, UserSummary } from '$lib/types';
-	import { formatTime } from '$lib/utils/time';
-	import Icon from './Icon.svelte';
-	import Avatar from './Avatar.svelte';
+    // Busca real (POST /search, debounced) sobre todos os canais legíveis.
+    // Clique num resultado dispara onResultClick; a página decide destacar
+    // localmente ou navegar (com scroll target).
+    import { api } from '$lib/api';
+    import * as usersStore from '$lib/store/users.svelte';
+    import type { SearchRequest, SearchResult, UserSummary } from '$lib/types';
+    import { formatTime } from '$lib/utils/time';
+    import { nextCursor, type KeysetCursor } from '$lib/utils/keyset';
+    import Icon from './Icon.svelte';
+    import Avatar from './Avatar.svelte';
 
-	let {
-		open = $bindable(false),
-		searchQuery = $bindable(''),
-		onOpenChange,
-		onResultClick
-	} = $props<{
-		open?: boolean;
-		searchQuery?: string;
-		onOpenChange?: (open: boolean) => void;
-		onResultClick?: (result: SearchResult) => void;
-	}>();
+    let {
+        open = $bindable(false),
+        searchQuery = $bindable(''),
+        onOpenChange,
+        onResultClick
+    } = $props<{
+        open?: boolean;
+        searchQuery?: string;
+        onOpenChange?: (open: boolean) => void;
+        onResultClick?: (result: SearchResult) => void;
+    }>();
 
-	let el: HTMLElement | null = null;
-	let inputEl: HTMLInputElement | null = null;
+    let el: HTMLElement | null = null;
+    let inputEl: HTMLInputElement | null = null;
 
-	let results = $state<SearchResult[]>([]);
-	let loading = $state(false);
-	let error: string | null = $state(null);
+    let results = $state<SearchResult[]>([]);
+    let loading = $state(false);
+    let error: string | null = $state(null);
+    // Cursor de paginação (keyset since + last_id) e flag de página seguinte.
+    let cursor: KeysetCursor | null = $state(null);
+    let hasMore = $state(false);
 
-	let searchTimer: ReturnType<typeof setTimeout> | null = null;
-	let requestGeneration = 0;
+    let searchTimer: ReturnType<typeof setTimeout> | null = null;
+    let requestGeneration = 0;
 
-	// Filtros combináveis (API /search): autor, intervalo de datas, ordem e
-	// anexos. `containsAttachment`: '' = sem filtro, 'with' = com, 'without' = sem.
-	type AttachmentFilter = '' | 'with' | 'without';
+    // Filtros combináveis (API /search): autor, intervalo de datas, ordem e
+    // anexos. `containsAttachment`: '' = sem filtro, 'with' = com, 'without' = sem.
+    type AttachmentFilter = '' | 'with' | 'without';
 
-	let filters = $state<{
-		author: string;
-		dateStart: string;
-		dateEnd: string;
-		order: 'asc' | 'desc';
-		containsAttachment: AttachmentFilter;
-	}>({
-		author: '',
-		dateStart: '',
-		dateEnd: '',
-		order: 'desc',
-		containsAttachment: ''
-	});
+    let filters = $state<{
+        author: string;
+        dateStart: string;
+        dateEnd: string;
+        order: 'asc' | 'desc';
+        containsAttachment: AttachmentFilter;
+    }>({
+        author: '',
+        dateStart: '',
+        dateEnd: '',
+        order: 'desc',
+        containsAttachment: ''
+    });
 
-	const authorOptions = $derived(usersStore.state.list.items);
+    const authorOptions = $derived(usersStore.state.list.items);
 
-	// Perfis dos autores dos resultados visíveis (batch, só ids ausentes do
-	// cache) — nome/avatar/anel do autor no popover.
-	$effect(() => {
-		const ids = new Set<string>();
-		for (const r of results) {
-			if (r.author_id) ids.add(r.author_id);
-		}
-		void usersStore.ensureProfiles([...ids]);
-	});
+    // Perfis dos autores dos resultados visíveis (batch, só ids ausentes do
+    // cache) — nome/avatar/anel do autor no popover.
+    $effect(() => {
+        const ids = new Set<string>();
+        for (const r of results) {
+            if (r.author_id) ids.add(r.author_id);
+        }
+        void usersStore.ensureProfiles([...ids]);
+    });
 
-	// Debounce + cancelamento: só o request mais recente pode escrever estado.
-	$effect(() => {
-		if (!open) {
-			if (searchTimer) {
-				clearTimeout(searchTimer);
-				searchTimer = null;
-			}
-			results = [];
-			loading = false;
-			error = null;
-			return;
-		}
+    // Request com os filtros atuais (o API exige >= 1 campo; `text` sempre
+    // vem da query).
+    function buildRequest(): SearchRequest {
+        const req: SearchRequest = { text: searchQuery.trim() };
+        if (filters.author) {
+            req.author = filters.author;
+        }
+        if (filters.dateStart) {
+            req.date_start = filters.dateStart;
+        }
+        if (filters.dateEnd) {
+            req.date_end = filters.dateEnd;
+        }
+        if (filters.order !== 'desc') {
+            req.order = filters.order;
+        }
+        if (filters.containsAttachment === 'with') {
+            req.contains_attachment = true;
+        } else if (filters.containsAttachment === 'without') {
+            req.contains_attachment = false;
+        }
+        return req;
+    }
 
-		if (searchTimer) {
-			clearTimeout(searchTimer);
-		}
+    // Busca uma página. `q` = cursor (null na primeira página). Só o request
+    // mais recente pode escrever estado (guarda `requestGeneration`).
+    async function fetchPage(q?: { since?: string; last_id?: string }): Promise<void> {
+        const generation = ++requestGeneration;
+        loading = true;
+        try {
+            const res = await api.search.search(buildRequest(), q);
+            if (generation !== requestGeneration) {
+                return;
+            }
+            if (q) {
+                // Página seguinte: anexa, deduplicando por id.
+                const seen = new Set(results.map((m) => m.id));
+                results = [
+                    ...results,
+                    ...res.results.filter((m) => !seen.has(m.id))
+                ];
+            } else {
+                results = res.results;
+            }
+            hasMore = res.has_more;
+            cursor = nextCursor(res.results);
+            error = null;
+        } catch (e) {
+            if (generation === requestGeneration) {
+                error = (e as Error).message || 'Falha ao buscar mensagens.';
+            }
+        } finally {
+            if (generation === requestGeneration) {
+                loading = false;
+            }
+        }
+    }
 
-		const query = searchQuery.trim();
+    // Página seguinte: só quando há cursor, há mais páginas e não há fetch em
+    // andamento. Chama o scroll (próximo ao fim) — sem botão "carregar mais".
+    function loadMore(): void {
+        if (!hasMore || !cursor || loading) {
+            return;
+        }
+        void fetchPage({ since: cursor.since, last_id: cursor.last_id });
+    }
 
-		// Sem termo: limpa a lista e não aciona request.
-		if (!query) {
-			results = [];
-			loading = false;
-			error = null;
-			searchTimer = null;
-			return;
-		}
+    // Scroll-based loading: ao aproximar o fim do corpo (distance < 200px),
+    // carrega a página seguinte. Sem clique, igual às mensagens do chat.
+    function onBodyScroll(e: Event): void {
+        const sc = e.target as HTMLElement;
+        const distance = sc.scrollHeight - sc.scrollTop - sc.clientHeight;
+        if (distance < 200 && !loading && hasMore) {
+            loadMore();
+        }
+    }
 
-		loading = true;
-		error = null;
-		const generation = ++requestGeneration;
-		searchTimer = setTimeout(async () => {
-			try {
-				// Envia somente os filtros definidos (o API exige >= 1 campo;
-				// `text` sempre vem da query).
-				const req: SearchRequest = { text: query };
-				if (filters.author) {
-					req.author = filters.author;
-				}
-				if (filters.dateStart) {
-					req.date_start = filters.dateStart;
-				}
-				if (filters.dateEnd) {
-					req.date_end = filters.dateEnd;
-				}
-				if (filters.order !== 'desc') {
-					req.order = filters.order;
-				}
-				if (filters.containsAttachment === 'with') {
-					req.contains_attachment = true;
-				} else if (filters.containsAttachment === 'without') {
-					req.contains_attachment = false;
-				}
-				const res = await api.search.search(req);
-				if (generation === requestGeneration) {
-					results = res.results;
-				}
-			} catch (e) {
-				if (generation === requestGeneration) {
-					error = (e as Error).message || 'Falha ao buscar mensagens.';
-				}
-			} finally {
-				if (generation === requestGeneration) {
-					loading = false;
-				}
-			}
-		}, 400);
-	});
+    // Debounce + cancelamento: só o request mais recente pode escrever estado.
+    $effect(() => {
+        if (!open) {
+            if (searchTimer) {
+                clearTimeout(searchTimer);
+                searchTimer = null;
+            }
+            results = [];
+            loading = false;
+            error = null;
+            cursor = null;
+            hasMore = false;
+            return;
+        }
 
-	function authorFor(result: SearchResult): UserSummary | undefined {
-		return result.author_id ? usersStore.state.byId.get(result.author_id) : undefined;
-	}
+        if (searchTimer) {
+            clearTimeout(searchTimer);
+        }
 
-	function onItemEnter(e: KeyboardEvent): void {
-		if (e.key === 'Enter' || e.key === ' ') {
-			e.preventDefault();
-			if (e.currentTarget instanceof HTMLElement) {
-				const r = e.currentTarget.dataset.resultId;
-				const m = results.find((x) => x.id === r);
-				if (m && onResultClick) onResultClick(m);
-			}
-		}
-	}
+        const query = searchQuery.trim();
 
-	function close(): void {
-		if (open) {
-			open = false;
-			onOpenChange?.(false);
-			searchQuery = '';
-			filters.author = '';
-			filters.dateStart = '';
-			filters.dateEnd = '';
-			filters.order = 'desc';
-			filters.containsAttachment = '';
-		}
-	}
+        // Sem termo: limpa a lista e não aciona request.
+        if (!query) {
+            results = [];
+            loading = false;
+            error = null;
+            cursor = null;
+            hasMore = false;
+            searchTimer = null;
+            return;
+        }
 
-	// Autofocus the input when the popover opens.
-	$effect(() => {
-		if (!open) return;
-		queueMicrotask(() => {
-			inputEl?.focus();
-			inputEl?.select();
-		});
-	});
+        loading = true;
+        error = null;
+        requestGeneration += 1; // invalida fetch em andamento da query anterior
+        searchTimer = setTimeout(() => {
+            fetchPage();
+        }, 400);
+    });
 
-	// Close on outside click + Escape. Listeners only exist while open.
-	$effect(() => {
-		if (!open) return;
+    function authorFor(result: SearchResult): UserSummary | undefined {
+        return result.author_id ? usersStore.state.byId.get(result.author_id) : undefined;
+    }
 
-		function onPointerDown(e: PointerEvent): void {
-			if (el && !el.contains(e.target as Node)) close();
-		}
+    function close(): void {
+        if (open) {
+            open = false;
+            onOpenChange?.(false);
+            searchQuery = '';
+            filters.author = '';
+            filters.dateStart = '';
+            filters.dateEnd = '';
+            filters.order = 'desc';
+            filters.containsAttachment = '';
+        }
+    }
 
-		function onKeyDown(e: KeyboardEvent): void {
-			if (e.key === 'Escape' && document.activeElement !== inputEl) {
-				close();
-			}
-		}
+    // Autofocus the input when the popover opens.
+    $effect(() => {
+        if (!open) return;
+        queueMicrotask(() => {
+            inputEl?.focus();
+            inputEl?.select();
+        });
+    });
 
-		document.addEventListener('pointerdown', onPointerDown);
-		document.addEventListener('keydown', onKeyDown);
+    // Close on outside click + Escape. Listeners only exist while open.
+    $effect(() => {
+        if (!open) return;
 
-		return () => {
-			document.removeEventListener('pointerdown', onPointerDown);
-			document.removeEventListener('keydown', onKeyDown);
-		};
-	});
+        function onPointerDown(e: PointerEvent): void {
+            if (el && !el.contains(e.target as Node)) close();
+        }
+
+        function onKeyDown(e: KeyboardEvent): void {
+            if (e.key === 'Escape' && document.activeElement !== inputEl) {
+                close();
+            }
+        }
+
+        document.addEventListener('pointerdown', onPointerDown);
+        document.addEventListener('keydown', onKeyDown);
+
+        return () => {
+            document.removeEventListener('pointerdown', onPointerDown);
+            document.removeEventListener('keydown', onKeyDown);
+        };
+    });
 </script>
 
 {#if open}
-	<div class="header-popover search-popover open" bind:this={el}>
-		<div class="popover-head">
-			<div class="popover-title">
-				<Icon name="magnifying-glass" variant="light" />
-				<strong>Pesquisar</strong>
-			</div>
-			<button class="popover-close" on:click={close} aria-label="Fechar">
-				<Icon name="x" variant="light" />
-			</button>
-		</div>
+    <div class="header-popover search-popover open" bind:this={el}>
+        <div class="popover-head search-popover-head">
+            <div class="popover-title search-popover-title">
+                <Icon name="magnifying-glass" variant="light" />
+                <div class="search-title-copy">
+                    <strong>Pesquisar</strong>
+                    <span>Mensagens em todos os canais</span>
+                </div>
+            </div>
 
-		<div class="popover-body">
-			<input
-				class="admin-input"
-				type="text"
-				placeholder="Pesquisar mensagens…"
-				bind:this={inputEl}
-				bind:value={searchQuery}
-				aria-label="Pesquisar mensagens"
-			/>
+            <button class="popover-close" type="button" onclick={close} aria-label="Fechar pesquisa">
+                <Icon name="x" variant="light" />
+            </button>
+        </div>
 
-			<div class="search-filters" aria-label="Filtros de busca">
-				<select class="admin-select" bind:value={filters.order} aria-label="Ordem">
-					<option class="admin-option" value="desc">Mais recentes</option>
-					<option class="admin-option" value="asc">Mais antigas</option>
-				</select>
+        <div class="popover-body search-popover-body" onscroll={onBodyScroll}>
+            <div class="search-field">
+                <span class="search-field-icon" aria-hidden="true">
+                    <Icon name="magnifying-glass" variant="light" />
+                </span>
+                <input
+                    class="admin-input search-input"
+                    type="search"
+                    placeholder="Pesquisar mensagens…"
+                    bind:this={inputEl}
+                    bind:value={searchQuery}
+                    aria-label="Pesquisar mensagens"
+                    autocomplete="off"
+                    spellcheck="false"
+                />
+            </div>
 
-				<select class="admin-select" bind:value={filters.containsAttachment} aria-label="Anexos">
-					<option class="admin-option" value="">Anexos: todos</option>
-					<option class="admin-option" value="with">Anexos: com</option>
-					<option class="admin-option" value="without">Anexos: sem</option>
-				</select>
+            <div class="search-filter-panel" aria-label="Filtros de busca">
+                <div class="search-filter-heading">
+                    <strong>Filtros</strong>
+                    <span>Opcionais</span>
+                </div>
 
-				{#if authorOptions.length}
-					<select class="admin-select" bind:value={filters.author} aria-label="Autor">
-						<option class="admin-option" value="">Autor: todos</option>
-						{#each authorOptions as u (u.id)}
-							<option class="admin-option" value={u.id}>Autor: {u.nickname || u.username}</option>
-						{/each}
-					</select>
-				{/if}
+                <div class="search-filter-grid">
+                    <label class="search-control">
+                        <span>Ordem</span>
+                        <select class="admin-select" bind:value={filters.order} aria-label="Ordem">
+                            <option class="admin-option" value="desc">Mais recentes</option>
+                            <option class="admin-option" value="asc">Mais antigas</option>
+                        </select>
+                    </label>
 
-				<input class="admin-select" type="date" bind:value={filters.dateStart} aria-label="De" />
-				<input class="admin-select" type="date" bind:value={filters.dateEnd} aria-label="Até" />
-			</div>
+                    <label class="search-control">
+                        <span>Anexos</span>
+                        <select class="admin-select" bind:value={filters.containsAttachment} aria-label="Anexos">
+                            <option class="admin-option" value="">Todos</option>
+                            <option class="admin-option" value="with">Com anexo</option>
+                            <option class="admin-option" value="without">Sem anexo</option>
+                        </select>
+                    </label>
 
-			{#if loading}
-				<div class="popover-empty">
-					<div class="popover-empty-icon">
-						<Icon name="arrow-clockwise" variant="light" />
-					</div>
-					<strong>Pesquisando…</strong>
-				</div>
-			{:else if error}
-				<div class="popover-empty">
-					<div class="popover-empty-icon">
-						<Icon name="warning-circle" variant="light" />
-					</div>
-					<strong>{error}</strong>
-				</div>
-			{:else if searchQuery.trim()}
-				{#if results.length > 0}
-					<div class="search-count">
-						{results.length}
-						{results.length === 1 ? 'resultado' : 'resultados'}
-					</div>
-					{#each results as m (m.id)}
-						{@const a = authorFor(m)}
-						<div
-							class="popover-item"
-							on:click={() => onResultClick?.(m)}
-							on:keydown={onItemEnter}
-							role="button"
-							tabindex={0}
-							data-result-id={m.id}
-						>
-							<Avatar user={a} size={34} />
-							<div>
-								<div class="meta">
-									<span class="name">{a?.nickname || a?.username || m.author_username}</span>
-									<span class="time">{formatTime(m.created_at)}</span>
-									{#if m.channel_name}
-										<span class="channel-name">{m.channel_name}</span>
-									{/if}
-								</div>
-								{#if m.content}
-									<div class="content">{m.content}</div>
-								{:else}
-									<div class="content"><span class="content-attachment">Anexo</span></div>
-								{/if}
-							</div>
-						</div>
-					{/each}
-				{:else}
-					<div class="popover-empty">
-						<div class="popover-empty-icon">
-							<Icon name="magnifying-glass" variant="duotone" />
-						</div>
-						<strong>Nada encontrado</strong>
-						<p>Nenhuma mensagem contém “{searchQuery.trim()}”.</p>
-					</div>
-				{/if}
-			{:else}
-				<div class="popover-empty">
-					<div class="popover-empty-icon">
-						<Icon name="magnifying-glass" variant="duotone" />
-					</div>
-					<strong>Pesquisar</strong>
-					<p>Digite um termo para encontrar mensagens.</p>
-				</div>
-			{/if}
-		</div>
-	</div>
+                    {#if authorOptions.length}
+                        <label class="search-control search-control-wide">
+                            <span>Autor</span>
+                            <select class="admin-select" bind:value={filters.author} aria-label="Autor">
+                                <option class="admin-option" value="">Todos os autores</option>
+                                {#each authorOptions as u (u.id)}
+                                    <option class="admin-option" value={u.id}>{u.nickname || u.username}</option>
+                                {/each}
+                            </select>
+                        </label>
+                    {/if}
+
+                    <label class="search-control">
+                        <span>De</span>
+                        <input class="admin-select" type="date" bind:value={filters.dateStart} aria-label="Data inicial" />
+                    </label>
+
+                    <label class="search-control">
+                        <span>Até</span>
+                        <input class="admin-select" type="date" bind:value={filters.dateEnd} aria-label="Data final" />
+                    </label>
+                </div>
+            </div>
+
+            <div class="search-feedback" aria-live="polite">
+                {#if loading && results.length === 0}
+                    <div class="search-state">
+                        <div class="popover-empty-icon search-loading-icon">
+                            <Icon name="arrow-clockwise" variant="light" />
+                        </div>
+                        <div class="search-state-copy">
+                            <strong>Pesquisando…</strong>
+                            <p>Procurando mensagens que correspondam ao termo.</p>
+                        </div>
+                    </div>
+                {:else if error && results.length === 0}
+                    <div class="search-state">
+                        <div class="popover-empty-icon">
+                            <Icon name="warning-circle" variant="light" />
+                        </div>
+                        <div class="search-state-copy">
+                            <strong>Não foi possível pesquisar</strong>
+                            <p>{error}</p>
+                        </div>
+                    </div>
+                {:else if searchQuery.trim()}
+                    {#if results.length > 0}
+                        <div class="search-results-head">
+                            <span class="search-count">
+                                {results.length} {results.length === 1 ? 'resultado' : 'resultados'}
+                            </span>
+                            {#if hasMore}
+                                <span class="search-results-hint">Role para ver mais</span>
+                            {/if}
+                        </div>
+
+                        <div class="search-results">
+                            {#each results as m (m.id)}
+                                {@const a = authorFor(m)}
+                                <button
+                                    class="popover-item search-result"
+                                    type="button"
+                                    onclick={() => onResultClick?.(m)}
+                                >
+                                    <Avatar user={a} size={34} />
+                                    <div class="search-result-main">
+                                        <div class="meta search-result-meta">
+                                            <span class="name">{a?.nickname || a?.username || m.author_username}</span>
+                                            {#if m.channel_name}
+                                                <span class="channel-name">{m.channel_name}</span>
+                                            {/if}
+                                            <span class="time">{formatTime(m.created_at)}</span>
+                                        </div>
+
+                                        {#if m.content}
+                                            <div class="content">{m.content}</div>
+                                        {:else}
+                                            <div class="content"><span class="content-attachment">Anexo</span></div>
+                                        {/if}
+                                    </div>
+                                </button>
+                            {/each}
+                        </div>
+
+                        {#if loading}
+                            <div class="search-inline-status">
+                                <span class="search-inline-spinner" aria-hidden="true">
+                                    <Icon name="arrow-clockwise" variant="light" />
+                                </span>
+                                Carregando mais…
+                            </div>
+                        {:else if error}
+                            <div class="search-inline-status search-inline-error">{error}</div>
+                        {/if}
+                    {:else}
+                        <div class="search-state">
+                            <div class="popover-empty-icon">
+                                <Icon name="magnifying-glass" variant="duotone" />
+                            </div>
+                            <div class="search-state-copy">
+                                <strong>Nada encontrado</strong>
+                                <p>Nenhuma mensagem contém “{searchQuery.trim()}”.</p>
+                            </div>
+                        </div>
+                    {/if}
+                {:else}
+                    <div class="search-state search-state-idle">
+                        <div class="popover-empty-icon">
+                            <Icon name="magnifying-glass" variant="duotone" />
+                        </div>
+                        <div class="search-state-copy">
+                            <strong>Encontre uma mensagem</strong>
+                            <p>Digite um termo acima e refine a busca pelos filtros, se necessário.</p>
+                        </div>
+                    </div>
+                {/if}
+            </div>
+        </div>
+    </div>
 {/if}
 
 <style>
-	.search-filters {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 6px 8px;
-		align-items: center;
-	}
-	.search-count {
-		display: block;
-		margin: 10px 2px 8px;
-		font-size: 11px;
-		font-weight: 700;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		color: var(--muted);
-	}
-	.popover-item .channel-name {
-		font-size: 12px;
-		color: var(--muted-soft);
-		margin-left: 4px;
-	}
-	.content-attachment {
-		font-style: italic;
-		color: var(--muted-soft);
-	}
+    .search-popover {
+        width: min(440px, calc(100vw - 34px));
+    }
+
+    .search-popover-head {
+        padding-block: 12px;
+    }
+
+    .search-popover-title {
+        min-width: 0;
+    }
+
+    .search-title-copy {
+        display: grid;
+        min-width: 0;
+        gap: 1px;
+    }
+
+    .search-title-copy > span {
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.25;
+    }
+
+    .search-popover-body {
+        width: 100%;
+        box-sizing: border-box;
+        justify-items: stretch;
+        gap: 12px;
+        padding: 14px;
+        max-height: min(590px, calc(100vh - 140px));
+    }
+
+    .search-field {
+        position: relative;
+        width: 100%;
+    }
+
+    .search-field-icon {
+        position: absolute;
+        z-index: 1;
+        top: 50%;
+        left: 14px;
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        pointer-events: none;
+        transform: translateY(-50%);
+    }
+
+    .search-field-icon :global(i) {
+        font-size: 16px;
+    }
+
+    .search-input {
+        width: 100%;
+        height: 48px;
+        box-sizing: border-box;
+        padding-left: 42px;
+        padding-right: 14px;
+    }
+
+    .search-input::-webkit-search-cancel-button {
+        opacity: 0.62;
+        cursor: pointer;
+    }
+
+    .search-filter-panel {
+        display: grid;
+        gap: 10px;
+        padding: 11px;
+        border: 1px solid rgba(255, 255, 255, 0.42);
+        border-radius: 15px;
+        background: rgba(255, 255, 255, 0.12);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
+    }
+
+    .search-filter-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 2px;
+    }
+
+    .search-filter-heading strong {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--muted);
+    }
+
+    .search-filter-heading > span {
+        font-size: 11px;
+        color: var(--muted-soft);
+    }
+
+    .search-filter-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 9px;
+    }
+
+    .search-control {
+        display: grid;
+        min-width: 0;
+        gap: 5px;
+    }
+
+    .search-control > span {
+        padding-left: 2px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 750;
+        letter-spacing: 0.045em;
+        line-height: 1;
+        text-transform: uppercase;
+    }
+
+    .search-control-wide {
+        grid-column: 1 / -1;
+    }
+
+    .search-control .admin-select {
+        width: 100%;
+        min-width: 0;
+        height: 40px;
+        box-sizing: border-box;
+        padding-inline: 10px;
+        border-radius: 11px;
+        font-size: 13px;
+    }
+
+    .search-feedback {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .search-state {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        min-height: 104px;
+        box-sizing: border-box;
+        gap: 12px;
+        padding: 14px 8px;
+    }
+
+    .search-state-idle {
+        min-height: 114px;
+    }
+
+    .search-state .popover-empty-icon {
+        width: 42px;
+        height: 42px;
+        flex: none;
+        border-radius: 13px;
+    }
+
+    .search-state-copy {
+        display: grid;
+        min-width: 0;
+        gap: 3px;
+    }
+
+    .search-state-copy strong {
+        font-size: 14px;
+    }
+
+    .search-state-copy p {
+        max-width: none;
+        font-size: 12px;
+    }
+
+    .search-loading-icon :global(i),
+    .search-inline-spinner :global(i) {
+        animation: search-spin 0.9s linear infinite;
+    }
+
+    @keyframes search-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .search-results-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 1px 3px 7px;
+    }
+
+    .search-count {
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+    }
+
+    .search-results-hint {
+        color: var(--muted-soft);
+        font-size: 10px;
+        white-space: nowrap;
+    }
+
+    .search-results {
+        display: grid;
+        gap: 3px;
+    }
+
+    .search-result {
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+        appearance: none;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+        background: transparent;
+    }
+
+    .search-result:hover,
+    .search-result:focus-visible {
+        background: rgba(255, 255, 255, 0.22);
+        border-color: rgba(255, 255, 255, 0.34);
+    }
+
+    .search-result:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(100, 196, 250, 0.13);
+    }
+
+    .search-result-main {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .search-result-meta {
+        display: flex;
+        align-items: center;
+        min-width: 0;
+        gap: 6px;
+        margin-bottom: 3px;
+    }
+
+    .search-result-meta .name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .search-result-meta .time {
+        margin-left: auto;
+        flex: none;
+        white-space: nowrap;
+    }
+
+    .search-result .channel-name {
+        max-width: 120px;
+        overflow: hidden;
+        padding: 2px 6px;
+        border-radius: 999px;
+        color: var(--link-muted);
+        background: rgba(90, 190, 245, 0.1);
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1.3;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .search-result .content {
+        display: -webkit-box;
+        max-width: none;
+        overflow: hidden;
+        color: var(--text);
+        font-size: 12px;
+        line-height: 1.42;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+
+    .content-attachment {
+        color: var(--muted-soft);
+        font-style: italic;
+    }
+
+    .search-inline-status {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        padding: 10px 6px 2px;
+        color: var(--muted);
+        font-size: 11px;
+    }
+
+    .search-inline-spinner {
+        display: grid;
+        place-items: center;
+    }
+
+    .search-inline-error {
+        color: var(--danger, #d94b63);
+    }
+
+    :global([data-theme='dark']) .search-filter-panel {
+        border-color: rgba(182, 224, 250, 0.1);
+        background: rgba(119, 194, 235, 0.045);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    :global([data-theme='dark']) .search-result:hover,
+    :global([data-theme='dark']) .search-result:focus-visible {
+        border-color: rgba(182, 224, 250, 0.11);
+        background: rgba(119, 194, 235, 0.075);
+    }
+
+    :global([data-theme='dark']) .search-result .channel-name {
+        background: rgba(119, 194, 235, 0.08);
+    }
+
+    @media (max-width: 700px) {
+        .search-popover {
+            right: 8px;
+            width: calc(100vw - 16px);
+        }
+
+        .search-popover-body {
+            max-height: min(620px, calc(100vh - 116px));
+            padding: 12px;
+        }
+    }
+
+    @media (max-width: 390px) {
+        .search-title-copy > span {
+            display: none;
+        }
+
+        .search-filter-grid {
+            gap: 8px;
+        }
+
+        .search-control .admin-select {
+            padding-inline: 8px;
+            font-size: 12px;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .search-loading-icon :global(i),
+        .search-inline-spinner :global(i) {
+            animation: none;
+        }
+    }
 </style>

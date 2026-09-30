@@ -37,6 +37,7 @@
 	},
 	"dependencies": {
 		"@phosphor-icons/web": "^2.1.2",
-		"@sveltejs/adapter-static": "^3.0.10"
+		"@sveltejs/adapter-static": "^3.0.10",
+		"marked": "^18.0.14"
 	}
 }

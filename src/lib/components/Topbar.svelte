@@ -3,6 +3,10 @@
 	import type { Channel, SearchResult } from '$lib/types';
 	import { state } from '$lib/store/ui.svelte';
 	import * as notificationsStore from '$lib/store/notifications.svelte';
+	import { meId, state as sessionState } from '$lib/store/session.svelte';
+	import { state as serverState } from '$lib/store/server.svelte';
+	import * as rolesStore from '$lib/store/roles.svelte';
+	import { can } from '$lib/store/roles.svelte';
 	import Icon from './Icon.svelte';
 	import NotificationsPopover from './NotificationsPopover.svelte';
 	import PinsPopover from './PinsPopover.svelte';
@@ -23,6 +27,16 @@
 		onSearchOpenChange?: (open: boolean) => void;
 		onSearchResult?: (result: SearchResult) => void;
 	}>();
+
+	// Botão de administração: só visível para dono do servidor ou roles
+	// com `manage_channels` — espelha o backend (RequireManageChannels
+	// sobre PUT/DELETE /channels/:channel_id).
+	const me = $derived(meId());
+	const isOwner = $derived(!!me && serverState.server?.owner_id === me);
+	const myRoleIds = $derived(new Set(sessionState.roles.map((r) => r.id)));
+	const myRoles = $derived(rolesStore.state.list.filter((r) => myRoleIds.has(r.id)));
+	const ctx = $derived({ roles: myRoles, isOwner });
+	const canManageChannel = $derived(can('manage_channels', ctx));
 
 	function openSidebar(): void {
 		state.channelsDrawerOpen = true;
@@ -53,14 +67,16 @@
 	<div class="title-wrap">
 		<div class="title-row">
 			<h2>{channel.name}</h2>
-			<button
-				class="pill channel-admin-btn"
-				on:click={() => goto(`/channels/${channel.id}/admin`)}
-				aria-label="Administração do canal"
-				title="Administração do canal"
-			>
-				<Icon name="gear" variant="light" />
-			</button>
+			{#if canManageChannel}
+				<button
+					class="pill channel-admin-btn"
+					on:click={() => goto(`/channels/${channel.id}/admin`)}
+					aria-label="Administração do canal"
+					title="Administração do canal"
+				>
+					<Icon name="gear" variant="light" />
+				</button>
+			{/if}
 		</div>
 		{#if channel.topic}
 			<p>{channel.topic}</p>
@@ -126,6 +142,7 @@
 		-webkit-appearance: none;
 		appearance: none;
 	}
+
 	button.pill {
 		font: inherit;
 		-webkit-appearance: none;

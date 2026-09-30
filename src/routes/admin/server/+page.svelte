@@ -1,16 +1,66 @@
 <script lang="ts">
-	// Server creation / edit. Demo only — no API wiring.
-	import { sampleServer } from '$lib/sample';
+	import { state as sessionState } from '$lib/store/session.svelte';
+	import * as serverStore from '$lib/store/server.svelte';
 	import { blobToUrl } from '$lib/utils/media';
+	import { isValidPassword } from '$lib/utils/password';
 	import Icon from '$lib/components/Icon.svelte';
 	import ServerIcon from '$lib/components/ServerIcon.svelte';
 
-	let name = $state(sampleServer.name);
-	let public_ = $state(sampleServer.public);
+	// O servidor é um singleton (máx. 1 por usuário). A página atende os dois
+	// estados: criação (sem servidor, rota de fallback do bootstrap) e edição.
+	const server = $derived(serverStore.state.server);
+	const loading = $derived(serverStore.state.loading);
+
+	let name = $state('');
+	let public_ = $state(true);
 	let password = $state('');
 	let iconBlob = $state('');
 	let iconFormat = $state('');
+	let creating = $state(true);
+	let saving = $state(false);
 	let saved = $state(false);
+	let error = $state<string | null>(null);
+	let seeded = $state(false);
+
+	// Garante que o servidor (ou a ausência dele) foi carregado para esta rota
+	// (navegação direta a /admin/server sem passar pelo chat).
+	$effect(() => {
+		if (serverStore.state.loaded) return;
+		void serverStore.load();
+	});
+
+	// Semeia o estado local da forma uma vez que o servidor é conhecido
+	// (existente → edição; ausente → criação).
+	$effect(() => {
+		if (!serverStore.state.loaded || seeded) return;
+		if (server) {
+			name = server.name;
+			public_ = server.public;
+			password = '';
+			iconBlob = server.icon_blob ?? '';
+			iconFormat = server.icon_format;
+			creating = false;
+		} else {
+			// Servidor ainda não criado.
+			name = '';
+			public_ = true;
+			password = '';
+			iconBlob = '';
+			iconFormat = '';
+			creating = true;
+		}
+		seeded = true;
+	});
+
+	const isPrivate = $derived(!public_);
+	const passwordErrors = $derived(
+		isPrivate && password ? isValidPassword(password).errors : []
+	);
+	const canSave = $derived(
+		name.trim().length > 0 &&
+		name.length <= 32 &&
+		(!isPrivate || (password && isValidPassword(password).ok))
+	);
 
 	function onIconSelect(e: Event): void {
 		const input = e.target as HTMLInputElement;
@@ -34,120 +84,194 @@
 	}
 
 	function save(): void {
-		// Demo: no API.
-		saved = true;
+		error = null;
+		saving = true;
+		const req = {
+			name: name.trim(),
+			icon_blob: iconBlob,
+			icon_format: iconFormat,
+			public: public_,
+			password: isPrivate ? password : null
+		};
+		const run = creating
+			? serverStore.create(req)
+			: serverStore.update(req);
+		run
+			.then(() => {
+				saved = true;
+				queueMicrotask(() => {
+					setTimeout(() => (saved = false), 2000);
+				});
+			})
+			.catch((err: unknown) => {
+				error = err instanceof Error ? err.message : 'Erro ao salvar o servidor.';
+			})
+			.finally(() => {
+				saving = false;
+			});
 	}
 </script>
 
-<div class="server-page">
-	<div class="server-card">
-		<div class="server-card-head">
-			<div class="server-icon" aria-hidden="true">
-				<ServerIcon {iconBlob} {iconFormat} {name} size={44} dark />
-			</div>
-			<h2>{name || 'Novo servidor'}</h2>
-		</div>
-
-		<div class="server-stats">
-			<div class="stat">
-				<span>Membros</span>
-				<strong>{sampleServer.member_count}</strong>
-			</div>
-			<div class="stat">
-				<span>Canais</span>
-				<strong>{sampleServer.channel_count}</strong>
-			</div>
-			<div class="stat">
-				<span>Roles</span>
-				<strong>{sampleServer.role_count}</strong>
+{#if loading && !seeded}
+	<div class="server-page">
+		<div class="server-card">
+			<div class="chat-empty">
+				<p>Carregando o servidor…</p>
 			</div>
 		</div>
-
-		<div class="admin-card">
-			<div class="admin-card-head">
-				<Icon name="gear" variant="duotone" size={16} />
-				Definições
+	</div>
+{:else}
+	<div class="server-page">
+		<div class="server-card">
+			<div class="server-card-head">
+				<div class="server-icon" aria-hidden="true">
+					<ServerIcon
+						iconBlob={iconBlob}
+						iconFormat={iconFormat}
+						name={name}
+						size={44}
+						dark
+					/>
+				</div>
+				<h2>{name || (creating ? 'Novo servidor' : 'Servidor')}</h2>
 			</div>
-			<div class="admin-card-body">
-				<div class="admin-field">
-					<label for="sv-name">Nome</label>
-					<input
-						id="sv-name"
-						class="admin-input"
-						bind:value={name}
-						placeholder="Nome do servidor"
-					/>
-				</div>
-				<div class="admin-field">
-					<label for="sv-owner">Dono</label>
-					<input
-						id="sv-owner"
-						class="admin-input"
-						value={sampleServer.owner_username ?? ''}
-						disabled
-					/>
-				</div>
-				<div class="admin-field">
-					<label for="sv-password">Senha</label>
-					<input
-						id="sv-password"
-						class="admin-input"
-						type="password"
-						bind:value={password}
-						placeholder="Senha do servidor"
-					/>
-					<span class="hint">Mín. 8 caracteres, 1 maiúscula + 1 especial</span>
-				</div>
-				<div class="admin-field">
-					<label for="sv-icon">Ícone</label>
-					<div class="icon-field-row">
-						<input
-							id="sv-icon"
-							class="admin-input icon-file"
-							type="file"
-							accept="image/*"
-							onchange={onIconSelect}
-						/>
-						<button class="icon-reset" onclick={resetIcon} aria-label="Remover ícone">
-							<Icon name="x" variant="light" size={14} />
-						</button>
+
+			{#if server}
+				<div class="server-stats">
+					<div class="stat">
+						<span>Membros</span>
+						<strong>{server.member_count}</strong>
 					</div>
-					{#if iconBlob}
-						<div class="icon-preview">
-							<img src={blobToUrl(iconBlob, iconFormat)} alt="Pré-visualização do ícone" />
+					<div class="stat">
+						<span>Canais</span>
+						<strong>{server.channel_count}</strong>
+					</div>
+					<div class="stat">
+						<span>Roles</span>
+						<strong>{server.role_count}</strong>
+					</div>
+				</div>
+			{/if}
+
+			<div class="admin-card">
+				<div class="admin-card-head">
+					<Icon name="gear" variant="duotone" size={16} />
+					{creating ? 'Criar servidor' : 'Definições'}
+				</div>
+				<div class="admin-card-body">
+					<div class="admin-field">
+						<label for="sv-name">Nome</label>
+						<input
+							id="sv-name"
+							class="admin-input"
+							bind:value={name}
+							placeholder="Nome do servidor"
+						/>
+					</div>
+
+					{#if server}
+						<div class="admin-field">
+							<label for="sv-owner">Dono</label>
+							<input
+								id="sv-owner"
+								class="admin-input"
+								value={server.owner_username ?? ''}
+								disabled
+							/>
 						</div>
-					{:else}
-						<div class="icon-preview empty">
-							<Icon name="image" variant="duotone" size={20} />
-							Sem ícone
+					{/if}
+
+					<div class="admin-field">
+						<label for="sv-password">Senha</label>
+						{#if isPrivate}
+							<input
+								id="sv-password"
+								class="admin-input"
+								type="password"
+								bind:value={password}
+								placeholder="Senha do servidor"
+							/>
+							<span class="hint">
+								Mín. 8 caracteres, 1 maiúscula + 1 especial
+							</span>
+							{#if passwordErrors.length}
+								{#each passwordErrors as err (err)}
+									<span class="hint error">{err}</span>
+								{/each}
+							{:else}
+								<span class="hint">
+									Mín. 8 caracteres, 1 maiúscula + 1 especial
+								</span>
+							{/if}
+						{:else}
+							<span class="hint">Servidor público — sem senha.</span>
+						{/if}
+					</div>
+
+					<div class="admin-field">
+						<label for="sv-icon">Ícone</label>
+						<div class="icon-field-row">
+							<input
+								id="sv-icon"
+								class="admin-input icon-file"
+								type="file"
+								accept="image/*"
+								onchange={onIconSelect}
+							/>
+							<button class="icon-reset" onclick={resetIcon} aria-label="Remover ícone">
+								<Icon name="x" variant="light" size={14} />
+							</button>
+						</div>
+						{#if iconBlob}
+							<div class="icon-preview">
+								<img
+									src={blobToUrl(iconBlob, iconFormat)}
+									alt="Pré-visualização do ícone"
+								/>
+							</div>
+						{:else}
+							<div class="icon-preview empty">
+								<Icon name="image" variant="duotone" size={20} />
+								Sem ícone
+							</div>
+						{/if}
+					</div>
+
+					<label class="admin-checkbox">
+						<input type="checkbox" bind:checked={public_} />
+						<div>
+							<strong>Público</strong>
+							<span class="hint">Qualquer pessoa pode entrar com o link</span>
+						</div>
+					</label>
+
+					{#if server}
+						<div class="admin-stat">
+							<span>Criado</span>
+							<strong>{server.created_at}</strong>
 						</div>
 					{/if}
 				</div>
-				<label class="admin-checkbox">
-					<input type="checkbox" bind:checked={public_} />
-					<div>
-						<strong>Público</strong>
-						<span class="hint">Qualquer pessoa pode entrar com o link</span>
-					</div>
-				</label>
-				<div class="admin-stat">
-					<span>Criado</span>
-					<strong>{sampleServer.created_at}</strong>
+			</div>
+
+			{#if error}
+				<div class="save-error" role="alert">
+					<Icon name="warning-circle" variant="light" />
+					<span>{error}</span>
 				</div>
+			{:else if saved}
+				<span class="saved">{creating ? 'Servidor criado' : 'Alterações salvas'}</span>
+			{/if}
+
+			<div class="server-actions">
+				<button class="admin-btn" onclick={save} disabled={saving || !canSave}>
+					<Icon name="check" variant="light" />
+					{creating ? 'Criar servidor' : 'Salvar alterações'}
+				</button>
 			</div>
 		</div>
-
-		<div class="server-actions">
-			<button class="admin-btn" onclick={save}>
-				<Icon name="check" variant="light" />
-				Salvar alterações
-			</button>
-			{#if saved}
-				<span class="saved">Alterações salvas</span>
-			{/if}
-		</div>
 	</div>
-</div>
+{/if}
 
 <style>
 	.server-page {
@@ -178,6 +302,7 @@
 		margin: 0;
 		font-size: 20px;
 	}
+
 	.server-stats {
 		display: grid;
 		grid-template-columns: repeat(3, 1fr);
@@ -202,6 +327,30 @@
 	.stat strong {
 		font-size: 17px;
 	}
+	.admin-field,
+	.icon-field-row,
+	.hint,
+	.save-error {
+		font-size: 13px;
+	}
+	.hint {
+		font-size: 11px;
+		color: var(--muted-soft);
+	}
+	.hint.error {
+		color: #e74c5f;
+	}
+	.save-error {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 8px 14px;
+		border: 1px solid rgba(220, 40, 40, 0.5);
+		border-radius: 14px;
+		background: rgba(220, 40, 40, 0.1);
+		color: #b91c1c;
+		font-size: 13px;
+	}
 	.server-actions {
 		display: flex;
 		align-items: center;
@@ -211,5 +360,15 @@
 		font-size: 12px;
 		font-weight: 700;
 		color: #24c982;
+	}
+	.chat-empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		height: 240px;
+		color: var(--muted-soft);
+		font-size: 14px;
 	}
 </style>

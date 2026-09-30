@@ -33,6 +33,11 @@ export const state = $state({
 	peer: null as RTCPeerConnection | null,
 	// Current members in the room (from voice_joined).
 	members: [] as VoiceState[],
+	// Per-channel rosters for the sidebar voice tree. Keyed by channel_id and
+	// fed by the same events as the room, but *not* gated on the current room
+	// (a user sees a channel's participants even when not in it, as long as
+	// they hold `connect_voice` — the server's `VoiceAudience`).
+	channelMembers: new SvelteMap<string, VoiceState[]>(),
 	// Active speakers (from active_speaker_update).
 	activeSpeakers: [] as string[],
 	// The single currently-active speaker (F20).
@@ -310,6 +315,10 @@ export function leave(channelId: string | null): void {
 	state.connected = false;
 	state.channelId = null;
 
+	// Não limpar channelMembers aqui.
+	// O roster representa o estado global dos canais de voz,
+	// não apenas o canal em que este usuário está conectado.
+
 	currentChannelId = null;
 
 	cleanupRemoteAudio();
@@ -317,6 +326,7 @@ export function leave(channelId: string | null): void {
 
 // Evict the room when the channel is deleted.
 export function clearRoom(channelId: string): void {
+	state.channelMembers.delete(channelId);
 	if (currentChannelId === channelId) {
 		leave(channelId);
 	}
@@ -326,6 +336,37 @@ export function isJoined(channelId: string): boolean {
 	// Lê `state.channelId` (reativo) em vez do `currentChannelId` de módulo
 	// (variável não rastreada): sem isso, o UI nunca sai do estado inicial.
 	return state.channelId === channelId;
+}
+
+// ── roster helpers (árvore de voz na sidebar) ──────────────
+// Upsert a user's voice state into the per-channel roster. When the channel
+// has no snapshot yet (the user never received `voice_joined` for it — a
+// known limitation: the initial roster of never-joined channels is
+// event-derived only), the roster is seeded with just this user.
+function applyStateToRoster(channelId: string, state_: VoiceState): void {
+	const members = state.channelMembers.get(channelId);
+	if (members) {
+		const idx = members.findIndex((m) => m.user_id === state_.user_id);
+		if (idx >= 0) {
+			const next = [...members];
+			next[idx] = { ...next[idx], ...state_ };
+			state.channelMembers.set(channelId, next);
+		} else {
+			state.channelMembers.set(channelId, [...members, state_]);
+		}
+	} else {
+		state.channelMembers.set(channelId, [state_]);
+	}
+}
+
+// Remove a user from the per-channel roster (voice_leave).
+function removeUserFromRoster(channelId: string, userId: string): void {
+	const members = state.channelMembers.get(channelId);
+	if (!members) {
+		return;
+	}
+	const next = members.filter((m) => m.user_id !== userId);
+	state.channelMembers.set(channelId, next);
 }
 
 // Called by the websocket store when the WS closes (P0.1). The call belongs
@@ -362,6 +403,11 @@ export function onSocketClose(): void {
 // ── signalling handlers (called by the websocket store) ───
 
 export function onVoiceJoined(ev: WsVoiceJoined): void {
+	// Roster: full snapshot for this channel (voice_joined is unicast to the
+	// joining client). Applied regardless of the current room so the sidebar
+	// voice tree can render any channel the user has `connect_voice` on.
+	state.channelMembers.set(ev.channel_id, ev.members);
+
 	if (currentChannelId !== ev.channel_id) {
 		return;
 	}
@@ -503,6 +549,15 @@ export function onVoiceIceCandidate(ev: WsVoiceIceCandidate): void {
 }
 
 export function onVoiceStateUpdate(ev: WsVoiceStateUpdate): void {
+	// Roster: broadcast to the channel audience (connect_voice holders, incl.
+	// non-callers) — never gated on the current room.
+	applyStateToRoster(ev.channel_id, {
+		user_id: ev.user_id,
+		muted: ev.muted,
+		camera_on: ev.camera_on,
+		screen_sharing: ev.screen_sharing
+	});
+
 	if (currentChannelId !== ev.channel_id) {
 		return;
 	}
@@ -543,6 +598,10 @@ export function onActiveSpeakerUpdate(ev: WsActiveSpeakerUpdate): void {
 }
 
 export function onVoiceLeave(ev: WsVoiceLeave): void {
+	// Roster: broadcast to the channel audience (connect_voice holders) —
+	// never gated on the current room.
+	removeUserFromRoster(ev.channel_id, ev.user_id);
+
 	if (currentChannelId !== ev.channel_id) {
 		return;
 	}

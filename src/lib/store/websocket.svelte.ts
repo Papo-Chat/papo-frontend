@@ -25,6 +25,7 @@ import type { WsOutbound, WsInbound, WsTyping } from '../types';
 
 export const state = $state({
 	connected: false,
+	reconnecting: false,
 	reconnectAttempts: 0,
 	lastPing: 0,
 	heartbeatTimer: 30000
@@ -113,6 +114,7 @@ export function connect(): void {
 		const wasConnected = hasConnected;
 		hasConnected = true;
 		state.connected = true;
+		state.reconnecting = false;
 		state.reconnectAttempts = 0;
 		startPing(socket, gen);
 		if (wasConnected) {
@@ -145,6 +147,7 @@ export function connect(): void {
 		}
 		// Network drop → reconnect with exponential backoff. The new WS is a
 		// different owner of the call; re-entering voice is a separate action.
+		state.reconnecting = true;
 		state.reconnectAttempts += 1;
 		const delay = Math.min(15000, 1000 * 2 ** state.reconnectAttempts);
 		reconnectTimer = setTimeout(() => {
@@ -164,6 +167,7 @@ export function connect(): void {
 export function disconnect(): void {
 	// Manual close (logout / 401 / account switch): no reconnect.
 	shouldReconnect = false;
+	state.reconnecting = false;
 	// Bump so any in-flight socket callbacks (captured older gen) are no-ops.
 	generation += 1;
 	stopTimers();

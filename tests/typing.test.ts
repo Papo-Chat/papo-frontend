@@ -40,16 +40,20 @@ describe('setTyping / isTyping / typingUsers', () => {
 		expect(isTyping('ch1', 'u1')).toBe(false);
 	});
 
-	it('typing is per-channel (not shared across channels)', () => {
+	// Um usuário só pode ter um canal ativo de typing. Iniciar typing em um
+	// novo canal limpa o indicador do canal anterior (evita indicador
+	// "fantasma" quando o usuário troca de canal sem um stop explícito).
+	it('user has one active typing channel (switching clears the previous)', () => {
 		now = 1000;
 		setTyping('ch1', 'u1', true);
-		setTyping('ch2', 'u1', true);
 		expect(isTyping('ch1', 'u1')).toBe(true);
-		expect(isTyping('ch2', 'u1')).toBe(true);
-		// clearing one channel does not affect the other
-		setTyping('ch1', 'u1', false);
+		// starting typing in ch2 clears u1 from ch1
+		setTyping('ch2', 'u1', true);
 		expect(isTyping('ch1', 'u1')).toBe(false);
 		expect(isTyping('ch2', 'u1')).toBe(true);
+		// explicitly stopping removes the entry without re-adding it
+		setTyping('ch2', 'u1', false);
+		expect(isTyping('ch2', 'u1')).toBe(false);
 	});
 
 	it('multiple users can be typing in the same channel', () => {

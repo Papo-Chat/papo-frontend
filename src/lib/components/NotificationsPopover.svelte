@@ -21,6 +21,21 @@
 		state.notificationsPopoverOpen = false;
 	}
 
+	// Scroll-based loading: while the user scrolls the body towards the
+	// bottom (distance < 200px) and there are more pages, load the next.
+	// Replaces a "show more" button (no click, same as the chat messages).
+	function onBodyScroll(e: Event): void {
+		const sc = e.target as HTMLElement;
+		const distance = sc.scrollHeight - sc.scrollTop - sc.clientHeight;
+		if (
+			distance < 200 &&
+			!notificationsStore.state.loading &&
+			notificationsStore.state.hasMore
+		) {
+			notificationsStore.loadMore();
+		}
+	}
+
 	function openNotification(n: NotificationSummary): void {
 		notificationsStore.markRead([n.id]);
 		setScrollTarget(n.message_id);
@@ -63,7 +78,7 @@
 				<Icon name="x" variant="light" />
 			</button>
 		</div>
-		<div class="popover-body">
+		<div class="popover-body" onscroll={onBodyScroll}>
 			{#if notificationsStore.state.items.length}
 				{#each notificationsStore.state.items as n (n.id)}
 					{@const author = usersStore.state.byId.get(n.author_id ?? '')}

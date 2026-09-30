@@ -1053,8 +1053,10 @@ export function send(payload: {
 	content: string | null;
 	reply_to: string | null;
 	files?: File[];
+	onProgress?: (percent: number) => void;
 }): Promise<MessageWithAttachment> {
-	return api.messages.send(payload);
+	const { onProgress, ...msgPayload } = payload;
+	return api.messages.send(msgPayload, onProgress);
 }
 
 export function edit(messageId: string, content: string): Promise<MessageWithAttachment> {
@@ -1080,53 +1082,134 @@ export function pin(
 export function unpin(channelId: string, messageId: string): Promise<void> {
 	return api.messages.unpin(channelId, messageId);
 }
+// DROP-IN: substitua updateUserReactions(), react() e unreact() por este bloco.
+//
+// Objetivo:
+// - atualizar `reactions` e `user_reactions` juntos;
+// - atualizar a UI imediatamente, sem depender do WS para a contagem;
+// - manter o WS como fonte de reconciliação do count absoluto;
+// - sempre ler a mensagem atual no momento da mutação;
+// - fazer rollback se a request falhar.
 
-// Update the local user_reactions from the API response (the WS react_update
-// only carries the count, not who reacted), then return the response.
-function updateUserReactions(
+type ReactionInput = {
+	emoji_id: string | null;
+	unicode: string | null;
+};
+
+type ApiUserReaction = ReactionInput & {
+	id?: string;
+};
+
+function reactionKey(r: ReactionInput): string {
+	return `${r.emoji_id ?? ''}:${r.unicode ?? ''}`;
+}
+
+function updateMessageAtomic(
 	channelId: string,
 	messageId: string,
-	userReaction: { id?: string; emoji_id: string | null; unicode: string | null },
-	remove?: boolean
+	updater: (current: MessageWithAttachment) => MessageWithAttachment
 ): void {
 	touchDuringFresh(channelId, messageId);
+
 	const ch = state.channels.get(channelId);
-	const msg = ch?.byId.get(messageId);
-	if (!ch || !msg) {
-		return;
+	const current = ch?.byId.get(messageId);
+
+	if (!ch || !current) return;
+
+	const nextMessage = updater(current);
+
+	// Só cria novas referências depois de aplicar o updater sobre o estado MAIS RECENTE.
+	const nextById = new SvelteMap<string, MessageWithAttachment>();
+	for (const [id, message] of ch.byId) {
+		nextById.set(id, message);
 	}
-	const key = (e: string | null, u: string | null) => `${e ?? ''}:${u ?? ''}`;
-	let nextUserReactions: { id: string; emoji_id: string | null; unicode: string | null }[];
-	if (remove) {
-		nextUserReactions = msg.user_reactions.filter(
-			(ur) => key(ur.emoji_id, ur.unicode) !== key(userReaction.emoji_id, userReaction.unicode)
-		);
-	} else {
-		// O POST /reactions responde sem `id` (contrato `MessageReaction`):
-		// usa placeholder — a dedupe já é por (emoji_id, unicode).
-		nextUserReactions = [
-			...msg.user_reactions.filter(
-				(ur) => key(ur.emoji_id, ur.unicode) !== key(userReaction.emoji_id, userReaction.unicode)
-			),
-			{ id: userReaction.id ?? '', emoji_id: userReaction.emoji_id, unicode: userReaction.unicode }
-		];
-	}
-	const newByd = new SvelteMap<string, MessageWithAttachment>();
-	for (const [id, m] of ch.byId) {
-		newByd.set(id, m);
-	}
-	newByd.set(messageId, { ...msg, user_reactions: nextUserReactions });
+	nextById.set(messageId, nextMessage);
+
 	state.channels.set(channelId, {
 		...ch,
-		byId: newByd,
-		ids: sortedIds(newByd)
+		byId: nextById,
+		ids: sortedIds(nextById)
+	});
+}
+
+function applyLocalReaction(
+	channelId: string,
+	messageId: string,
+	reaction: ApiUserReaction,
+	remove: boolean
+): void {
+	const wantedKey = reactionKey(reaction);
+
+	updateMessageAtomic(channelId, messageId, (msg) => {
+		const mineBefore = msg.user_reactions.some(
+			(r) => reactionKey(r) === wantedKey
+		);
+
+		// Idempotência: não incrementa/decrementa duas vezes a mesma reação local.
+		if (!remove && mineBefore) return msg;
+		if (remove && !mineBefore) return msg;
+
+		const nextUserReactions = remove
+			? msg.user_reactions.filter((r) => reactionKey(r) !== wantedKey)
+			: [
+					...msg.user_reactions.filter((r) => reactionKey(r) !== wantedKey),
+					{
+						id: reaction.id ?? '',
+						emoji_id: reaction.emoji_id,
+						unicode: reaction.unicode
+					}
+				];
+
+		const existingIndex = msg.reactions.findIndex(
+			(r) => reactionKey(r) === wantedKey
+		);
+
+		let nextReactions: typeof msg.reactions;
+
+		if (remove) {
+			if (existingIndex === -1) {
+				nextReactions = msg.reactions;
+			} else {
+				const existing = msg.reactions[existingIndex];
+				const nextCount = Math.max(0, existing.count - 1);
+
+				if (nextCount === 0) {
+					nextReactions = msg.reactions.filter((_, i) => i !== existingIndex);
+				} else {
+					nextReactions = msg.reactions.map((r, i) =>
+						i === existingIndex ? { ...r, count: nextCount } : r
+					);
+				}
+			}
+		} else {
+			if (existingIndex === -1) {
+				nextReactions = [
+					...msg.reactions,
+					{
+						emoji_id: reaction.emoji_id,
+						unicode: reaction.unicode,
+						count: 1
+					}
+				];
+			} else {
+				nextReactions = msg.reactions.map((r, i) =>
+					i === existingIndex ? { ...r, count: r.count + 1 } : r
+				);
+			}
+		}
+
+		return {
+			...msg,
+			reactions: nextReactions,
+			user_reactions: nextUserReactions
+		};
 	});
 }
 
 export function react(
 	channelId: string,
 	messageId: string,
-	req: { emoji_id: string | null; unicode: string | null }
+	req: ReactionInput
 ): Promise<{
 	message_id: string;
 	user_id: string;
@@ -1136,30 +1219,45 @@ export function react(
 }> {
 	const epoch = storeEpoch;
 
-	return api.messages.react(channelId, messageId, req).then((r) => {
-		if (epoch === storeEpoch) {
-			updateUserReactions(channelId, messageId, r);
-		}
+	// Otimista e síncrono: o pill/count muda antes de qualquer evento WS poder chegar.
+	applyLocalReaction(channelId, messageId, req, false);
 
-		return r;
-	});
+	return api.messages.react(channelId, messageId, req).then(
+		(r) => {
+			// Não reescreve a mensagem aqui.
+			// O estado otimista já foi aplicado e o WS pode reconciliar o count absoluto.
+			return r;
+		},
+		(error) => {
+			// Request falhou: desfaz somente a alteração otimista.
+			if (epoch === storeEpoch) {
+				applyLocalReaction(channelId, messageId, req, true);
+			}
+			throw error;
+		}
+	);
 }
 
 export function unreact(
 	channelId: string,
 	messageId: string,
-	req: {
-		emoji_id: string | null;
-		unicode: string | null;
-	}
+	req: ReactionInput
 ): Promise<void> {
 	const epoch = storeEpoch;
 
-	return api.messages.unreact(channelId, messageId, req).then(() => {
-		if (epoch === storeEpoch) {
-			updateUserReactions(channelId, messageId, req, true);
+	// Otimista e síncrono.
+	applyLocalReaction(channelId, messageId, req, true);
+
+	return api.messages.unreact(channelId, messageId, req).then(
+		() => undefined,
+		(error) => {
+			// Request falhou: recoloca a reação.
+			if (epoch === storeEpoch) {
+				applyLocalReaction(channelId, messageId, req, false);
+			}
+			throw error;
 		}
-	});
+	);
 }
 
 export function reactionUsers(
@@ -1178,6 +1276,7 @@ export function reactionUsers(
 }> {
 	return api.messages.reactionUsers(channelId, messageId, q);
 }
+
 
 export function loadPinned(channelId: string): void {
 	const ch = state.channels.get(channelId);

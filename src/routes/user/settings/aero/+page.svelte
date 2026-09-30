@@ -45,7 +45,7 @@
 			<h2 class="aero-label">Tema</h2>
 			<div class="theme-cards">
 				<button
-					class="theme-card { $theme === 'light' ? 'selected' : '' }"
+					class="theme-card {$theme === 'light' ? 'selected' : ''}"
 					on:click={() => setTheme('light')}
 					aria-pressed={$theme === 'light'}
 					aria-label="Usar tema claro"
@@ -54,7 +54,7 @@
 					<span>Claro</span>
 				</button>
 				<button
-					class="theme-card { $theme === 'dark' ? 'selected' : '' }"
+					class="theme-card {$theme === 'dark' ? 'selected' : ''}"
 					on:click={() => setTheme('dark')}
 					aria-pressed={$theme === 'dark'}
 					aria-label="Usar tema escuro"
@@ -68,7 +68,7 @@
 			<div class="bg-grid">
 				{#each deviceImages as img (img.id)}
 					<button
-						class="bg-card { $backgroundId === img.id ? 'selected' : '' }"
+						class="bg-card {$backgroundId === img.id ? 'selected' : ''}"
 						on:click={() => setBackground(img.id)}
 						style="background: {img.background || defaultBackground}"
 						aria-label={img.label}
@@ -77,7 +77,7 @@
 					</button>
 				{/each}
 				<button
-					class="bg-card bg-custom { $backgroundId === CUSTOM_BG_ID ? 'selected' : '' }"
+					class="bg-card bg-custom {$backgroundId === CUSTOM_BG_ID ? 'selected' : ''}"
 					on:click={pickUserImage}
 					title="Enviar imagem de fundo (PNG/JPEG, até 2MB)"
 					aria-label="Enviar imagem de fundo"

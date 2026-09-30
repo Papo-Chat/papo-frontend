@@ -24,6 +24,21 @@
 		usersStore.loadMore();
 	}
 
+	// Scroll-based loading: while the user scrolls `.users-list` towards the
+	// bottom (distance < 200px) and there are more pages, load the next page.
+	// Replaces the "Carregar mais" button (no click, same as the chat messages).
+	function onListScroll(e: Event): void {
+		const sc = e.target as HTMLElement;
+		const distance = sc.scrollHeight - sc.scrollTop - sc.clientHeight;
+		if (
+			distance < 200 &&
+			!usersStore.state.list.loading &&
+			usersStore.state.list.hasMore
+		) {
+			loadNext();
+		}
+	}
+
 	const users = $derived(usersStore.state.list.items);
 	const roles = $derived(rolesStore.state.list);
 
@@ -139,7 +154,7 @@
 			Membros
 		</div>
 		<div class="admin-card-body">
-			<div class="users-list">
+			<div class="users-list" onscroll={onListScroll}>
 				{#each visibleUsers as u (u.id)}
 					{#if !isBanned(u.id)}
 						<div class="user-row">
@@ -192,17 +207,7 @@
 						</div>
 					{/if}
 				{/each}
-				{#if usersStore.state.list.hasMore}
-					<div class="load-more">
-						<button
-							class="load-more-btn"
-							onclick={loadNext}
-							disabled={usersStore.state.list.loading}
-						>
-							{usersStore.state.list.loading ? 'Carregando…' : 'Carregar mais'}
-						</button>
-					</div>
-				{/if}
+
 			</div>
 		</div>
 	</div>
@@ -385,32 +390,6 @@
 		height: 32px;
 		padding: 0 10px;
 		font-size: 12px;
-	}
-	.load-more {
-		display: flex;
-		justify-content: center;
-		padding: 12px;
-	}
-	.load-more-btn {
-		font: inherit;
-		font-size: 12px;
-		color: var(--muted);
-		background: transparent;
-		border: 1px solid rgba(255, 255, 255, 0.35);
-		border-radius: 8px;
-		padding: 6px 14px;
-		cursor: pointer;
-	}
-	.load-more-btn:hover {
-		background: rgba(255, 255, 255, 0.2);
-		color: var(--text);
-	}
-	.load-more-btn:disabled {
-		opacity: 0.6;
-		cursor: default;
-	}
-	:global([data-theme='dark']) .load-more-btn {
-		border-color: rgba(185, 224, 250, 0.2);
 	}
 	.loading-hint {
 		text-align: center;

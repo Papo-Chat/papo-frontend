@@ -11,6 +11,7 @@
 	import { tick } from 'svelte';
 	import { allEmojis, type EmojiOption } from '$lib/utils/emojis';
 	import { blobToUrl } from '$lib/utils/media';
+	import * as emojisStore from '$lib/store/emojis.svelte';
 	import Icon from './Icon.svelte';
 
 	let {
@@ -58,6 +59,21 @@
 	function onFilterInput(e: Event): void {
 		const el = e.target as HTMLInputElement;
 		filter = el.value;
+	}
+
+	// Scroll-based loading: while the user scrolls the body towards the bottom
+	// (distance < 200px) and there are more pages, load the next page.
+	// No "show more" button — same pattern as the chat messages.
+	function onBodyScroll(e: Event): void {
+		const sc = e.target as HTMLElement;
+		const distance = sc.scrollHeight - sc.scrollTop - sc.clientHeight;
+		if (
+			distance < 200 &&
+			!emojisStore.state.loading &&
+			emojisStore.state.hasMore
+		) {
+			emojisStore.loadMore();
+		}
 	}
 
 	// Fresh start each time the picker opens.
@@ -199,7 +215,7 @@
 			</button>
 		</div>
 
-		<div class="emoji-picker-body">
+		<div class="emoji-picker-body" onscroll={onBodyScroll}>
 			{#if custom.length}
 				<div class="emoji-section">
 					<span class="emoji-section-label">Personalizados</span>

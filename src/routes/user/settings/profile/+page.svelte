@@ -1,282 +1,484 @@
 <script lang="ts">
-	// Edit own profile. Demo only — local state seeded from sampleMe.
-	import { sampleMe } from '$lib/sample';
-	import { fileToBase64 } from '$lib/utils/upload';
-	import { blobToUrl, mimeToFormat } from '$lib/utils/media';
-	import Icon from '$lib/components/Icon.svelte';
-	import Avatar from '$lib/components/Avatar.svelte';
+    import * as api from '$lib/api';
+    import { meId } from '$lib/store/session.svelte';
+    import * as usersStore from '$lib/store/users.svelte';
+    import { fileToBase64 } from '$lib/utils/upload';
+    import { blobToUrl, mimeToFormat, mediaUrl } from '$lib/utils/media';
+    import type { UserProfile, UserSummary } from '$lib/types';
+    import Icon from '$lib/components/Icon.svelte';
+    import Avatar from '$lib/components/Avatar.svelte';
 
-	let nickname = $state(sampleMe.nickname ?? '');
-	let statusMessage = $state(sampleMe.status_message ?? '');
-	let description = $state('');
-	let saved = $state(false);
+    let profile: UserProfile | null = $state(null);
+    let nickname = $state('');
+    let statusMessage = $state('');
+    let description = $state('');
+    let avatarImg: { base64: string; mime: string } | null = $state(null);
+    let bannerImg: { base64: string; mime: string } | null = $state(null);
+    let avatarError = $state('');
+    let bannerError = $state('');
+    let saving = $state(false);
+    let showSaving = $state(false);
+    let saved = $state(false);
+    let savingFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
+    let savedTimer: ReturnType<typeof setTimeout> | null = null;
+    let error = $state<string | null>(null);
+    let seeded = $state(false);
 
-	// Demo preview: merge the unsaved local nickname into the sample summary
-	// so the Avatar preview follows the in-progress edit.
-	const previewUser = $derived({ ...sampleMe, nickname: nickname });
+    // Previews: o upload pendente (avatarImg/bannerImg) ganha prioridade; senão,
+    // usa o valor já persistido no perfil. O acesso aos $state nulos é feito
+    // em funções regulares; o $derived mantém a reatividade.
+    function previewAvatar(): string {
+        if (avatarImg) {
+            return blobToUrl(avatarImg.base64, mimeToFormat(avatarImg.mime));
+        }
+        if (profile?.avatar_blob) {
+            return blobToUrl(profile.avatar_blob, profile.avatar_format);
+        }
+        return '';
+    }
 
-	// Avatar / banner uploads (demo: stored as base64, previewed via objectURL).
-	let avatarImg = $state<{ base64: string; mime: string } | null>(null);
-	let bannerImg = $state<{ base64: string; mime: string } | null>(null);
-	let avatarError = $state('');
-	let bannerError = $state('');
+    function previewBanner(): string {
+        if (bannerImg) {
+            return blobToUrl(bannerImg.base64, mimeToFormat(bannerImg.mime));
+        }
+        if (profile?.banner_media) {
+            return mediaUrl(profile.banner_media);
+        }
+        return '';
+    }
 
-	const avatarSrc = $derived(
-		avatarImg ? blobToUrl(avatarImg.base64, mimeToFormat(avatarImg.mime)) : ''
-	);
-	const bannerSrc = $derived(
-		bannerImg ? blobToUrl(bannerImg.base64, mimeToFormat(bannerImg.mime)) : ''
-	);
+    function showName(): string {
+        return nickname || (profile?.username ?? 'Usuário');
+    }
 
-	async function onAvatarSelect(e: Event) {
-		avatarError = '';
-		const input = e.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
-		try {
-			avatarImg = await fileToBase64(file, 'avatar');
-		} catch (err) {
-			avatarError = (err as Error).message;
-			avatarImg = null;
-		}
-	}
+    function userHandle(): string {
+        return profile?.username ?? '';
+    }
 
-	async function onBannerSelect(e: Event) {
-		bannerError = '';
-		const input = e.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
-		try {
-			bannerImg = await fileToBase64(file, 'banner');
-		} catch (err) {
-			bannerError = (err as Error).message;
-			bannerImg = null;
-		}
-	}
+    const avatarSrc = $derived(previewAvatar());
+    const bannerSrc = $derived(previewBanner());
+    const displayName = $derived(showName());
+    const atUsername = $derived(userHandle());
 
-	function resetAvatar(): void {
-		avatarImg = null;
-		avatarError = '';
-	}
+    // Semeia o formulário a partir do perfil (whoami + GET /users/:me).
+    $effect(() => {
+        const id = meId();
+        if (!id || seeded) {
+            return;
+        }
+        void loadProfile(id);
+    });
 
-	function resetBanner(): void {
-		bannerImg = null;
-		bannerError = '';
-	}
+    async function loadProfile(id: string): Promise<void> {
+        try {
+            const p = await usersStore.ensureProfile(id);
+            profile = p;
+            nickname = p.nickname ?? '';
+            statusMessage = p.status_message ?? '';
+            description = p.description ?? '';
+        } catch {
+            // Fallback: apenas os campos que o whoami expõe (description/capa
+            // ficam vazios — o perfil não foi carregado).
+            nickname = '';
+            statusMessage = '';
+            description = '';
+        }
+        seeded = true;
+    }
+
+    async function onAvatarSelect(e: Event): Promise<void> {
+        avatarError = '';
+        const input = e.target as HTMLInputElement;
+        const file = input.files?.[0];
+        if (!file) return;
+        try {
+            avatarImg = await fileToBase64(file, 'avatar');
+        } catch (err) {
+            avatarError = (err as Error).message;
+            avatarImg = null;
+        }
+    }
+
+    async function onBannerSelect(e: Event): Promise<void> {
+        bannerError = '';
+        const input = e.target as HTMLInputElement;
+        const file = input.files?.[0];
+        if (!file) return;
+        try {
+            bannerImg = await fileToBase64(file, 'banner');
+        } catch (err) {
+            bannerError = (err as Error).message;
+            bannerImg = null;
+        }
+    }
+
+    async function save(): Promise<void> {
+        const id = meId();
+        if (!id || saving) {
+            return;
+        }
+        error = null;
+        saved = false;
+        saving = true;
+        showSaving = false;
+        if (savingFeedbackTimer) clearTimeout(savingFeedbackTimer);
+        if (savedTimer) clearTimeout(savedTimer);
+        // Evita o flash de “Salvando…” quando a resposta da API é quase instantânea.
+        savingFeedbackTimer = setTimeout(() => {
+            if (saving) showSaving = true;
+        }, 220);
+        try {
+            await api.users.update(id, {
+                nickname,
+                status: statusMessage,
+                description,
+                typing: null
+            });
+
+            if (avatarImg) {
+                await api.users.updateAvatar(id, {
+                    avatar: avatarImg.base64,
+                    avatar_format: mimeToFormat(avatarImg.mime)
+                });
+            }
+            if (bannerImg) {
+                await api.users.updateBanner(id, {
+                    banner: bannerImg.base64,
+                    banner_format: mimeToFormat(bannerImg.mime)
+                });
+            }
+
+            // Atualiza os caches (o updateBanner retorna apenas a mensagem; o
+            // sha da capa vem do refetch do perfil).
+            const fresh = await api.users.profile(id);
+            profile = fresh;
+            usersStore.state.profiles.set(id, fresh);
+            usersStore.state.byId.set(id, {
+                id: fresh.id,
+                username: fresh.username,
+                nickname: fresh.nickname,
+                status: fresh.status,
+                status_message: fresh.status_message,
+                typing: fresh.typing,
+                status_updated_at: fresh.status_updated_at,
+                created_at: fresh.created_at,
+                roles: fresh.roles
+            } as UserSummary);
+
+            avatarImg = null;
+            bannerImg = null;
+            saved = true;
+            savedTimer = setTimeout(() => {
+                saved = false;
+            }, 1800);
+        } catch (err) {
+            error = err instanceof Error ? err.message : 'Erro ao salvar o perfil.';
+        } finally {
+            if (savingFeedbackTimer) {
+                clearTimeout(savingFeedbackTimer);
+                savingFeedbackTimer = null;
+            }
+            showSaving = false;
+            saving = false;
+        }
+    }
 </script>
 
 <div class="profile-edit-page">
-	<div class="profile-edit-card">
-		{#if bannerSrc}
-			<div class="profile-banner-preview">
-				<img src={bannerSrc} alt="" />
-				<button class="banner-reset" onclick={resetBanner} aria-label="Remover capa">
-					<Icon name="x" variant="light" size={14} />
-				</button>
-			</div>
-		{/if}
+    <div class="profile-edit-card">
+        {#if bannerSrc}
+            <div class="profile-banner-preview">
+                <img src={bannerSrc} alt="" />
+                <button
+                    class="banner-reset"
+                    onclick={() => {
+                        bannerImg = null;
+                        bannerError = '';
+                    }}
+                    aria-label="Remover capa"
+                >
+                    <Icon name="x" variant="light" size={14} />
+                </button>
+            </div>
+        {/if}
 
-		<div class="profile-preview">
-			{#if avatarSrc}
-				<img class="avatar avatar-custom" src={avatarSrc} alt={nickname || sampleMe.username} />
-			{:else}
-				<Avatar user={previewUser} size={64} />
-			{/if}
-			<div class="profile-preview-info">
-				<h3>{nickname || sampleMe.username}</h3>
-				<span class="preview-user">@{sampleMe.username}</span>
-				<span class="preview-status">
-					{#if statusMessage}{statusMessage}{:else}Online{/if}
-				</span>
-			</div>
-		</div>
+        <div class="profile-preview">
+            {#if avatarSrc}
+                <img class="avatar avatar-custom" src={avatarSrc} alt={displayName} />
+            {:else}
+                <Avatar user={profile ?? null} size={64} />
+            {/if}
+            <div class="profile-preview-info">
+                <h3>{displayName}</h3>
+                <span class="preview-user">@{atUsername}</span>
+                <span class="preview-status" title={statusMessage || 'Online'}>
+                    {statusMessage || 'Online'}
+                </span>
+            </div>
+        </div>
 
-		<div class="profile-form">
-			<div class="admin-field">
-				<label for="pf-name">Nome</label>
-				<input
-					id="pf-name"
-					class="admin-input"
-					bind:value={nickname}
-					placeholder="Como você quer ser chamado"
-				/>
-			</div>
-			<div class="admin-field">
-				<label for="pf-status">Mensagem de status</label>
-				<input
-					id="pf-status"
-					class="admin-input"
-					bind:value={statusMessage}
-					placeholder="ex.: online, ocupado, em férias…"
-					maxlength="80"
-				/>
-			</div>
-			<div class="admin-field">
-				<label for="pf-desc">Descrição</label>
-				<textarea
-					id="pf-desc"
-					class="admin-textarea"
-					bind:value={description}
-					placeholder="Sobre você, seus interesses, seu Role no AeroClub…"></textarea>
-			</div>
-			<div class="admin-field">
-				<label>Avatar</label>
-				<input
-					type="file"
-					accept="image/*"
-					onchange={onAvatarSelect}
-					aria-label="Escolher avatar"
-				/>
-				{#if avatarError}
-					<span class="field-error">{avatarError}</span>
-				{/if}
-			</div>
-			<div class="admin-field">
-				<label>Capa</label>
-				<input type="file" accept="image/*" onchange={onBannerSelect} aria-label="Escolher capa" />
-				{#if bannerError}
-					<span class="field-error">{bannerError}</span>
-				{/if}
-			</div>
-			<div class="profile-actions">
-				<button
-					class="admin-btn"
-					onclick={() => {
-						saved = true;
-					}}
-				>
-					<Icon name="check" variant="light" />
-					Salvar
-				</button>
-				{#if saved}
-					<span class="saved">Perfil salvo</span>
-				{/if}
-			</div>
-		</div>
-	</div>
+        <div class="profile-form">
+            <div class="admin-field">
+                <label for="pf-name">Nome</label>
+                <input
+                    id="pf-name"
+                    class="admin-input"
+                    bind:value={nickname}
+                    placeholder="Como você quer ser chamado"
+                />
+            </div>
+            <div class="admin-field">
+                <label for="pf-status">Mensagem de status</label>
+                <input
+                    id="pf-status"
+                    class="admin-input"
+                    bind:value={statusMessage}
+                    placeholder="ex.: online, ocupado, em férias…"
+                    maxlength="80"
+                />
+            </div>
+            <div class="admin-field">
+                <label for="pf-desc">Descrição</label>
+                <textarea
+                    id="pf-desc"
+                    class="admin-textarea"
+                    bind:value={description}
+                    placeholder="Sobre você, seus interesses, seu papel no AeroClub…"
+                ></textarea>
+            </div>
+            <div class="admin-field">
+                <label>Avatar</label>
+                <input
+                    type="file"
+                    accept="image/*"
+                    onchange={onAvatarSelect}
+                    aria-label="Escolher avatar"
+                />
+                {#if avatarError}
+                    <span class="field-error">{avatarError}</span>
+                {/if}
+            </div>
+            <div class="admin-field">
+                <label>Capa</label>
+                <input
+                    type="file"
+                    accept="image/*"
+                    onchange={onBannerSelect}
+                    aria-label="Escolher capa"
+                />
+                {#if bannerError}
+                    <span class="field-error">{bannerError}</span>
+                {/if}
+            </div>
+            {#if error}
+                <div class="profile-error" role="alert">
+                    <Icon name="warning-circle" variant="light" />
+                    <span>{error}</span>
+                </div>
+            {/if}
+            <div class="profile-actions">
+                <button class="admin-btn save-btn" onclick={save} disabled={saving} aria-busy={saving}>
+                    <span class="save-label">{showSaving ? 'Salvando…' : 'Salvar'}</span>
+                    <Icon name="check" variant="light" />
+                </button>
+                <span class:visible={saved} class="saved" aria-live="polite">Perfil salvo</span>
+            </div>
+        </div>
+    </div>
 </div>
 
 <style>
-	.profile-edit-page {
-		padding: 4px 0 8px;
-	}
-	.profile-edit-card {
-		max-width: 620px;
-		display: grid;
-		grid-template-columns: auto 1fr;
-		gap: 18px;
-		align-items: start;
-		background: linear-gradient(145deg, rgba(255, 255, 255, 0.48), rgba(239, 248, 252, 0.27));
-		border: 1px solid rgba(255, 255, 255, 0.58);
-		border-radius: 14px;
-		padding: 18px;
-		box-shadow:
-			inset 0 1px 0 rgba(255, 255, 255, 0.84),
-			0 10px 22px rgba(28, 82, 116, 0.08);
-	}
-	.profile-preview {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 10px;
-	}
-	.profile-preview-info {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 3px;
-		text-align: center;
-	}
-	.profile-preview-info h3 {
-		margin: 0;
-		font-size: 16px;
-	}
-	.preview-user {
-		font-size: 12px;
-		color: var(--muted);
-	}
-	.preview-status {
-		font-size: 12px;
-		color: var(--muted-soft);
-		max-width: 220px;
-	}
-	.avatar.avatar-custom {
-		border: 2px solid rgba(255, 255, 255, 0.84);
-		border-radius: 50%;
-		display: block;
-		width: 64px;
-		height: 64px;
-		object-fit: cover;
-	}
-	.profile-banner-preview {
-		position: relative;
-		width: 100%;
-		height: 120px;
-		border-radius: 12px;
-		overflow: hidden;
-		background: linear-gradient(120deg, #0a84ff, #5ac8fa, #30d158);
-		margin-bottom: 14px;
-	}
-	.profile-banner-preview img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-		display: block;
-	}
-	.banner-reset {
-		position: absolute;
-		top: 8px;
-		right: 8px;
-		width: 26px;
-		height: 26px;
-		border-radius: 50%;
-		border: 1px solid rgba(255, 255, 255, 0.6);
-		background: rgba(255, 255, 255, 0.5);
-		display: grid;
-		place-items: center;
-		color: var(--text);
-		cursor: pointer;
-		transition: transform 0.18s var(--ease);
-	}
-	.banner-reset:hover {
-		transform: translateY(-1px);
-	}
-	.field-error {
-		display: block;
-		margin-top: 4px;
-		font-size: 12px;
-		color: #e74c5f;
-	}
-	.profile-actions {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		margin-top: 4px;
-	}
-	.saved {
-		font-size: 12px;
-		font-weight: 700;
-		color: #24c982;
-	}
-	:global([data-theme='dark']) .profile-edit-card {
-		background:
-			radial-gradient(circle at 12% -18%, rgba(116, 207, 255, 0.1), transparent 40%),
-			linear-gradient(145deg, rgba(25, 51, 68, 0.86), rgba(12, 33, 48, 0.8));
-		border-color: rgba(182, 224, 250, 0.14);
-		box-shadow:
-			inset 0 1px 0 rgba(255, 255, 255, 0.1),
-			0 10px 22px rgba(0, 0, 0, 0.24);
-	}
-	:global([data-theme='dark']) .banner-reset {
-		color: var(--text);
-		background: rgba(69, 91, 105, 0.48);
-		border-color: rgba(185, 225, 249, 0.14);
-		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
-	}
+    .profile-edit-page {
+        padding: 4px 0 8px;
+    }
 
-	@media (max-width: 640px) {
-		.profile-edit-card {
-			grid-template-columns: 1fr;
-		}
-	}
+    .profile-edit-card {
+        width: 100%;
+        max-width: 620px;
+        box-sizing: border-box;
+        display: grid;
+        grid-template-columns: 112px minmax(0, 1fr);
+        gap: 18px;
+        align-items: start;
+        background:
+            radial-gradient(circle at 12% -18%, rgba(255, 255, 255, 0.34), transparent 40%),
+            linear-gradient(145deg, rgba(248, 252, 255, 0.72), rgba(226, 242, 251, 0.56));
+        border: 1px solid rgba(255, 255, 255, 0.58);
+        border-radius: 14px;
+        padding: 18px;
+    }
+
+    :global([data-theme='dark']) .profile-edit-card {
+        background:
+            radial-gradient(circle at 12% -18%, rgba(116, 207, 255, 0.1), transparent 40%),
+            linear-gradient(145deg, rgba(25, 51, 68, 0.86), rgba(12, 33, 48, 0.8));
+        border-color: rgba(185, 224, 250, 0.2);
+    }
+
+    .profile-banner-preview {
+        grid-column: 1 / -1;
+        position: relative;
+        height: 72px;
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    .profile-banner-preview img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .banner-reset {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        border: none;
+        background: rgba(255, 255, 255, 0.55);
+        cursor: pointer;
+        display: grid;
+        place-items: center;
+    }
+
+    :global([data-theme='dark']) .banner-reset {
+        background: rgba(255, 255, 255, 0.15);
+    }
+
+    .profile-preview {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .profile-preview-info {
+        width: 100%;
+        min-width: 0;
+        text-align: center;
+    }
+
+    .profile-preview-info h3 {
+        margin: 0;
+        font-size: 16px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .preview-user {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .preview-status {
+        display: block;
+        width: 100%;
+        min-height: 18px;
+        line-height: 18px;
+        color: #24c982;
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .avatar.avatar-custom {
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.9);
+        display: block;
+    }
+
+    .profile-form {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .field-error {
+        color: #e74c5f;
+        font-size: 11px;
+        display: block;
+        margin-top: 4px;
+    }
+
+    .profile-error {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border-radius: 10px;
+        background: rgba(220, 40, 40, 0.12);
+        color: #b91c1c;
+        font-size: 13px;
+    }
+
+    .profile-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 34px;
+        margin-top: 4px;
+    }
+
+    .save-btn {
+        min-width: 112px;
+        justify-content: center;
+        transition: transform 120ms ease, opacity 160ms ease;
+    }
+
+    .save-btn:active:not(:disabled) {
+        transform: translateY(1px);
+    }
+
+    .save-btn:disabled {
+        cursor: wait;
+        opacity: 0.78;
+    }
+
+    .save-label {
+        display: inline-block;
+        min-width: 66px;
+        text-align: center;
+    }
+
+    .saved {
+        min-width: 68px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #24c982;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(2px);
+        transition: opacity 180ms ease, transform 180ms ease, visibility 180ms;
+    }
+
+    .saved.visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
+
+    @media (max-width: 520px) {
+        .profile-edit-card {
+            grid-template-columns: 88px minmax(0, 1fr);
+            gap: 14px;
+            padding: 14px;
+        }
+
+        .profile-actions {
+            flex-wrap: wrap;
+        }
+    }
 </style>

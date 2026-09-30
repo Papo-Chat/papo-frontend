@@ -468,23 +468,28 @@
 .header-icon-btn i {
 	font-size: 18px;
 }
-
 .unread-badge {
 	position: absolute;
-	top: 3px;
-	right: 3px;
-	min-width: 15px;
-	height: 15px;
-	padding: 0 5px;
-	border-radius: 10px;
-	font-size: 9px;
-	font-weight: 700;
-	display: grid;
-	place-items: center;
-	color: #fff;
-	background: var(--danger);
-}
+	top: -4px;
+	right: -4px;
 
+	display: flex;
+	align-items: center;
+	justify-content: center;
+
+	min-width: 18px;
+	height: 18px;
+	padding: 0 5px;
+	box-sizing: border-box;
+
+	border-radius: 9999px;
+	background: #ef4444;
+	color: #fff;
+
+	font-size: 11px;
+	font-weight: 700;
+	line-height: 1;
+}
 /* Members button is only needed on mobile/desktop-laptop where the members
  * column is hidden (<= 1220px). On the full layout the column is always
  * visible, so the button is dropped. Match `.pill.circle` specificity so it
@@ -503,17 +508,20 @@
    ───────────────────────────────────────────────────────────────────── */
 
 .chat {
+	visibility: hidden;
+
 	position: relative;
 	z-index: 1;
 	min-height: 0;
 	padding: 18px 24px 16px;
 	overflow-y: auto;
-	scroll-behavior: smooth;
+	scroll-behavior: auto !important;
+	overflow-anchor: none;
 	scrollbar-width: thin;
 	scrollbar-color: rgba(72, 130, 170, 0.28) transparent;
 	background: radial-gradient(circle at 82% 14%, rgba(109, 220, 255, 0.055), transparent 25%);
 	/* small margin before the in-flow composer */
-	padding-bottom: 14px;
+	padding-bottom: 16px;
 	/* anchor messages to the bottom when they don't fill the chat;
 	 * "safe" keeps top overflow scrollable (plain flex-end on a scroll
 	 * container clips top overflow / hides the vertical scrollbar in
@@ -521,6 +529,41 @@
 	display: flex;
 	flex-direction: column;
 	justify-content: safe flex-end;
+}
+
+.chat.ready {
+	visibility: visible;
+}
+.chat-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	height: 100%;
+	min-height: 240px;
+	color: var(--muted-soft);
+	font-size: 14px;
+}
+
+.jump-to-latest {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font: inherit;
+	font-size: 13px;
+	color: var(--text-secondary);
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	padding: 4px 10px;
+	cursor: pointer;
+	margin-bottom: 6px;
+}
+
+.jump-to-latest:hover {
+	background: var(--hover);
+	color: var(--text-primary);
 }
 .chat::-webkit-scrollbar {
 	width: 10px;
@@ -550,11 +593,19 @@
 }
 @keyframes message-pop {
 	from {
-		padding-top: 10px;
+		opacity: 0;
+		transform: translateY(8px);
 	}
 
 	to {
-		padding-top: 0;
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.new-message {
+		animation: none;
 	}
 }
 .avatar {
@@ -672,6 +723,16 @@ button.name:focus-visible {
 }
 .bubble:active {
 	transform: translateY(0) scale(0.995);
+}
+
+/* mensagem fixada: destaque dourado (token --gold). A transição de
+ * border-color/box-shadow da .bubble anima a mudança ao fixar/desfixar. */
+.bubble.pinned {
+	border-color: var(--gold);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.9),
+		0 10px 20px rgba(23, 75, 108, 0.09),
+		0 0 18px rgba(231, 168, 11, 0.18);
 }
 .bubble p {
 	margin: 0;
@@ -1074,18 +1135,27 @@ button.name:focus-visible {
 
 .input {
 	min-width: 0;
+	min-height: 42px;
+	height: auto;
+
 	flex: 1 1 auto;
-	height: 42px;
+
 	border-radius: 16px;
 	border: 1px solid rgba(255, 255, 255, 0.7);
 	background: rgba(255, 255, 255, 0.62);
+
 	display: flex;
 	align-items: center;
-	padding: 0 14px;
+
+	padding: 9px 14px;
+
 	color: var(--muted-soft);
+
 	box-shadow:
 		inset 0 1px 4px rgba(51, 112, 154, 0.05),
 		inset 0 1px 0 rgba(255, 255, 255, 0.75);
+
+	box-sizing: border-box;
 }
 .input input {
 	min-width: 0;
@@ -2194,6 +2264,13 @@ button.name:focus-visible {
 		0 14px 30px rgba(0, 0, 0, 0.3),
 		0 0 22px rgba(95, 211, 255, 0.08);
 }
+[data-theme='dark'] .bubble.pinned {
+	border-color: var(--gold);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.16),
+		0 14px 30px rgba(0, 0, 0, 0.28),
+		0 0 18px rgba(231, 168, 11, 0.25);
+}
 [data-theme='dark'] .preview-card {
 	background:
 		radial-gradient(circle at 14% -8%, rgba(108, 201, 253, 0.09), transparent 36%),
@@ -2260,9 +2337,9 @@ button.name:focus-visible {
 [data-theme='dark'] .nav-item.active {
 	background:
 		radial-gradient(circle at 25% 0%, rgba(255, 255, 255, 0.16), transparent 58%),
-		linear-gradient(145deg, rgba(123, 205, 250, 0.16), rgba(67, 158, 224, 0.08));
-	border-color: rgba(255, 255, 255, 0.14);
-	box-shadow: none;
+		linear-gradient(145deg, rgba(123, 205, 250, 0.16), rgba(67, 158, 224, 0.08)) !important;
+	border-color: rgba(255, 255, 255, 0.14) !important;
+	box-shadow: none !important;
 }
 [data-theme='dark'] .composer-tool,
 [data-theme='dark'] .input,
@@ -2429,25 +2506,32 @@ button.name:focus-visible {
 [data-theme='dark'] .inline-message-icon.blue-heart {
 	color: rgba(101, 171, 255, 0.96);
 }
-
 /* =====================================================================
-   Profile card (hovering overlay — banner, avatar, roles, description)
-   Floats over the interface like the mobile drawers. Render as a direct
-   child of the positioned `.app-shell` (or any positioned ancestor) so the
-   `inset: 0` overlay covers the whole view.
+   Profile card
+   Desktop: modal centralizado
+   Mobile: bottom sheet preso ao viewport, estilo Discord
    ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   Overlay
+   --------------------------------------------------------------------- */
+
 .profile-overlay {
-	position: absolute;
+	position: fixed;
 	inset: 0;
-	z-index: 180;
+	z-index: 9999;
+
+	display: block;
 	pointer-events: auto;
 
 	background: rgba(4, 18, 31, 0.12);
+
 	backdrop-filter: blur(13px) saturate(120%);
 	-webkit-backdrop-filter: blur(13px) saturate(120%);
 
 	animation: profile-overlay-in 180ms ease-out both;
 }
+
 @keyframes profile-overlay-in {
 	from {
 		opacity: 0;
@@ -2458,15 +2542,19 @@ button.name:focus-visible {
 	}
 }
 
+/* ---------------------------------------------------------------------
+   Desktop animation
+   --------------------------------------------------------------------- */
+
 @keyframes profile-card-pop {
 	0% {
 		opacity: 0;
-		transform: translate(-50%, -50%) translateY(12px) scale(0.9);
+		transform: translate(-50%, -50%) translateY(12px) scale(0.96);
 	}
 
 	65% {
 		opacity: 1;
-		transform: translate(-50%, -50%) translateY(-2px) scale(1.025);
+		transform: translate(-50%, -50%) translateY(-2px) scale(1.015);
 	}
 
 	100% {
@@ -2475,57 +2563,104 @@ button.name:focus-visible {
 	}
 }
 
-@media (prefers-reduced-motion: reduce) {
-	.profile-overlay,
-	.profile-card {
-		animation: none;
+/* ---------------------------------------------------------------------
+   Mobile animation
+   IMPORTANT:
+   Mobile cannot reuse profile-card-pop because it contains
+   translate(-50%, -50%).
+   --------------------------------------------------------------------- */
+
+@keyframes profile-card-mobile-in {
+	from {
+		opacity: 0;
+		transform: translateY(100%);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
 	}
 }
+
+/* ---------------------------------------------------------------------
+   Card
+   --------------------------------------------------------------------- */
 
 .profile-card {
 	--banner-h: 150px;
 	--avatar-size: 92px;
+
 	position: absolute;
-	/* Desktop: centered on screen. Mobile (<=700px) overrides to a bottom
-	 * sheet. */
 	top: 50%;
 	left: 50%;
+
 	width: min(380px, calc(100vw - 32px));
-	z-index: 220;
+
+	z-index: 1;
+
 	border: 1px solid rgba(255, 255, 255, 0.72);
 	border-radius: var(--radius-lg);
+
 	overflow: hidden;
 	isolation: isolate;
+
 	background:
-		radial-gradient(circle at 12% -18%, rgba(255, 255, 255, 0.46), transparent 34%),
-		linear-gradient(145deg, rgba(249, 253, 255, 0.84), rgba(221, 241, 251, 0.68));
+		radial-gradient(
+			circle at 12% -18%,
+			rgba(255, 255, 255, 0.46),
+			transparent 34%
+		),
+		linear-gradient(
+			145deg,
+			rgba(249, 253, 255, 0.84),
+			rgba(221, 241, 251, 0.68)
+		);
+
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, 0.96),
 		0 24px 52px rgba(11, 60, 96, 0.18),
 		0 8px 22px rgba(11, 60, 96, 0.08);
+
 	backdrop-filter: blur(18px) saturate(150%);
 	-webkit-backdrop-filter: blur(18px) saturate(150%);
+
 	transform-origin: center;
+
 	opacity: 0;
 	pointer-events: none;
+
 	transform: translate(-50%, -50%) translateY(12px) scale(0.98);
+
 	transition:
 		opacity 0.24s ease,
 		transform 0.28s var(--ease);
-	animation: profile-card-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+
+	animation: profile-card-pop 380ms
+		cubic-bezier(0.34, 1.56, 0.64, 1) both;
+
 	will-change: transform, opacity;
 }
+
 .profile-card.open {
 	opacity: 1;
 	pointer-events: auto;
+
 	transform: translate(-50%, -50%) translateY(0) scale(1);
 }
+
+/* ---------------------------------------------------------------------
+   Glass highlight
+   --------------------------------------------------------------------- */
+
 .profile-card::before {
 	content: '';
+
 	position: absolute;
 	inset: 0;
+
 	z-index: 0;
 	pointer-events: none;
+
 	background: linear-gradient(
 		120deg,
 		rgba(255, 255, 255, 0.5) 0%,
@@ -2533,245 +2668,537 @@ button.name:focus-visible {
 		transparent 36% 76%,
 		rgba(84, 196, 255, 0.08) 100%
 	);
+
 	mix-blend-mode: screen;
 }
+
 .profile-card > * {
 	position: relative;
 	z-index: 1;
 }
 
+/* ---------------------------------------------------------------------
+   Banner
+   --------------------------------------------------------------------- */
+
 .profile-banner {
 	position: relative;
+
 	width: 100%;
 	height: var(--banner-h);
+
 	overflow: hidden;
+
 	border-bottom: 1px solid rgba(255, 255, 255, 0.4);
 }
+
 .profile-banner-img {
 	position: absolute;
 	inset: 0;
+
 	width: 100%;
 	height: 100%;
+
 	object-fit: cover;
 	display: block;
 }
+
+/* ---------------------------------------------------------------------
+   Avatar
+   --------------------------------------------------------------------- */
 
 .profile-avatar {
 	position: absolute;
+
 	left: 24px;
 	top: calc(var(--banner-h) - var(--avatar-size) / 2);
+
 	width: var(--avatar-size);
 	height: var(--avatar-size);
+
 	border-radius: 50%;
+
 	display: grid;
 	place-items: center;
+
 	z-index: 3;
 }
+
 .profile-avatar-img {
 	width: 100%;
 	height: 100%;
+
 	object-fit: cover;
 	border-radius: 50%;
+
 	display: block;
 }
+
 .profile-avatar-initial {
 	font-size: calc(var(--avatar-size) * 0.34);
 	font-weight: 800;
+
 	color: rgba(10, 60, 96, 0.85);
 }
 
+/* ---------------------------------------------------------------------
+   Status
+   --------------------------------------------------------------------- */
+
 .profile-status-dot {
 	position: absolute;
+
 	right: -3px;
 	bottom: -3px;
+
 	width: 26px;
 	height: 26px;
+
 	border-radius: 50%;
+
 	border: 3px solid rgba(255, 255, 255, 0.9);
 }
+
 .profile-status-dot.online {
 	background: #24c982;
 }
+
 .profile-status-dot.away {
 	background: #e7a80b;
 }
+
 .profile-status-dot.busy {
 	background: #f03d5e;
 }
+
 .profile-status-dot.offline {
 	background: var(--muted);
 }
+
+/* ---------------------------------------------------------------------
+   Name
+   --------------------------------------------------------------------- */
+
 .profile-name-block {
 	padding: calc(var(--avatar-size) / 2 + 14px) 24px 0;
 }
+
 .profile-name-row {
 	display: flex;
 	flex-wrap: wrap;
+
 	align-items: baseline;
+
 	gap: 8px;
 }
+
 .profile-name {
 	font-size: 18px;
 	font-weight: 800;
+
 	letter-spacing: -0.01em;
 }
+
 .profile-username {
 	font-size: 15px;
 	font-weight: 600;
+
 	color: var(--link-muted);
 }
+
 .profile-status-text {
 	font-size: 13px;
 	font-weight: 600;
 }
+
 .profile-status-text.online {
 	color: #1f9e63;
 }
+
 .profile-status-text.away {
 	color: #b68a05;
 }
+
 .profile-status-text.busy {
 	color: #d62f4d;
 }
 
+/* ---------------------------------------------------------------------
+   Roles
+   --------------------------------------------------------------------- */
+
 .profile-roles {
 	display: flex;
 	flex-wrap: wrap;
+
 	gap: 7px;
+
 	padding: 14px 24px;
 }
+
 .profile-role {
 	padding: 4px 10px;
+
 	border-radius: 10px;
+
 	border: 1px solid currentColor;
+
 	background: rgba(255, 255, 255, 0.14);
+
 	font-size: 12px;
 	font-weight: 700;
 }
 
+/* ---------------------------------------------------------------------
+   Divider
+   --------------------------------------------------------------------- */
+
 .profile-divider {
 	height: 1px;
+
 	margin: 0 24px;
+
 	background: rgba(255, 255, 255, 0.3);
 }
 
+/* ---------------------------------------------------------------------
+   Bio
+   --------------------------------------------------------------------- */
+
 .profile-bio {
 	margin: 0;
+
 	padding: 14px 24px 22px;
+
 	font-size: 14px;
 	line-height: 1.55;
+
 	color: var(--text);
+
+	overflow-wrap: anywhere;
 }
+
 .profile-bio-empty {
 	font-style: italic;
+
 	color: var(--muted-soft);
 }
 
+/* ---------------------------------------------------------------------
+   Close button
+   --------------------------------------------------------------------- */
+
 .profile-close {
 	position: absolute;
+
 	top: 12px;
 	right: 12px;
+
 	z-index: 4;
+
 	width: 32px;
 	height: 32px;
+
 	display: grid;
 	place-items: center;
+
 	border-radius: 50%;
+
 	color: var(--text);
+
 	border: 1px solid rgba(255, 255, 255, 0.6);
+
 	background: rgba(255, 255, 255, 0.46);
+
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, 0.85),
 		0 6px 14px rgba(16, 72, 108, 0.08);
+
 	cursor: pointer;
-	transition: 0.18s var(--ease);
+
+	transition:
+		transform 0.18s var(--ease),
+		box-shadow 0.18s var(--ease);
 }
+
 .profile-close:hover {
 	transform: translateY(-2px);
+
 	box-shadow: 0 8px 18px rgba(16, 72, 108, 0.12);
 }
+
 .profile-close:active {
 	transform: scale(0.95);
 }
+
 .profile-close i {
 	font-size: 17px;
 }
 
-/* profile card — mobile (bottom sheet, like the drawers) */
+/* =====================================================================
+   MOBILE
+   Bottom sheet preso ao viewport
+   ===================================================================== */
+
 @media (max-width: 700px) {
-	.profile-card {
+	.profile-overlay {
+		position: fixed;
+		inset: 0;
+
+		z-index: 9999;
+
+		overflow: hidden;
+
+		/* evita scroll da própria camada */
+		overscroll-behavior: contain;
+
+		background: rgba(4, 18, 31, 0.2);
+	}
+
+	.profile-card,
+	.profile-card.open {
 		--banner-h: 120px;
 		--avatar-size: 80px;
+
+		position: absolute;
+
+		/*
+		 * Remove completamente o posicionamento central
+		 * usado no desktop.
+		 */
 		top: auto;
 		left: 0;
 		right: 0;
 		bottom: 0;
+
 		width: 100%;
+		max-width: none;
+
+		/*
+		 * Nunca deixa o card passar da viewport.
+		 * dvh acompanha corretamente a barra do navegador mobile.
+		 */
+		max-height: calc(100dvh - 12px);
+
 		border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+
+		/*
+		 * O conteúdo inteiro do sheet pode rolar caso seja
+		 * maior que a tela.
+		 */
+		overflow-x: hidden;
+		overflow-y: auto;
+
+		overscroll-behavior: contain;
+
+		-webkit-overflow-scrolling: touch;
+
 		transform-origin: bottom center;
-		transform: translateY(24px) scale(0.98);
+
+		/*
+		 * IMPORTANTE:
+		 * nenhum translate(-50%, -50%) no mobile.
+		 */
+		transform: translateY(0);
+
+		opacity: 1;
+		pointer-events: auto;
+
+		animation: profile-card-mobile-in 280ms
+			cubic-bezier(0.22, 1, 0.36, 1) both;
+
+		/*
+		 * Home indicator / notch em iPhone.
+		 */
+		padding-bottom: env(safe-area-inset-bottom);
 	}
-	.profile-card.open {
-		transform: translateY(0) scale(1);
-	}
+
 	.profile-banner {
+		height: var(--banner-h);
+
 		border-bottom: 0;
+
+		flex-shrink: 0;
 	}
+
 	.profile-avatar {
 		left: 20px;
+
+		top: calc(var(--banner-h) - var(--avatar-size) / 2);
 	}
+
 	.profile-name-block {
-		padding: calc(var(--avatar-size) / 2 + 10px) 20px 0;
+		padding:
+			calc(var(--avatar-size) / 2 + 10px)
+			20px
+			0;
 	}
+
+	.profile-name-row {
+		gap: 6px 8px;
+	}
+
+	.profile-name {
+		font-size: 18px;
+	}
+
+	.profile-username {
+		font-size: 14px;
+	}
+
+	.profile-status-text {
+		width: 100%;
+
+		font-size: 13px;
+	}
+
 	.profile-roles {
 		padding: 14px 20px;
 	}
+
 	.profile-divider {
 		margin: 0 20px;
 	}
+
 	.profile-bio {
-		padding: 14px 20px 20px;
+		padding:
+			14px
+			20px
+			calc(20px + env(safe-area-inset-bottom));
 	}
+
 	.profile-close {
+		position: absolute;
+
 		top: 10px;
 		right: 10px;
 	}
 }
 
-/* profile card — dark */
+/* =====================================================================
+   Very small phones
+   ===================================================================== */
+
+@media (max-width: 380px) {
+	.profile-card {
+		--banner-h: 105px;
+		--avatar-size: 72px;
+	}
+
+	.profile-name-block {
+		padding:
+			calc(var(--avatar-size) / 2 + 10px)
+			16px
+			0;
+	}
+
+	.profile-avatar {
+		left: 16px;
+	}
+
+	.profile-roles {
+		padding: 12px 16px;
+	}
+
+	.profile-divider {
+		margin: 0 16px;
+	}
+
+	.profile-bio {
+		padding:
+			12px
+			16px
+			calc(18px + env(safe-area-inset-bottom));
+	}
+}
+
+/* =====================================================================
+   Dark theme
+   ===================================================================== */
+
 [data-theme='dark'] .profile-overlay {
 	background: rgba(0, 7, 13, 0.3);
 }
+
 [data-theme='dark'] .profile-card {
 	background:
-		radial-gradient(circle at 15% -18%, rgba(116, 207, 255, 0.14), transparent 34%),
-		linear-gradient(145deg, rgba(25, 51, 68, 0.9), rgba(10, 33, 48, 0.82));
+		radial-gradient(
+			circle at 15% -18%,
+			rgba(116, 207, 255, 0.14),
+			transparent 34%
+		),
+		linear-gradient(
+			145deg,
+			rgba(25, 51, 68, 0.9),
+			rgba(10, 33, 48, 0.82)
+		);
+
 	border-color: rgba(182, 224, 250, 0.18);
+
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, 0.12),
 		0 26px 56px rgba(0, 0, 0, 0.32),
 		0 8px 22px rgba(0, 0, 0, 0.16);
 }
+
 [data-theme='dark'] .profile-avatar {
 	border-color: rgba(183, 225, 250, 0.22);
+
 	box-shadow:
 		inset 0 1px 0 rgba(255, 255, 255, 0.12),
 		0 10px 22px rgba(0, 0, 0, 0.28);
 }
+
 [data-theme='dark'] .profile-avatar-initial {
 	color: rgba(20, 80, 120, 0.85);
 }
+
 [data-theme='dark'] .profile-role {
 	background: rgba(255, 255, 255, 0.06);
 }
+
 [data-theme='dark'] .profile-divider {
 	background: rgba(182, 224, 250, 0.08);
 }
+
 [data-theme='dark'] .profile-close {
 	color: var(--text);
+
 	background: rgba(69, 91, 105, 0.48);
+
 	border-color: rgba(185, 225, 249, 0.14);
-	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* =====================================================================
+   Reduced motion
+   ===================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+	.profile-overlay,
+	.profile-card,
+	.profile-card.open {
+		animation: none;
+		transition: none;
+	}
+
+	.profile-card {
+		opacity: 1;
+	}
+
+	@media (min-width: 701px) {
+		.profile-card {
+			transform: translate(-50%, -50%);
+		}
+	}
+
+	@media (max-width: 700px) {
+		.profile-card {
+			transform: translateY(0);
+		}
+	}
 }
 
 /* ─────────────────────────────────────────────────────────────────────

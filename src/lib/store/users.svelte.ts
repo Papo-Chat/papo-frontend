@@ -1,6 +1,5 @@
 // Users store: summaries (byId), lazy profiles (byId), ephemeral presence,
 // typing (TTL), and a keyset list.
-
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
 import { nextCursor } from '../utils/keyset';
@@ -9,385 +8,445 @@ import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epo
 import type { UserSummary, UserProfile, KeysetCursor, PresenceStatus } from '../types';
 
 const TYPING_TTL = 5000; // ms
+// Real timers are required because Date.now() is not reactive. The TTL stored
+// in state remains useful as a fallback for delayed/suspended browser timers.
 
+const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function typingTimerKey(channelId: string, userId: string): string {
+    return `${channelId}:${userId}`;
+}
 // Full live presence (not just online/offline). `presence_sync` is the
 // authoritative snapshot on (re)connect; `presence_update` patches one user.
+
 interface LivePresence {
-	status: PresenceStatus;
-	status_message: string | null;
-	nickname: string | null;
+    status: PresenceStatus;
+    status_message: string | null;
+    nickname: string | null;
 }
 
 export const state = $state({
-	byId: new SvelteMap<string, UserSummary>(),
-	// Lazy profiles (incl. banner_media). Only fetched when needed.
-	profiles: new SvelteMap<string, UserProfile>(),
-	// Ephemeral presence: full live state per user.
-	presence: new SvelteMap<string, LivePresence>(),
-	// channelId → userId → expiresAt (ms epoch).
-	typing: new SvelteMap<string, SvelteMap<string, number>>(),
-	// Ban state. The REST list (GET /users) does NOT expose the `banned`
-	// column (it is excluded from UserSummary), so this is a client-side
-	// session cache: seeded empty and updated on successful ban/unban.
-	// Only reset on logout/full reset — not per list load.
-	bannedIds: new SvelteSet<string>(),
-	list: {
-		items: [] as UserSummary[],
-		hasMore: false,
-		cursor: null as KeysetCursor | null,
-		loading: false,
-		// Guards against concurrent load/loadMore (P1.11).
-		loadGeneration: 0
-	}
+    byId: new SvelteMap<string, UserSummary>(),
+    // Lazy profiles (incl. banner_media). Only fetched when needed.
+    profiles: new SvelteMap<string, UserProfile>(),
+    // Ephemeral presence: full live state per user.
+    presence: new SvelteMap<string, LivePresence>(),
+    // channelId → userId → expiresAt (ms epoch).
+    typing: new SvelteMap<string, SvelteMap<string, number>>(),
+    // Ban state. The REST list (GET /users) does NOT expose the `banned`
+    // column (it is excluded from UserSummary), so this is a client-side
+    // session cache: seeded empty and updated on successful ban/unban.
+    // Only reset on logout/full reset — not per list load.
+    bannedIds: new SvelteSet<string>(),
+    list: {
+        items: [] as UserSummary[],
+        hasMore: false,
+        cursor: null as KeysetCursor | null,
+        loading: false,
+        // Guards against concurrent load/loadMore (P1.11).
+        loadGeneration: 0
+    }
 });
 
 // ── list (keyset, 100/page) ─────────────────────────────
 
 async function listLoad(q?: { since?: string; last_id?: string }): Promise<void> {
-	const gen = (state.list.loadGeneration += 1);
-	state.list.loading = true;
-	try {
-		const res = await api.users.list(q);
-		// Discard if a newer load/loadMore started in the meantime (P1.11).
-		if (state.list.loadGeneration !== gen) {
-			return;
-		}
-		if (q) {
-			// loadMore: append, deduping by user id.
-			const seen = new Set(state.list.items.map((u) => u.id));
-			const fresh = res.users.filter((u) => !seen.has(u.id));
-			state.list.items = [...state.list.items, ...fresh];
-		} else {
-			// load: replace.
-			state.list.items = res.users;
-		}
-		state.list.hasMore = res.has_more;
-		state.list.cursor = nextCursor(res.users) ?? null;
-		for (const u of res.users) {
-			state.byId.set(u.id, u);
-		}
-	} finally {
-		if (state.list.loadGeneration === gen) {
-			state.list.loading = false;
-		}
-	}
+    const gen = (state.list.loadGeneration += 1);
+    state.list.loading = true;
+    try {
+        const res = await api.users.list(q);
+        // Discard if a newer load/loadMore started in the meantime (P1.11).
+        if (state.list.loadGeneration !== gen) {
+            return;
+        }
+        if (q) {
+            // loadMore: append, deduping by user id.
+            const seen = new Set(state.list.items.map((u) => u.id));
+            const fresh = res.users.filter((u) => !seen.has(u.id));
+            state.list.items = [...state.list.items, ...fresh];
+        } else {
+            // load: replace.
+            state.list.items = res.users;
+        }
+        state.list.hasMore = res.has_more;
+        state.list.cursor = nextCursor(res.users) ?? null;
+        for (const u of res.users) {
+            state.byId.set(u.id, u);
+        }
+    } finally {
+        if (state.list.loadGeneration === gen) {
+            state.list.loading = false;
+        }
+    }
 }
 
 export function loadList(): Promise<void> {
-	return listLoad();
+    return listLoad();
 }
 
 export function loadMore(): void {
-	// Guard: no in-flight page + a cursor to continue from (P1.11).
-	if (state.list.loading || !state.list.cursor) {
-		return;
-	}
-	listLoad({
-		since: state.list.cursor.since,
-		last_id: state.list.cursor.last_id
-	});
+    // Guard: no in-flight page + a cursor to continue from (P1.11).
+    if (state.list.loading || !state.list.cursor) {
+        return;
+    }
+    listLoad({
+        since: state.list.cursor.since,
+        last_id: state.list.cursor.last_id
+    });
 }
-
 // Seed the current user from the whoami response (richer than the /users
 // list: includes avatar_blob, banner_media, status, settings). Called by the
 // session store on load.
+
 export function seedMe(me: {
-	id: string;
-	username: string;
-	nickname: string | null;
-	avatar_blob: string | null;
-	avatar_format: string;
-	status: 'away' | 'busy' | null;
-	status_message: string | null;
-	typing: string | null;
-	status_updated_at: string | null;
-	created_at: string;
-	roles: { id: string; name: string; color: string | null }[];
+    id: string;
+    username: string;
+    nickname: string | null;
+    avatar_blob: string | null;
+    avatar_format: string;
+    status: 'away' | 'busy' | null;
+    status_message: string | null;
+    typing: string | null;
+    status_updated_at: string | null;
+    created_at: string;
+    roles: { id: string; name: string; color: string | null }[];
 }): void {
-	const summary: UserSummary = {
-		id: me.id,
-		username: me.username,
-		nickname: me.nickname,
-		status: me.status,
-		status_message: me.status_message,
-		typing: me.typing,
-		status_updated_at: me.status_updated_at,
-		created_at: me.created_at,
-		roles: me.roles
-	};
-	state.byId.set(me.id, summary);
+    const summary: UserSummary = {
+        id: me.id,
+        username: me.username,
+        nickname: me.nickname,
+        status: me.status,
+        status_message: me.status_message,
+        typing: me.typing,
+        status_updated_at: me.status_updated_at,
+        created_at: me.created_at,
+        roles: me.roles
+    };
+    state.byId.set(me.id, summary);
 }
 
 // ── profiles (lazy) ─────────────────────────────────────
 
 export function getProfile(id: string): UserProfile | null {
-	return state.profiles.get(id) ?? null;
+    return state.profiles.get(id) ?? null;
 }
-
 // Summary built from a fetched profile (used to seed `byId` so byId-based
 // renderers pick up the user's name/roles immediately).
+
 function summaryFromProfile(p: UserProfile): UserSummary {
-	return {
-		id: p.id,
-		username: p.username,
-		nickname: p.nickname,
-		status: p.status,
-		status_message: p.status_message,
-		typing: p.typing,
-		status_updated_at: p.status_updated_at,
-		created_at: p.created_at,
-		roles: p.roles
-	};
+    return {
+        id: p.id,
+        username: p.username,
+        nickname: p.nickname,
+        status: p.status,
+        status_message: p.status_message,
+        typing: p.typing,
+        status_updated_at: p.status_updated_at,
+        created_at: p.created_at,
+        roles: p.roles
+    };
 }
 
 export async function ensureProfile(id: string): Promise<UserProfile> {
-	const cached = state.profiles.get(id);
-	if (cached) {
-		return cached;
-	}
-	const epoch = currentSessionEpoch();
-	const profile = await api.users.profile(id);
-	if (!isCurrentSessionEpoch(epoch)) {
-		throw new Error('stale session');
-	}
-	state.profiles.set(id, profile);
-	// Seed the summary even when the user is unknown — a new author / a
-	// profile fetched directly must still appear in the summaries map.
-	state.byId.set(id, summaryFromProfile(profile));
-	return profile;
+    const cached = state.profiles.get(id);
+    if (cached) {
+        return cached;
+    }
+    const epoch = currentSessionEpoch();
+    const profile = await api.users.profile(id);
+    if (!isCurrentSessionEpoch(epoch)) {
+        throw new Error('stale session');
+    }
+    state.profiles.set(id, profile);
+    // Seed the summary even when the user is unknown — a new author / a
+    // profile fetched directly must still appear in the summaries map.
+    state.byId.set(id, summaryFromProfile(profile));
+    return profile;
 }
 
 export async function ensureProfiles(ids: string[]): Promise<UserProfile[]> {
-	// Callers pass "all visible users"; only the ids missing from the profile
-	// cache actually hit the network. Re-runs with everything cached are a
-	// no-op (no fetch).
-	const missing = [...new Set(ids)].filter((id) => id !== '' && !state.profiles.has(id));
-	const out: UserProfile[] = [];
-	if (missing.length === 0) {
-		return out;
-	}
-	// Chunk ≤ 50 (server limit).
-	for (let i = 0; i < missing.length; i += 50) {
-		const chunk = missing.slice(i, i + 50);
-		const epoch = currentSessionEpoch();
-		const res = await api.users.profileBatch(chunk);
-		if (!isCurrentSessionEpoch(epoch)) {
-			throw new Error('stale session');
-		}
-		for (const p of res.profiles) {
-			state.profiles.set(p.id, p);
-			// Seed the summary so byId-based renderers (message authors,
-			// member rows, …) show name/roles/avatar without another fetch.
-			state.byId.set(p.id, summaryFromProfile(p));
-			out.push(p);
-		}
-	}
-	return out;
+    // Callers pass "all visible users"; only the ids missing from the profile
+    // cache actually hit the network. Re-runs with everything cached are a
+    // no-op (no fetch).
+    const missing = [...new Set(ids)].filter((id) => id !== '' && !state.profiles.has(id));
+    const out: UserProfile[] = [];
+    if (missing.length === 0) {
+        return out;
+    }
+    // Chunk ≤ 50 (server limit).
+    for (let i = 0; i < missing.length; i += 50) {
+        const chunk = missing.slice(i, i + 50);
+        const epoch = currentSessionEpoch();
+        const res = await api.users.profileBatch(chunk);
+        if (!isCurrentSessionEpoch(epoch)) {
+            throw new Error('stale session');
+        }
+        for (const p of res.profiles) {
+            state.profiles.set(p.id, p);
+            // Seed the summary so byId-based renderers (message authors,
+            // member rows, …) show name/roles/avatar without another fetch.
+            state.byId.set(p.id, summaryFromProfile(p));
+            out.push(p);
+        }
+    }
+    return out;
 }
 
 // ── presence ────────────────────────────────────────────
 
 export function presenceStatus(id: string): PresenceStatus | null {
-	return state.presence.get(id)?.status ?? null;
+    return state.presence.get(id)?.status ?? null;
 }
-
 // Effective status for display. An *unknown* presence (user not in the sync
 // snapshot) is **not** treated as online — fall back to the persisted
 // summary status, else 'offline'.
-export function effectiveStatus(id: string): 'online' | 'offline' | 'away' | 'busy' {
-	const pres = state.presence.get(id);
-	if (pres) {
-		return pres.status;
-	}
-	const summary = state.byId.get(id);
-	return summary?.status ?? 'offline';
-}
 
+export function effectiveStatus(id: string): 'online' | 'offline' | 'away' | 'busy' {
+    const pres = state.presence.get(id);
+    if (pres) {
+        return pres.status;
+    }
+    const summary = state.byId.get(id);
+    return summary?.status ?? 'offline';
+}
 // Replaces the ephemeral presence snapshot with the given members. The
 // snapshot is authoritative: users not listed are no longer online.
+
 export function setPresence(
-	members: {
-		user_id: string;
-		status: string;
-		status_message: string | null;
-		nickname?: string | null;
-	}[]
+    members: {
+        user_id: string;
+        status: string;
+        status_message: string | null;
+        nickname?: string | null;
+    }[]
 ): void {
-	const next: SvelteMap<string, LivePresence> = new SvelteMap();
-	for (const m of members) {
-		next.set(m.user_id, {
-			status: (m.status === 'offline' ? 'offline' : m.status) as PresenceStatus,
-			status_message: m.status_message ?? null,
-			nickname: m.nickname ?? null
-		});
-	}
-	state.presence = next;
+    const next: SvelteMap<string, LivePresence> = new SvelteMap();
+    for (const m of members) {
+        next.set(m.user_id, {
+            status: (m.status === 'offline' ? 'offline' : m.status) as PresenceStatus,
+            status_message: m.status_message ?? null,
+            nickname: m.nickname ?? null
+        });
+    }
+    state.presence = next;
 }
 
 // ── typing (TTL) ────────────────────────────────────────
 
+function clearTypingTimer(channelId: string, userId: string): void {
+    const key = typingTimerKey(channelId, userId);
+    const timer = typingTimers.get(key);
+    if (timer) {
+        clearTimeout(timer);
+        typingTimers.delete(key);
+    }
+}
+
+function removeTypingEntry(channelId: string, userId: string): void {
+    clearTypingTimer(channelId, userId);
+    const map = state.typing.get(channelId);
+    if (!map) return;
+    map.delete(userId);
+    if (map.size === 0) {
+        state.typing.delete(channelId);
+    }
+}
+
+function clearTypingUser(userId: string, exceptChannelId?: string): void {
+    const channels: string[] = [];
+    for (const [channelId, map] of state.typing) {
+        if (channelId !== exceptChannelId && map.has(userId)) {
+            channels.push(channelId);
+        }
+    }
+    for (const channelId of channels) {
+        removeTypingEntry(channelId, userId);
+    }
+}
+
+function scheduleTypingExpiry(channelId: string, userId: string, delay = TYPING_TTL): void {
+    clearTypingTimer(channelId, userId);
+    const key = typingTimerKey(channelId, userId);
+    const timer = setTimeout(() => {
+        const map = state.typing.get(channelId);
+        const expiresAt = map?.get(userId) ?? 0;
+        // A newer typing event may have extended the TTL while this callback
+        // was already queued. Only remove the entry if it really expired.
+        if (expiresAt > Date.now()) {
+            scheduleTypingExpiry(channelId, userId, expiresAt - Date.now());
+            return;
+        }
+        removeTypingEntry(channelId, userId);
+    }, Math.max(0, delay));
+    typingTimers.set(key, timer);
+}
+
 export function pruneTyping(now = Date.now()): void {
-	// Remove all expired typing entries.
-	const toDelete: string[] = [];
-	for (const [, map] of state.typing) {
-		const ids = map.keys();
-		for (const userId of ids) {
-			const expiresAt = map.get(userId) ?? 0;
-			if (expiresAt <= now) {
-				toDelete.push(userId);
-			}
-		}
-	}
-	for (const userId of toDelete) {
-		// find the channel containing it
-		for (const [, map] of state.typing) {
-			if (map.has(userId)) {
-				map.delete(userId);
-				break;
-			}
-		}
-	}
+    const expired: Array<[channelId: string, userId: string]> = [];
+    for (const [channelId, map] of state.typing) {
+        for (const [userId, expiresAt] of map) {
+            if (expiresAt <= now) {
+                expired.push([channelId, userId]);
+            }
+        }
+    }
+    for (const [channelId, userId] of expired) {
+        removeTypingEntry(channelId, userId);
+    }
 }
 
 export function isTyping(channelId: string, userId: string): boolean {
-	pruneTyping();
-	const map = state.typing.get(channelId);
-	return map ? map.has(userId) : false;
+    pruneTyping();
+    return state.typing.get(channelId)?.has(userId) ?? false;
 }
 
 export function typingUsers(channelId: string): string[] {
-	pruneTyping();
-	const map = state.typing.get(channelId);
-	if (!map) {
-		return [];
-	}
-	return Array.from(map.keys());
+    pruneTyping();
+    const map = state.typing.get(channelId);
+    return map ? Array.from(map.keys()) : [];
 }
 
 export function setTyping(channelId: string, userId: string, typing: boolean): void {
-	let map = state.typing.get(channelId);
-	if (!map) {
-		map = new SvelteMap<string, number>();
-	}
-	if (typing) {
-		map.set(userId, Date.now() + TYPING_TTL);
-	} else {
-		map.delete(userId);
-	}
-	// Replace with a new map so the outer typing map sees a change.
-	state.typing.set(channelId, map);
+    if (!typing) {
+        removeTypingEntry(channelId, userId);
+        return;
+    }
+    // A user should only have one active typing channel. This also prevents a
+    // stale indicator if the user switches channels without an explicit stop.
+    clearTypingUser(userId, channelId);
+    let map = state.typing.get(channelId);
+    if (!map) {
+        map = new SvelteMap<string, number>();
+        state.typing.set(channelId, map);
+    }
+    map.set(userId, Date.now() + TYPING_TTL);
+    scheduleTypingExpiry(channelId, userId);
 }
 
 // ── WS event handlers ───────────────────────────────────
 
 export function handleUserJoin(userId: string): void {
-	// Lazy-fetch the profile (resolves author name/roles).
-	ensureProfile(userId);
+    // Lazy-fetch the profile (resolves author name/roles).
+    ensureProfile(userId);
 }
-
 // presence_sync is the authoritative snapshot on (re)connect: replace the
 // whole presence map (users absent from the snapshot are no longer online).
-export function handlePresenceSync(
-	members: {
-		user_id: string;
-		status: PresenceStatus;
-		status_message: string | null;
-	}[]
-): void {
-	setPresence(members);
-}
 
+export function handlePresenceSync(
+    members: {
+        user_id: string;
+        status: PresenceStatus;
+        status_message: string | null;
+    }[]
+): void {
+    setPresence(members);
+}
 // presence_update: patch one user's live presence and summary (nickname /
 // status_message are surfaced in the summary).
-export function handlePresenceUpdate(ev: {
-	user_id: string;
-	status: PresenceStatus;
-	status_message: string | null;
-	typing?: string | null;
-	nickname?: string | null;
-}): void {
-	const { user_id, status, status_message, nickname } = ev;
-	const summary = state.byId.get(user_id);
-	if (summary) {
-		const next: UserSummary = { ...summary };
-		if ('status_message' in ev) {
-			next.status_message = status_message ?? null;
-		}
 
-		if ('nickname' in ev) {
-			next.nickname = nickname ?? null;
-		}
-		state.byId.set(user_id, next);
-	}
-	state.presence.set(user_id, {
-		status,
-		status_message: status_message ?? null,
-		nickname: nickname ?? null
-	});
+export function handlePresenceUpdate(ev: {
+    user_id: string;
+    status: PresenceStatus;
+    status_message: string | null;
+    typing?: string | null;
+    nickname?: string | null;
+}): void {
+    const { user_id, status, status_message, nickname } = ev;
+    const summary = state.byId.get(user_id);
+    if (summary) {
+        const next: UserSummary = { ...summary };
+        if ('status_message' in ev) {
+            next.status_message = status_message ?? null;
+        }
+        if ('nickname' in ev) {
+            next.nickname = nickname ?? null;
+        }
+        if ('typing' in ev) {
+            next.typing = ev.typing ?? null;
+        }
+        state.byId.set(user_id, next);
+    }
+    // The backend exposes `typing` as the channel id while typing and null
+    // when typing stops. Apply it to the ephemeral typing map as well.
+    if ('typing' in ev) {
+        if (ev.typing) {
+            setTyping(ev.typing, user_id, true);
+        } else {
+            clearTypingUser(user_id);
+        }
+    }
+    state.presence.set(user_id, {
+        status,
+        status_message: status_message ?? null,
+        nickname: nickname ?? null
+    });
 }
 
 export function handleAvatarUpdate(userId: string): void {
-	// Invalidate the profile cache entry (refetch if cached).
-	if (state.profiles.has(userId)) {
-		state.profiles.delete(userId);
-		// Re-fetch if it was cached.
-		ensureProfile(userId);
-	}
+    // Invalidate the profile cache entry (refetch if cached).
+    if (state.profiles.has(userId)) {
+        state.profiles.delete(userId);
+        // Re-fetch if it was cached.
+        ensureProfile(userId);
+    }
 }
 
 export function handleRoleAdd(userId: string): void {
-	// Payload is only {user_id, role_id} (no name/color) → invalidate the
-	// cached profile (if any) so it refetches with the new roles.
-	if (state.profiles.has(userId)) {
-		state.profiles.delete(userId);
-	}
-	void ensureProfile(userId);
+    // Payload is only {user_id, role_id} (no name/color) → invalidate the
+    // cached profile (if any) so it refetches with the new roles.
+    if (state.profiles.has(userId)) {
+        state.profiles.delete(userId);
+    }
+    void ensureProfile(userId);
 }
 
 export function handleRoleRemove(userId: string): void {
-	if (state.profiles.has(userId)) {
-		state.profiles.delete(userId);
-	}
-	void ensureProfile(userId);
+    if (state.profiles.has(userId)) {
+        state.profiles.delete(userId);
+    }
+    void ensureProfile(userId);
 }
-
 // Avatar objectURL helper (base64 → objectURL, cached).
-export function avatarUrl(user: UserProfile): string {
-	if (!user.avatar_blob) {
-		return '';
-	}
-	return blobToUrl(user.avatar_blob, user.avatar_format);
-}
 
+export function avatarUrl(user: UserProfile): string {
+    if (!user.avatar_blob) {
+        return '';
+    }
+    return blobToUrl(user.avatar_blob, user.avatar_format);
+}
 // Full reset (logout / 401 / account switch) — clears every user-specific
 // cache so the previous account leaves zero residue.
+
 export function reset(): void {
-	state.byId.clear();
-	state.profiles.clear();
-	state.presence.clear();
-	state.typing.clear();
-	state.bannedIds.clear();
-	const nextGeneration = state.list.loadGeneration + 1;
-
-	state.list = {
-		items: [],
-		hasMore: false,
-		cursor: null,
-		loading: false,
-		loadGeneration: nextGeneration
-	};
+    for (const timer of typingTimers.values()) {
+        clearTimeout(timer);
+    }
+    typingTimers.clear();
+    state.byId.clear();
+    state.profiles.clear();
+    state.presence.clear();
+    state.typing.clear();
+    state.bannedIds.clear();
+    const nextGeneration = state.list.loadGeneration + 1;
+    state.list = {
+        items: [],
+        hasMore: false,
+        cursor: null,
+        loading: false,
+        loadGeneration: nextGeneration
+    };
 }
-
 // Ban / unban. The API does not return the resulting ban state; it is
 // applied locally only after the server confirms success.
+
 export function setBanState(userId: string, ban: boolean): void {
-	api.users
-		.ban({ user_id: userId, ban_state: ban })
-		.then(() => {
-			if (ban) state.bannedIds.add(userId);
-			else state.bannedIds.delete(userId);
-		})
-		.catch((err) => {
-			console.error('failha ao alterar estado de ban:', err);
-		});
+    api.users
+        .ban({ user_id: userId, ban_state: ban })
+        .then(() => {
+            if (ban) state.bannedIds.add(userId);
+            else state.bannedIds.delete(userId);
+        })
+        .catch((err) => {
+            console.error('failha ao alterar estado de ban:', err);
+        });
 }

@@ -1,8 +1,10 @@
 <script lang="ts">
 	// Server admin shell: shared back-office chrome (top bar + left nav +
 	// content slot) via Shell, with the server-admin nav.
-	import { sampleServer } from '$lib/sample';
+	import { state as serverState } from '$lib/store/server.svelte';
 	import Shell from '$lib/components/Shell.svelte';
+
+	const server = $derived(serverState.server);
 
 	const nav = [
 		{ to: '/admin/server', label: 'Servidor', icon: 'server' },
@@ -17,7 +19,7 @@
 <Shell
 	brandIcon="server"
 	brandSub="Administração"
-	server={sampleServer}
+	server={server ?? undefined}
 	backUrl="/channels/geral"
 	backLabel="Voltar ao chat"
 	{nav}
