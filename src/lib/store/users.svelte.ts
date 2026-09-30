@@ -12,6 +12,7 @@ const TYPING_TTL = 5000; // ms
 // in state remains useful as a fallback for delayed/suspended browser timers.
 
 const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+let joinNoticeSerial = 0;
 
 const PROFILE_CACHE_TARGET = 75;
 const PROFILE_CACHE_MAX = 120;
@@ -45,6 +46,7 @@ export const state = $state({
     presence: new SvelteMap<string, LivePresence>(),
     // channelId → userId → expiresAt (ms epoch).
     typing: new SvelteMap<string, SvelteMap<string, number>>(),
+    joinNotice: null as { id: number; userId: string } | null,
     // Ban state. The REST list (GET /users) does NOT expose the `banned`
     // column (it is excluded from UserSummary), so this is a client-side
     // session cache: seeded empty and updated on successful ban/unban.
@@ -249,6 +251,13 @@ function syncSummary(summary: UserSummary): void {
     if (index >= 0) {
         state.list.items = state.list.items.map((u, i) => (i === index ? summary : u));
     }
+}
+
+export function setPersistedStatus(userId: string, status: 'away' | 'busy' | null): void {
+    const summary = state.byId.get(userId);
+    if (summary) syncSummary({ ...summary, status, status_updated_at: new Date().toISOString() });
+    const presence = state.presence.get(userId);
+    if (presence) state.presence.set(userId, { ...presence, status: status ?? 'online' });
 }
 
 function trackProfileRequest(id: string, request: Promise<UserProfile | null>): void {
@@ -485,8 +494,13 @@ export function setTyping(channelId: string, userId: string, typing: boolean): v
 // ── WS event handlers ───────────────────────────────────
 
 export function handleUserJoin(userId: string): void {
-    // Lazy-fetch the profile (resolves author name/roles).
-    ensureProfile(userId);
+    state.joinNotice = { id: (joinNoticeSerial += 1), userId };
+    void ensureProfile(userId).then(() => {
+        const summary = state.byId.get(userId);
+        if (summary && !state.list.items.some((u) => u.id === userId)) {
+            state.list.items = [...state.list.items, summary];
+        }
+    }).catch(() => {});
 }
 // presence_sync is the authoritative snapshot on (re)connect: replace the
 // whole presence map (users absent from the snapshot are no longer online).
@@ -587,6 +601,8 @@ export function reset(): void {
     profileTouchSeq = 0;
     state.presence.clear();
     state.typing.clear();
+    state.joinNotice = null;
+    joinNoticeSerial = 0;
     state.bannedIds.clear();
     const nextGeneration = state.list.loadGeneration + 1;
     state.list = {
