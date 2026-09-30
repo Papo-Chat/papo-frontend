@@ -12,12 +12,6 @@
 	// o status persistido.
 	const users = $derived([...usersStore.state.byId.values()]);
 
-	// Perfis (avatar/banner) dos usuários que esta lista renderiza — batch,
-	// só ids ausentes do cache (o store dedupica e pula cacheado). Cobre
-	// quem a página não batchou (ex.: o próprio usuário, via seedMe).
-	$effect(() => {
-		void usersStore.ensureProfiles(users.map((u) => u.id));
-	});
 
 	function computeSections(): Array<{ title: string; members: UserSummary[] }> {
 		const get = (u: UserSummary) => usersStore.effectiveStatus(u.id);
