@@ -55,6 +55,9 @@
 		new Set((messagesStore.getChannel(message.channel_id)?.pinned ?? []).map((p) => p.id))
 	);
 	const isPinned = $derived(pinnedIds.has(message.id));
+	const isEveryoneMessage = $derived(
+		authorCanEveryone && /(^|\s)@everyone\b/i.test(message.content ?? '')
+	);
 
 	const name = $derived(author?.nickname || author?.username || 'Usuário');
 	const msgReply = $derived(messagesStore.getMessage(message.channel_id, message.reply_to));
@@ -246,7 +249,7 @@
 							disabled={!canPin}
 							onclick={togglePin}
 						>
-							<Icon name="pin" variant="duotone" />
+							<Icon name="push-pin" variant="duotone" />
 						</button>
 					{/if}
 
@@ -309,7 +312,7 @@
 					<button class="confirm-btn" type="button" onclick={doEdit}> Enviar </button>
 				</div>
 			{:else if message.content}
-				<div class="bubble {isPinned ? 'pinned' : ''}">
+				<div class="bubble {(isPinned || isEveryoneMessage) ? 'pinned' : ''}">
 					<FormattedMessage content={message.content} allowEveryoneHighlight={authorCanEveryone} />
 				</div>
 				{#if message.previews.length}
@@ -326,7 +329,7 @@
 			<!-- anexos: thumbnail de imagem, player de vídeo/áudio ou chip. -->
 			{#if message.attachments.length}
 				{#each message.attachments as a (a.id)}
-					<Attachment attachment={a} />
+					<Attachment attachment={a} pinned={isPinned} />
 				{/each}
 			{/if}
 
@@ -441,16 +444,17 @@
 	}
 
 	.message-actions {
+		position: absolute;
+		top: 2px;
+		right: 8px;
+		z-index: 4;
+
 		display: flex;
 		align-items: center;
 		gap: 4px;
-
-		margin-left: auto;
 		height: 28px;
-		flex-shrink: 0;
 
-		/* deixa a toolbar como último item da linha */
-		order: 99;
+		pointer-events: auto;
 	}
 
 	.act-btn {
