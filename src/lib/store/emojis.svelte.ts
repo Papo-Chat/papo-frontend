@@ -84,7 +84,17 @@ export async function loadAll(): Promise<void> {
 			}
 
 			// Publish each page so the picker becomes progressively complete.
-			state.list = [...all];
+			// Keep local create/remove mutations authoritative while pagination
+			// is still walking older pages.
+			const published = all.filter((emoji) => state.byId.has(emoji.id));
+			const publishedIds = new Set(published.map((emoji) => emoji.id));
+			for (const emoji of state.byId.values()) {
+				if (!publishedIds.has(emoji.id)) {
+					published.push(emoji);
+					publishedIds.add(emoji.id);
+				}
+			}
+			state.list = published;
 			state.hasMore = res.has_more;
 			cursor = nextCursor(res.emojis) ?? null;
 			state.cursor = cursor;
