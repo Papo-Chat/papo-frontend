@@ -866,7 +866,38 @@ export function applyEvent(state: MessagesState, event: WsOutbound): void {
 // ── store actions ─────────────────────────────────────────
 
 export function evict(channelId: string): void {
-	// Clear per-channel caches (tombstones, pending previews) before drop.
+	const ch = state.channels.get(channelId);
+	if (!ch) return;
+
+	const droppedById = new Map<string, MessageWithAttachment>();
+	for (const message of ch.byId.values()) {
+		droppedById.set(message.id, message);
+	}
+	for (const message of ch.pinned) {
+		if (!droppedById.has(message.id)) {
+			droppedById.set(message.id, message);
+		}
+	}
+
+	releaseMessageResources(
+		new SvelteMap<string, MessageWithAttachment>(),
+		[...droppedById.values()]
+	);
+
+	for (const message of droppedById.values()) {
+		pendingPreviews.delete(message.id);
+	}
+
+	// Global preview tombstones are keyed as messageId:previewId. They only
+	// need to survive while the channel window can still receive a stale page.
+	for (const key of [...previewTombstones]) {
+		const messageId = key.split(':', 1)[0];
+		if (droppedById.has(messageId)) {
+			previewTombstones.delete(key);
+		}
+	}
+
+	freshGuards.delete(channelId);
 	state.channels.delete(channelId);
 }
 
@@ -996,37 +1027,22 @@ async function _fetchPage(
 				}
 			}
 		}
-		// Trim to MAX_WINDOW.
-		const dropCount = newByd.size - MAX_WINDOW;
-		let drop: string[] = [];
-		let trimmedNewer = false;
-
-		if (dropCount > 0) {
-			const ids = sortedIds(newByd);
-
-			if (ch2.windowMode === 'latest') {
-				drop = ids.slice(0, dropCount);
-			} else {
-				drop = ids.slice(ids.length - dropCount);
-				trimmedNewer = true;
-			}
-
-			const dropped: MessageWithAttachment[] = [];
-			for (const id of drop) {
-				const m = newByd.get(id);
-				if (m) dropped.push(m);
-				newByd.delete(id);
-			}
-			releaseMessageResources(newByd, dropped);
-		}
-		state.channels.set(channelId, {
+		const pageState: ChannelMessagesState = {
 			...ch2,
-			byId: newByd,
-			hasMoreNewer: q == null ? false : ch2.hasMoreNewer || trimmedNewer,
-			ids: sortedIds(newByd),
-			loaded: true,
+			hasMoreNewer: q == null ? false : ch2.hasMoreNewer,
 			hasMoreOlder: res.has_more,
 			cursorOlder: nextCursor(res.messages) ?? null
+		};
+		const checkpointed = checkpointWindow(pageState, newByd);
+
+		state.channels.set(channelId, {
+			...pageState,
+			byId: checkpointed.byId,
+			hasMoreNewer: checkpointed.hasMoreNewer,
+			ids: sortedIds(checkpointed.byId),
+			loaded: true,
+			hasMoreOlder: checkpointed.hasMoreOlder,
+			cursorOlder: checkpointed.cursorOlder
 			// A fresh load (q == null) is anchored at the newest message.
 		});
 		for (const message of messages) {
