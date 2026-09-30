@@ -259,12 +259,15 @@ export function mergeFetchedMessage(
 	incoming: MessageWithAttachment,
 	ch: ChannelMessagesState
 ): MessageWithAttachment | null {
-	if (ch.deletedMessageIds.has(incoming.id)) {
+	const normalizedIncoming = coerceMessage(incoming);
+	if (ch.deletedMessageIds.has(normalizedIncoming.id)) {
 		return null;
 	}
 	const incomingSafe: MessageWithAttachment = {
-		...incoming,
-		previews: incoming.previews.filter((p) => !isPreviewRemoved(ch, incoming.id, p.id))
+		...normalizedIncoming,
+		previews: normalizedIncoming.previews.filter((p) =>
+			!isPreviewRemoved(ch, normalizedIncoming.id, p.id)
+		)
 	};
 	if (!existing) {
 		// Not in the local cache: insert the REST message as-is.
@@ -313,16 +316,17 @@ export function upsertMessage(
 	channelId: string,
 	msg: MessageWithAttachment
 ): void {
+	const safeMessage = coerceMessage(msg);
 	const ch = state.channels.get(channelId);
 	let inserted = false;
 	if (ch) {
-		const merged = mergeFetchedMessage(ch.byId.get(msg.id), msg, ch);
+		const merged = mergeFetchedMessage(ch.byId.get(safeMessage.id), safeMessage, ch);
 		if (merged) {
 			const newByd = new SvelteMap<string, MessageWithAttachment>();
 			for (const [id, m] of ch.byId) {
 				newByd.set(id, m);
 			}
-			newByd.set(msg.id, merged);
+			newByd.set(safeMessage.id, merged);
 
 			const trimmed =
 				ch.windowMode === 'latest'
@@ -345,15 +349,15 @@ export function upsertMessage(
 	} else {
 		// No channel state yet: create it and insert.
 		const c = newChannelState();
-		c.byId.set(msg.id, msg);
-		c.ids = [msg.id];
+		c.byId.set(safeMessage.id, safeMessage);
+		c.ids = [safeMessage.id];
 		c.loaded = true;
 		state.channels.set(channelId, c);
 		inserted = true;
 	}
 	// Apply any preview that resolved before the message arrived (P0.5).
 	if (inserted) {
-		applyPendingPreview(state, msg.id);
+		applyPendingPreview(state, safeMessage.id);
 	}
 }
 
