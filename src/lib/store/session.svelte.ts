@@ -92,15 +92,15 @@ export async function load(): Promise<void> {
 		seedSettings(me.settings.config, me.settings.version);
 		notificationsStore.load();
 
-		// Enter the app as soon as the core session/roles are ready. Large
-		// servers continue hydrating summaries/emojis progressively in the
-		// background instead of blocking the initial navigation.
+		// Emoji consumers always operate on the complete server list. Finish
+		// pagination once during bootstrap; picker/admin never paginate.
+		await emojisStore.loadAll();
+
+		// UserSummary hydration can remain progressive because it is lightweight
+		// and Avatar/Profile loading is viewport-driven.
 		state.loaded = true;
 		void loadAllUsers().catch((err) => {
 			console.error('falha ao carregar todos os usuários:', err);
-		});
-		void emojisStore.loadAll().catch((err) => {
-			console.error('falha ao carregar todos os emojis:', err);
 		});
 		startTimer();
 		// Conexão WS (handshake com o mesmo cookie Auth). Só conecta quando a
