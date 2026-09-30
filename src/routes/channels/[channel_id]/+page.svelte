@@ -193,7 +193,7 @@
 	/>
 
 	{#if channel.type === 'voice'}
-		<div class="voice-channel-stack"><VoiceRoom {channel} /><div class="voice-chat-bar"><Composer onSend={SendMsg} channelId={channel.id} replyTo={null} disabled={!messagesStore.getChannel(channel.id)} /></div></div>
+		<VoiceRoom {channel} />
 	{:else}
 		{#key channel.id}<Chat
 			{messages}
@@ -352,7 +352,6 @@
 		font-size: 14px;
 	}
 
-	.voice-channel-stack{display:flex;flex:1 1 0;min-height:0;flex-direction:column;overflow-y:auto}.voice-chat-bar{position:sticky;bottom:0;z-index:10;padding:0 12px 12px;background:linear-gradient(180deg,transparent,var(--surface) 28%)}
 	.composer-area {
 		position: relative;
 		display: flex;
