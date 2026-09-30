@@ -42,9 +42,16 @@
 
 	// UserSummary hydration is global and walks every /users page in the
 	// background. Admin consumes the same store instead of starting a competing
-	// pagination request that could cancel the global preload.
+	// pagination request that could cancel the global preload. Retry at most
+	// once here if the bootstrap preload failed before this page mounted.
+	let requestedUserHydration = false;
 	$effect(() => {
-		if (!usersStore.state.list.loading && !usersStore.state.list.fullyLoaded) {
+		if (
+			!requestedUserHydration &&
+			!usersStore.state.list.loading &&
+			!usersStore.state.list.fullyLoaded
+		) {
+			requestedUserHydration = true;
 			void usersStore.loadAll();
 		}
 	});
