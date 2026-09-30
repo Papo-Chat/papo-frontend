@@ -175,6 +175,9 @@
 				setUnreadCount(0);
 				scrollToBottom();
 				stickToBottom = true;
+				if (!hasMoreNewer) {
+					onReachLatest?.(messages.at(-1) ?? null);
+				}
 			}
 
 			// Allow intrinsic media sizes to settle for two frames before user
@@ -347,7 +350,10 @@
 		if (!initialScrollDone || !stickToBottom || count === 0) return;
 
 		void tick().then(() => {
-			requestAnimationFrame(() => scrollToBottom());
+			requestAnimationFrame(() => {
+				scrollToBottom();
+				clearUnreadAtBottom();
+			});
 		});
 	});
 
