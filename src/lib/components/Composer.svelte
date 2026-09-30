@@ -4,6 +4,9 @@
 	import { send as wsSend } from '../ws';
 	import { throttle } from '$lib/utils/throttle';
 	import * as usersStore from '$lib/store/users.svelte';
+	import * as rolesStore from '$lib/store/roles.svelte';
+	import { state as sessionState } from '$lib/store/session.svelte';
+	import { state as serverState } from '$lib/store/server.svelte';
 	import Icon from './Icon.svelte';
 	import EmojiPicker from './EmojiPicker.svelte';
 	import Avatar from './Avatar.svelte';
@@ -41,6 +44,21 @@
 
 	let files = $state<File[]>([]);
 	let progress = $state(0);
+	type MentionOption={kind:'user'|'everyone';id:string;label:string;value:string};
+	let mentionOpen=$state(false); let mentionStart=$state(-1); let mentionQuery=$state(''); let mentionIndex=$state(0);
+	const myRoleIds=$derived(new Set(sessionState.roles.map((r)=>r.id)));
+	const myRoles=$derived(rolesStore.state.list.filter((r)=>myRoleIds.has(r.id)));
+	const canMentionEveryone=$derived(rolesStore.can('everyone_message',{roles:myRoles,isOwner:!!sessionState.userId&&serverState.server?.owner_id===sessionState.userId}));
+	function mentionOptions():MentionOption[]{
+		if(!mentionOpen)return[]; const q=mentionQuery.toLowerCase(); const out:MentionOption[]=[];
+		if(canMentionEveryone&&'everyone'.startsWith(q))out.push({kind:'everyone',id:'everyone',label:'everyone',value:'@everyone'});
+		for(const u of [...usersStore.state.byId.values()].filter((u)=>(u.nickname||u.username).toLowerCase().includes(q)||u.username.toLowerCase().includes(q)).slice(0,8-out.length))out.push({kind:'user',id:u.id,label:u.nickname||u.username,value:`@mention(<@${u.id}>)`});
+		return out;
+	}
+	const mentionItems=$derived(mentionOptions());
+	function closeMentions(){mentionOpen=false;mentionStart=-1;mentionQuery='';mentionIndex=0;}
+	function refreshMentions(){const cursor=inputEl?.selectionStart??text.length;const before=text.slice(0,cursor);const m=before.match(/(?:^|\s)@([^\s@()]*)$/);if(!m){closeMentions();return;}mentionStart=before.length-m[1].length-1;mentionQuery=m[1];mentionOpen=true;mentionIndex=0;}
+	function insertMention(option:MentionOption){if(mentionStart<0)return;const cursor=inputEl?.selectionStart??text.length;const value=`${option.value} `;text=text.slice(0,mentionStart)+value+text.slice(cursor);const next=mentionStart+value.length;closeMentions();queueMicrotask(()=>{if(!inputEl)return;inputEl.selectionStart=next;inputEl.selectionEnd=next;inputEl.focus();resizeInput();notifyTyping();});}
 
 	// ── gravação de áudio (microfone) ──
 	let recording = $state(false);
@@ -209,10 +227,12 @@
 		text = el.value;
 
 		resizeInput();
+		refreshMentions();
 		notifyTyping();
 	}
 
 	function onKeydown(e: KeyboardEvent): void {
+		if(mentionOpen&&mentionItems.length){if(e.key==='ArrowDown'){e.preventDefault();mentionIndex=(mentionIndex+1)%mentionItems.length;return;}if(e.key==='ArrowUp'){e.preventDefault();mentionIndex=(mentionIndex-1+mentionItems.length)%mentionItems.length;return;}if((e.key==='Enter'||e.key==='Tab')&&!e.isComposing){e.preventDefault();insertMention(mentionItems[mentionIndex]??mentionItems[0]);return;}if(e.key==='Escape'){e.preventDefault();closeMentions();return;}}
 		// Enter envia.
 		// Shift + Enter é deixado para o textarea criar uma nova linha.
 		if (
@@ -725,6 +745,15 @@
 		</div>
 
         <div class="input">
+			{#if mentionOpen && mentionItems.length}
+				<div class="mention-menu" role="listbox">
+					{#each mentionItems as option,index (option.kind+option.id)}
+						<button type="button" class:active={index===mentionIndex} onmousedown={(e)=>e.preventDefault()} onclick={()=>insertMention(option)}>
+							{#if option.kind==='user'}<Avatar user={usersStore.state.byId.get(option.id)} size={22} />{:else}<strong>@</strong>{/if}<span>@{option.label}</span>
+						</button>
+					{/each}
+				</div>
+			{/if}
             <textarea
                 class="composer-input"
                 bind:this={inputEl}
@@ -1314,4 +1343,5 @@
 			animation: none;
 		}
 	}
+	.input{position:relative}.mention-menu{position:absolute;left:0;bottom:calc(100% + 7px);z-index:70;display:flex;flex-direction:column;gap:2px;width:min(320px,78vw);max-height:250px;overflow:auto;padding:5px;border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:0 10px 28px rgb(0 0 0/.18)}.mention-menu button{display:flex;align-items:center;gap:7px;width:100%;padding:6px 8px;border:0;border-radius:8px;background:transparent;color:var(--text-primary);font:inherit;text-align:left;cursor:pointer}.mention-menu button:hover,.mention-menu button.active{background:var(--hover)}
 </style>
