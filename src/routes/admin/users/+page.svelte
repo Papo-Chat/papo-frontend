@@ -124,7 +124,9 @@
 			/>
 			<div class="users-stats">
 				<span>Ativos: <strong>{activeCount}</strong></span>
-				<span class="banned-count">Banidos: <strong>{banned.length}</strong></span>
+				{#if canManageServer}
+					<span class="banned-count">Banidos: <strong>{banned.length}</strong></span>
+				{/if}
 			</div>
 		</div>
 	</header>
@@ -146,7 +148,7 @@
 						aria-label={`Desbanir ${u.nickname || u.username}`}
 						onclick={() => toggleBan(u)}
 					>
-						${u.nickname || u.username}
+						{u.nickname || u.username}
 						<Icon name="arrow-clockwise" variant="light" size={14} />
 					</button>
 				{/each}
@@ -199,7 +201,7 @@
 											aria-label={`Remover Role ${r.name}`}
 											onclick={() => removeRole(u.id, r.id)}
 										>
-											
+											×
 										</button>
 										{/if}
 									</span>
@@ -376,7 +378,9 @@
 	}
 	.chip {
 		position: relative;
-		padding-right: 20px; /* espaço pro X */
+	}
+	.chip:has(.chip-x) {
+		padding-right: 20px;
 	}
 	.chip-x {
 		position: absolute;
