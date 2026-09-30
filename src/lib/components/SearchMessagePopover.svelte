@@ -57,13 +57,6 @@
 
     // Perfis dos autores dos resultados visíveis (batch, só ids ausentes do
     // cache) — nome/avatar/anel do autor no popover.
-    $effect(() => {
-        const ids = new Set<string>();
-        for (const r of results) {
-            if (r.author_id) ids.add(r.author_id);
-        }
-        void usersStore.ensureProfiles([...ids]);
-    });
 
     // Request com os filtros atuais (o API exige >= 1 campo; `text` sempre
     // vem da query).
