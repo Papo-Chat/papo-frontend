@@ -30,7 +30,7 @@
 	// Revealed one tick after mount so the CSS fade-in plays without a flash.
 	// The element only exists while `open` ({#if open}).
 	let shown = $state(false);
-	const all = allEmojis();
+	const all = $derived(allEmojis());
 
 	const filtered = $derived(
 		all.filter((opt) => {
