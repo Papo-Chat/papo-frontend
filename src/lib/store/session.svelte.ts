@@ -8,7 +8,7 @@
 //   call. It also disconnects the WS (no reconnect) and drops voice.
 
 import { api, setOnUnauthorized } from '../api';
-import { seedMe, loadList as loadUsersList, reset as usersReset } from '../store/users.svelte';
+import { seedMe, loadList as loadUsersList, reset as usersReset, setPersistedStatus } from '../store/users.svelte';
 import { load as loadRoles, reset as rolesReset } from '../store/roles.svelte';
 import { seed as seedSettings, reset as settingsReset } from '../store/settings.svelte';
 import * as channelsStore from '../store/channels.svelte';
@@ -127,6 +127,14 @@ export function clearLocalSession(): void {
 	usersReset();
 	rolesReset();
 	emojisStore.reset();
+}
+
+export async function setStatus(status: 'away' | 'busy' | null): Promise<void> {
+	const userId = state.userId;
+	if (!userId) throw new Error('usuário não autenticado');
+	await api.users.updateStatus(userId, { status });
+	state.status = status;
+	setPersistedStatus(userId, status);
 }
 
 // Explicit "leave": revoke the server session, then tear down locally.
