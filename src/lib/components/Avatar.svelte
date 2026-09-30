@@ -7,6 +7,7 @@
 
 	let {
 		user = null,
+		userId = null,
 		icon = '',
 		size = 39,
 		onClick = null,
@@ -14,6 +15,7 @@
 		ringColor = null
 	} = $props<{
 		user?: UserSummary | null;
+		userId?: string | null;
 		icon?: string;
 		size?: number;
 		onClick?: () => void;
@@ -21,11 +23,12 @@
 		ringColor?: string | null;
 	}>();
 
-	const profile = $derived(user ? usersStore.getProfile(user.id) : null);
+	const effectiveUserId = $derived(user?.id ?? userId ?? null);
+	const profile = $derived(effectiveUserId ? usersStore.getProfile(effectiveUserId) : null);
 
 	const name = $derived(profile?.nickname || user?.nickname || user?.username || 'Usuário');
 
-	const gradient = $derived(user ? avatarGradient(user.username) : avatarGradient('U'));
+	const gradient = $derived(user ? avatarGradient(user.username) : avatarGradient(effectiveUserId ?? 'U'));
 
 	const initial = $derived(
 		user ? avatarInitial(user.username, profile?.nickname ?? user.nickname) : 'U'
@@ -61,7 +64,7 @@
 	// Keep heavy profiles hot only for avatars that are visible or close to
 	// becoming visible. The store keeps released profiles in a bounded LRU.
 	$effect(() => {
-		const id = user?.id;
+		const id = effectiveUserId;
 		const el = avatarEl;
 
 		if (!id || !el) return;
