@@ -109,18 +109,20 @@ function releaseMessageResources(
 
 // ── state ─────────────────────────────────────────────────
 
-function trimLatestWindow(
+function checkpointWindow(
 	ch: ChannelMessagesState,
 	byId: SvelteMap<string, MessageWithAttachment>
 ): {
 	byId: SvelteMap<string, MessageWithAttachment>;
 	hasMoreOlder: boolean;
+	hasMoreNewer: boolean;
 	cursorOlder: ChannelMessagesState['cursorOlder'];
 } {
 	if (byId.size <= MAX_WINDOW) {
 		return {
 			byId,
 			hasMoreOlder: ch.hasMoreOlder,
+			hasMoreNewer: ch.hasMoreNewer,
 			cursorOlder: ch.cursorOlder
 		};
 	}
@@ -128,10 +130,18 @@ function trimLatestWindow(
 	const ids = sortedIds(byId);
 	const excess = ids.length - MAX_WINDOW;
 
+	// Latest window stays anchored at the bottom, so discard oldest messages.
+	// Historical window stays anchored around the user's reading position, so
+	// discard newest messages instead and remember that newer data exists.
+	const dropIds =
+		ch.windowMode === 'latest'
+			? ids.slice(0, excess)
+			: ids.slice(ids.length - excess);
+
 	const dropped: MessageWithAttachment[] = [];
-	for (const id of ids.slice(0, excess)) {
-		const m = byId.get(id);
-		if (m) dropped.push(m);
+	for (const id of dropIds) {
+		const message = byId.get(id);
+		if (message) dropped.push(message);
 		byId.delete(id);
 	}
 	releaseMessageResources(byId, dropped);
@@ -142,13 +152,15 @@ function trimLatestWindow(
 
 	return {
 		byId,
-		hasMoreOlder: true,
-		cursorOlder: oldest
-			? {
-					since: oldest.created_at,
-					last_id: oldest.id
-				}
-			: null
+		hasMoreOlder: ch.windowMode === 'latest' ? true : ch.hasMoreOlder,
+		hasMoreNewer: ch.windowMode === 'historical' ? true : ch.hasMoreNewer,
+		cursorOlder:
+			ch.windowMode === 'latest' && oldest
+				? {
+						since: oldest.created_at,
+						last_id: oldest.id
+					}
+				: ch.cursorOlder
 	};
 }
 
@@ -329,21 +341,15 @@ export function upsertMessage(
 			}
 			newByd.set(safeMessage.id, merged);
 
-			const trimmed =
-				ch.windowMode === 'latest'
-					? trimLatestWindow(ch, newByd)
-					: {
-							byId: newByd,
-							hasMoreOlder: ch.hasMoreOlder,
-							cursorOlder: ch.cursorOlder
-						};
+			const checkpointed = checkpointWindow(ch, newByd);
 
 			state.channels.set(channelId, {
 				...ch,
-				byId: trimmed.byId,
-				ids: sortedIds(trimmed.byId),
-				hasMoreOlder: trimmed.hasMoreOlder,
-				cursorOlder: trimmed.cursorOlder
+				byId: checkpointed.byId,
+				ids: sortedIds(checkpointed.byId),
+				hasMoreOlder: checkpointed.hasMoreOlder,
+				hasMoreNewer: checkpointed.hasMoreNewer,
+				cursorOlder: checkpointed.cursorOlder
 			});
 			inserted = true;
 		}
