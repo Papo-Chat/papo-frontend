@@ -10,7 +10,7 @@
 	// the `.chat` container (composer, at the bottom) it always opens above.
 	import { tick } from 'svelte';
 	import { allEmojis, type EmojiOption } from '$lib/utils/emojis';
-	import { blobToUrl } from '$lib/utils/media';
+	import { formatToMime } from '$lib/utils/media';
 	import Icon from './Icon.svelte';
 
 	let {
@@ -53,6 +53,11 @@
 	function pick(opt: EmojiOption): void {
 		onPick?.(opt);
 		close();
+	}
+
+	function customEmojiSrc(opt: Extract<EmojiOption, { kind: 'custom' }>): string {
+		if (!opt.image_blob) return '';
+		return `data:${formatToMime(opt.format)};base64,${opt.image_blob}`;
 	}
 
 	function onFilterInput(e: Event): void {
@@ -208,7 +213,7 @@
 						{#each custom as opt (`c-${opt.name}`)}
 							<button class="emoji custom" title={opt.name} onclick={() => pick(opt)}>
 								{#if opt.image_blob}
-									<img src={blobToUrl(opt.image_blob, opt.format)} alt={opt.name} />
+									<img src={customEmojiSrc(opt)} alt={opt.name} />
 								{:else}
 									<span class="custom-name">{opt.name}</span>
 								{/if}
