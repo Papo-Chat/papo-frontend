@@ -624,23 +624,25 @@
 				/>
 			</button>
 
-			<button
-				class="composer-tool emoji-btn"
-				title="Emojis"
-				aria-label="Emojis"
-				onclick={toggleEmoji}
-				{disabled}
-			>
-				<Icon
-					name="smiley"
-					variant="light"
-				/>
+			<div class="emoji-btn-wrap">
+				<button
+					class="composer-tool emoji-btn"
+					title="Emojis"
+					aria-label="Emojis"
+					onclick={toggleEmoji}
+					{disabled}
+				>
+					<Icon
+						name="smiley"
+						variant="light"
+					/>
+				</button>
 
 				<EmojiPicker
 					bind:open={emojiOpen}
 					onPick={onPickEmoji}
 				/>
-			</button>
+			</div>
 		</div>
 
 		<div
@@ -651,24 +653,26 @@
 				class="mobile-action-menu"
 				aria-hidden={!mobileActionsOpen}
 			>
-				<button
-					class="composer-tool mobile-action emoji-btn"
-					title="Emojis"
-					aria-label="Emojis"
-					tabindex={mobileActionsOpen ? 0 : -1}
-					onclick={toggleMobileEmoji}
-					{disabled}
-				>
-					<Icon
-						name="smiley"
-						variant="light"
-					/>
+				<div class="mobile-action emoji-mobile-wrap">
+					<button
+						class="composer-tool emoji-btn"
+						title="Emojis"
+						aria-label="Emojis"
+						tabindex={mobileActionsOpen ? 0 : -1}
+						onclick={toggleMobileEmoji}
+						{disabled}
+					>
+						<Icon
+							name="smiley"
+							variant="light"
+						/>
+					</button>
 
 					<EmojiPicker
 						bind:open={emojiOpen}
 						onPick={onPickEmoji}
 					/>
-				</button>
+				</div>
 
 				<button
 					class="composer-tool mobile-action mic-tool"
@@ -846,6 +850,12 @@
 		font: inherit;
 		-webkit-appearance: none;
 		appearance: none;
+	}
+
+	.emoji-btn-wrap,
+	.emoji-mobile-wrap {
+		position: relative;
+		display: inline-flex;
 	}
 
 	.composer-tool.emoji-btn {
