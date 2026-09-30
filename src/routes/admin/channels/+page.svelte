@@ -190,6 +190,9 @@
 		channelPerms = { ...channelPerms, [roleId]: next };
 		try {
 			await channelsStore.setRolePermissions(selected.id, roleId, next);
+			success = 'Permissão atualizada.';
+			if (feedbackTimer) clearTimeout(feedbackTimer);
+			feedbackTimer = setTimeout(() => (success = ''), 1800);
 		} catch (err) {
 			channelPerms = { ...channelPerms, [roleId]: before };
 			error = err instanceof Error ? err.message : 'Erro ao atualizar permissão.';
