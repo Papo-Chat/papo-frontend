@@ -19,7 +19,8 @@
 	const fullUrl = $derived(attachmentUrl(attachment.id));
 	const name = attachment.original_file_name || 'anexo';
 	const isImage = isImageMime(attachment.mime_type);
-	const isAudio = attachment.mime_type.startsWith('audio/');
+	const isRecordedAudioName = /^audio_.*\.(webm|ogg|wav|mp3|m4a|aac|opus)$/i.test(name);
+	const isAudio = attachment.mime_type.startsWith('audio/') || isRecordedAudioName;
 	const SMALL_AUDIO_MAX = 2 * 1024 * 1024;
 
 	let audioEl: HTMLAudioElement | null = $state(null);
@@ -153,12 +154,7 @@
 		</button>
 	</dialog>
 {/if}
-{:else if (attachment.mime_type.startsWith('video/') || attachment.mime_type.startsWith('application/octet-stream')) }
-	<!-- Vídeo: player inline (o backend suporta Range requests). -->
-	<div class="attachment-media">
-		<video src={fullUrl} controls class:pinned-attachment={pinned}></video>
-	</div>
-{:else if attachment.mime_type.startsWith('audio/')}
+{:else if isAudio}
 	<!-- Áudio: player compacto. Áudios pequenos são baixados inteiros para
 	     blob local, evitando Range/206 e metadados de duração instáveis. -->
 	<div class="attachment-media attachment-audio" class:pinned-attachment={pinned} title={name}>
@@ -194,6 +190,11 @@
 			{formatAudioTime(audioCurrent)}
 			<span class="audio-duration">/ {audioDuration > 0 ? formatAudioTime(audioDuration) : (audioLoading ? '…' : '--:--')}</span>
 		</span>
+	</div>
+{:else if (attachment.mime_type.startsWith('video/') || attachment.mime_type.startsWith('application/octet-stream')) }
+	<!-- Vídeo / binário genérico: player inline quando não foi reconhecido como áudio. -->
+	<div class="attachment-media">
+		<video src={fullUrl} controls class:pinned-attachment={pinned}></video>
 	</div>
 {:else}
 	<!-- Arquivo: chip de download. -->
@@ -249,9 +250,9 @@
 		grid-template-columns: 24px minmax(64px, 100px) auto;
 		align-items: center;
 		gap: 5px;
-		width: min(220px, 100%);
-		max-width: 220px;
-		margin: 4px auto;
+		width: min(200px, 100%);
+		max-width: 200px;
+		margin: 4px 0;
 		padding: 4px 6px;
 		border: 1px solid var(--border);
 		border-radius: 9px;
