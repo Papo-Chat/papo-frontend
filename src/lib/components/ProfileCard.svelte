@@ -2,7 +2,7 @@
 	// User profile card — a Liquid Glass overlay that floats over the
 	// interface (like the mobile drawers), showing banner, avatar, roles and
 	// description. Follows the same glass language as the popovers.
-	import type { RoleSummary, UserProfile } from '$lib/types';
+	import type { RoleSummary, UserSummary } from '$lib/types';
 	import { mediaUrl } from '$lib/utils/media';
 	import * as usersStore from '$lib/store/users.svelte';
 	import { hash } from '$lib/utils/avatars';
@@ -13,7 +13,7 @@
 		open = $bindable(false),
 		onOpenChange = () => {}
 	} = $props<{
-		user: UserProfile;
+		user: UserSummary;
 		open?: boolean;
 		onOpenChange?: (open: boolean) => void;
 	}>();
@@ -53,7 +53,7 @@
 	};
 	const name = $derived(user.nickname || user.username || 'Usuário');
 
-	const bannerSrc = profile ? (profile.banner_media ? mediaUrl(profile.banner_media) : '') : '';
+	const bannerSrc = $derived(profile?.banner_media ? mediaUrl(profile.banner_media) : '');
 	const bannerGradient = $derived(bannerGradients[hash(name) % bannerGradients.length]);
 	const statusClass = $derived<'online' | 'away' | 'busy' | 'offline'>(
 		usersStore.effectiveStatus(user.id)
@@ -136,8 +136,8 @@
 
 			<div class="profile-divider" />
 
-			{#if user.description}
-				<p class="profile-bio">{user.description}</p>
+			{#if profile?.description}
+				<p class="profile-bio">{profile.description}</p>
 			{:else}
 				<p class="profile-bio profile-bio-empty">Sem descrição.</p>
 			{/if}
