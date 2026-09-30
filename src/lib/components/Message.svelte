@@ -167,11 +167,6 @@
 	onpointerenter={onEnter}
 	onpointerleave={onLeave}
 >
-	{#if isPinned}
-		<span class="message-pin-indicator" title="Mensagem fixada" aria-label="Mensagem fixada">
-			<Icon name="push-pin" variant="duotone" size={13} />
-		</span>
-	{/if}
 		<Avatar
 			user={author}
 			size={39}
@@ -237,40 +232,54 @@
 				{/if}
 			{/if}
 
-			{#if showActions}
+			{#if showActions || isPinned}
 				<div class="message-actions" role="toolbar">
-					{#if canReply}
-						<button class="act-btn" type="button" title="Responder" onclick={doReply}>
-							<Icon name="arrow-bend-up-left" variant="light" />
-						</button>
-					{/if}
-
-					{#if canPin}
+					{#if isPinned}
 						<button
-							class="act-btn"
+							class="act-btn pinned-action"
 							type="button"
-							title={isPinned ? 'Desfixar mensagem' : 'Fixar mensagem'}
+							title="Desfixar mensagem"
+							aria-label="Desfixar mensagem"
 							onclick={togglePin}
 						>
-							<Icon name={isPinned ? 'pin' : 'push-pin'} variant="light" />
+							<Icon name="pin" variant="duotone" />
 						</button>
 					{/if}
 
-					{#if canEdit}
-						<button class="act-btn" type="button" title="Editar" onclick={startEdit}>
-							<Icon name="pencil" variant="light" />
-						</button>
-					{/if}
+					{#if showActions}
+						{#if canReply}
+							<button class="act-btn" type="button" title="Responder" onclick={doReply}>
+								<Icon name="arrow-bend-up-left" variant="light" />
+							</button>
+						{/if}
 
-					{#if canDelete}
-						<button
-							class="act-btn"
-							type="button"
-							title="Excluir"
-							onclick={startDelete}
-						>
-							<Icon name="trash" variant="light" />
-						</button>
+						{#if canPin && !isPinned}
+							<button
+								class="act-btn"
+								type="button"
+								title="Fixar mensagem"
+								onclick={togglePin}
+							>
+								<Icon name="push-pin" variant="light" />
+							</button>
+						{/if}
+
+						{#if canEdit}
+							<button class="act-btn" type="button" title="Editar" onclick={startEdit}>
+								<Icon name="pencil" variant="light" />
+							</button>
+						{/if}
+
+						{#if canDelete}
+							<button
+								class="act-btn"
+								type="button"
+								title="Excluir"
+								onclick={startDelete}
+							>
+								<Icon name="trash" variant="light" />
+							</button>
+						{/if}
 					{/if}
 				</div>
 			{/if}
@@ -351,28 +360,6 @@
 		border-radius: 10px;
 		position: relative;
 	}
-	.message-pin-indicator {
-		position: absolute;
-		top: 5px;
-		right: 7px;
-		z-index: 3;
-		display: grid;
-		place-items: center;
-		width: 23px;
-		height: 23px;
-		border-radius: 8px;
-		color: #a87500;
-		background: rgba(231, 168, 11, 0.13);
-		border: 1px solid rgba(231, 168, 11, 0.24);
-		pointer-events: none;
-	}
-
-	:global([data-theme='dark']) .message-pin-indicator {
-		color: #ffd66d;
-		background: rgba(231, 168, 11, 0.15);
-		border-color: rgba(255, 214, 109, 0.18);
-	}
-
 	.edit-input {
 		font: inherit;
 		color: var(--text-primary);
@@ -511,6 +498,19 @@
 	.act-btn:hover {
 		background: var(--hover);
 		color: var(--text-primary);
+	}
+	.pinned-action {
+		color: #a87500;
+		background: rgba(231, 168, 11, 0.12);
+		border-color: rgba(231, 168, 11, 0.22);
+	}
+	.pinned-action:hover {
+		background: rgba(231, 168, 11, 0.2);
+		color: #8a6100;
+	}
+	:global([data-theme='dark']) .pinned-action {
+		color: #ffd66d;
+		border-color: rgba(255, 214, 109, 0.18);
 	}
 	.delete-confirm {
 		display: flex;
