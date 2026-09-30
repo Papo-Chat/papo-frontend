@@ -223,6 +223,14 @@ html[data-ui-flat][data-theme='dark'] body {
 		var(--user-background);
 }
 
+/* The flat-mode background shorthand resets background-size/repeat. Restore
+ * full-viewport wallpaper behavior explicitly for desktop custom images. */
+html[data-ui-flat].has-user-image:not([data-ui-mobile]) body {
+	background-size: auto, auto, 100% 100%;
+	background-repeat: no-repeat, no-repeat, no-repeat;
+	background-position: center, center, center;
+}
+
 /* Mobile never renders a user-uploaded image, even if one is stored from a
    desktop session on the same device/browser profile. */
 html[data-ui-mobile].has-user-image body {
