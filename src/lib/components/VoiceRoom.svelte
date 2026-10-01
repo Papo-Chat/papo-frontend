@@ -293,8 +293,11 @@
 <style>
 	.voice-room {
 		width: 100%;
+		max-width: 100%;
+		min-width: 0;
 		box-sizing: border-box;
 		padding: 16px;
+		overflow-x: hidden;
 	}
 
 	.voice-header {
@@ -341,6 +344,8 @@
 		position: relative;
 
 		width: 100%;
+		max-width: 100%;
+		min-width: 0;
 		box-sizing: border-box;
 
 		overflow: hidden;
