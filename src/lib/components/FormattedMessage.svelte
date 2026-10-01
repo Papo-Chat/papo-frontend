@@ -96,8 +96,24 @@
 
 	:global(.msg-text :is(h1, h2, h3, h4, h5, h6)) {
 		margin: 0.2em 0;
+		font-weight: 700;
+		line-height: 1.25;
+	}
+
+	:global(.msg-text h1) {
+		font-size: 1.6em;
+	}
+
+	:global(.msg-text h2) {
+		font-size: 1.4em;
+	}
+
+	:global(.msg-text h3) {
+		font-size: 1.2em;
+	}
+
+	:global(.msg-text :is(h4, h5, h6)) {
 		font-size: 1em;
-		font-weight: 600;
 	}
 
 	:global(.msg-text p) {
