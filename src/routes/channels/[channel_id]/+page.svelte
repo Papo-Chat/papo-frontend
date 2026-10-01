@@ -116,6 +116,12 @@
 		uiState.scrollToMessageId = null;
 		if (!channel) return;
 
+		if (channel.type === 'voice') {
+			uiState.channelsDrawerOpen = false;
+			uiState.membersDrawerOpen = false;
+			uiState.voiceChatDrawerOpen = true;
+		}
+
 		const { messageId, createdAt } = target;
 
 		void messagesStore
@@ -175,6 +181,12 @@
 		const msgId = result.id;
 
 		if (channel && result.channel_id === channel.id) {
+			if (channel.type === 'voice') {
+				uiState.channelsDrawerOpen = false;
+				uiState.membersDrawerOpen = false;
+				uiState.voiceChatDrawerOpen = true;
+			}
+
 			void messagesStore
 				.gotoMessage(channel.id, msgId, result.created_at)
 				.then((found) => {
