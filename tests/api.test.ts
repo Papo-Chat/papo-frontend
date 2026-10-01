@@ -159,6 +159,18 @@ describe('ApiError (RFC 7807) parsing', () => {
 		);
 	});
 
+	it('uses Echo-style message fields instead of [object Object]', async () => {
+		installFetch({ status: 404, body: { message: 'Not Found' } });
+		await expectApiError(
+			() => auth.whoami(),
+			(err) => {
+				expect(err.message).toBe('Not Found');
+				expect(err.detail).toBe('Not Found');
+				expect(err.message).not.toContain('[object Object]');
+			}
+		);
+	});
+
 	it('falls back to defaults when the body lacks RFC 7807 fields', async () => {
 		installFetch({ status: 500, body: {} });
 		await expectApiError(
