@@ -23,11 +23,11 @@
 	const users = $derived.by(() => {
 		const map = new Map<string, UserSummary>();
 		for (const user of usersStore.state.list.items) {
-			if (!(user.banned ?? usersStore.state.bannedIds.has(user.id))) map.set(user.id, user);
+			if (!user.banned && !usersStore.state.bannedIds.has(user.id)) map.set(user.id, user);
 		}
 		for (const id of usersStore.state.presence.keys()) {
 			const user = usersStore.state.byId.get(id);
-			if (user && !(user.banned ?? usersStore.state.bannedIds.has(user.id))) {
+			if (user && !user.banned && !usersStore.state.bannedIds.has(user.id)) {
 				map.set(user.id, user);
 			}
 		}
