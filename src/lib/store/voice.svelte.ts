@@ -18,6 +18,7 @@
 import { SvelteMap } from 'svelte/reactivity';
 import { api } from '../api';
 import { send as wsSend } from '../ws';
+import { PUBLIC_VOICE_AUDIO_SLOTS, PUBLIC_VOICE_VIDEO_SLOTS } from '../env';
 import type {
 	ICEServer,
 	VoiceState,
@@ -91,7 +92,7 @@ let cameraTransceiver: RTCRtpTransceiver | null = null;
 let screenTransceiver: RTCRtpTransceiver | null = null;
 
 const remoteVideoSlots: RemoteVideoSlot[] = [];
-const remoteSubscriptions = new Map<string, RemoteVideoSlot>();
+const remoteSubscriptions = new Map<string, RemoteVideoSlot | null>();
 const subscribeRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 let pendingAnswer: PendingAnswer | null = null;
@@ -272,6 +273,15 @@ export function join(channelId: string, userId?: string): void {
 
 			peer = conn;
 			state.peer = conn;
+
+			// Reserve SFU receive slots in the client offer. The backend ignores
+			// recvonly m-lines when classifying our own camera/screen publications.
+			for (let i = 0; i < PUBLIC_VOICE_VIDEO_SLOTS; i += 1) {
+				conn.addTransceiver('video', { direction: 'recvonly' });
+			}
+			for (let i = 0; i < PUBLIC_VOICE_AUDIO_SLOTS; i += 1) {
+				conn.addTransceiver('audio', { direction: 'recvonly' });
+			}
 
 			conn.ontrack = (event) => {
 				// Ignora eventos de um PeerConnection que já ficou velho.
@@ -1085,23 +1095,33 @@ function sendSubscriptionWithRetry(
 	subscribeRetryTimers.set(key, timer);
 }
 
-function releaseRemoteSubscription(key: string, notifyServer = true): void {
-	const slot = remoteSubscriptions.get(key);
-	if (!slot) return;
+function subscriptionParts(key: string): { userId: string; kind: VoiceMediaKind } | null {
+	const split = key.lastIndexOf(':');
+	if (split <= 0) return null;
+	const userId = key.slice(0, split);
+	const kind = key.slice(split + 1);
+	if (kind !== 'video' && kind !== 'screen') return null;
+	return { userId, kind };
+}
 
-	const media = state.remoteMedia.get(key);
-	if (notifyServer && media && currentChannelId) {
+function releaseRemoteSubscription(key: string, notifyServer = true): void {
+	if (!remoteSubscriptions.has(key)) return;
+
+	const slot = remoteSubscriptions.get(key);
+	const parts = subscriptionParts(key);
+
+	if (notifyServer && parts && currentChannelId) {
 		wsSend({
 			type: 'track_unsubscribe',
 			channel_id: currentChannelId,
-			publisher_id: media.userId,
-			kind: media.kind
+			publisher_id: parts.userId,
+			kind: parts.kind
 		} as WsInbound);
 	}
 
 	clearSubscribeRetry(key);
 	remoteSubscriptions.delete(key);
-	slot.assignmentKey = null;
+	if (slot) slot.assignmentKey = null;
 	state.remoteMedia.delete(key);
 }
 
@@ -1120,17 +1140,21 @@ function reconcileRemoteVideoSubscriptions(): void {
 	for (const item of desired) {
 		if (remoteSubscriptions.has(item.key)) continue;
 
-		const slot = remoteVideoSlots.find((candidate) => candidate.assignmentKey === null);
-		if (!slot) break;
+		const slot = remoteVideoSlots.find((candidate) => candidate.assignmentKey === null) ?? null;
 
-		slot.assignmentKey = item.key;
+		if (slot) {
+			slot.assignmentKey = item.key;
+			state.remoteMedia.set(item.key, {
+				key: item.key,
+				userId: item.userId,
+				kind: item.kind,
+				stream: slot.stream
+			});
+		}
+
+		// Subscribe even before the browser has emitted ontrack for that SFU
+		// slot. The first RTP packet is what makes the receiver track observable.
 		remoteSubscriptions.set(item.key, slot);
-		state.remoteMedia.set(item.key, {
-			key: item.key,
-			userId: item.userId,
-			kind: item.kind,
-			stream: slot.stream
-		});
 		sendSubscriptionWithRetry(item.key, item.userId, item.kind);
 	}
 }
@@ -1186,6 +1210,27 @@ function onRemoteTrack(_peerConn: RTCPeerConnection, event: RTCTrackEvent): void
 				const bm = Number(b.transceiver.mid);
 				return Number.isFinite(am) && Number.isFinite(bm) ? am - bm : 0;
 			});
+
+			// A subscribe can precede ontrack. Match the first still-unbound
+			// subscription to the SFU slot that just started producing RTP.
+			const pendingKey = [...remoteSubscriptions.entries()].find(
+				([, assigned]) => assigned === null
+			)?.[0];
+			if (pendingKey) {
+				slot.assignmentKey = pendingKey;
+				remoteSubscriptions.set(pendingKey, slot);
+
+				const parts = subscriptionParts(pendingKey);
+				if (parts) {
+					state.remoteMedia.set(pendingKey, {
+						key: pendingKey,
+						userId: parts.userId,
+						kind: parts.kind,
+						stream: slot.stream
+					});
+				}
+				clearSubscribeRetry(pendingKey);
+			}
 		} else {
 			slot.track = track;
 			slot.stream = new MediaStream([track]);
