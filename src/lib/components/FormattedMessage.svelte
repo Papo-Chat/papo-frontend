@@ -143,9 +143,9 @@
 
 <style>
 	.giphy-message {
-		display: flex;
-		width: min(var(--giphy-width, 420px), 100%);
-		max-width: 100%;
+		display: inline-flex;
+		width: min(var(--giphy-width, 420px), calc(100vw - 112px));
+		max-width: 420px;
 		flex-direction: column;
 		align-items: stretch;
 	}
