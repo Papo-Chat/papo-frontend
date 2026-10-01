@@ -20,8 +20,53 @@
 		joined ? voiceStore.state.activeSpeaker : null
 	);
 
+	const remoteMedia = $derived(
+		joined ? [...voiceStore.state.remoteMedia.values()] : []
+	);
+	const localCamera = $derived(joined ? voiceStore.state.localCameraStream : null);
+	const localScreen = $derived(joined ? voiceStore.state.localScreenStream : null);
+	const myCameraOn = $derived(localCamera !== null);
+	const myScreenOn = $derived(localScreen !== null);
+	const mediaCount = $derived(
+		remoteMedia.length + (localCamera ? 1 : 0) + (localScreen ? 1 : 0)
+	);
+	const mediaGridColumns = $derived(
+		mediaCount <= 1 ? 1 : mediaCount <= 4 ? 2 : mediaCount <= 9 ? 3 : 4
+	);
+
+	let expandedKey = $state<string | null>(null);
+	let expandedDialog: HTMLDialogElement | null = null;
+	const expandedRemote = $derived(
+		expandedKey && !expandedKey.startsWith('local:')
+			? remoteMedia.find((media) => media.key === expandedKey) ?? null
+			: null
+	);
+	const expandedStream = $derived(
+		expandedKey === 'local:screen'
+			? localScreen
+			: expandedKey === 'local:camera'
+				? localCamera
+				: expandedRemote?.stream ?? null
+	);
+	const expandedKind = $derived(
+		expandedKey === 'local:screen'
+			? 'screen'
+			: expandedKey === 'local:camera'
+				? 'video'
+				: expandedRemote?.kind ?? null
+	);
+	const expandedTitle = $derived(
+		expandedKey === 'local:screen'
+			? 'Sua tela'
+			: expandedKey === 'local:camera'
+				? 'Sua câmera'
+				: expandedRemote
+					? `${mediaName(expandedRemote.userId)}${expandedRemote.kind === 'screen' ? ' — tela' : ''}`
+					: ''
+	);
+
 	let joining = $state(false);
-	let error: string | null = $state(null);
+	const error = $derived(voiceStore.state.lastError);
 
 	const myMuted = $derived(
 		members.find((m) => m.user_id === me)?.muted ?? false
@@ -30,7 +75,6 @@
 	$effect(() => {
 		if (joined) {
 			joining = false;
-			error = null;
 		}
 	});
 
@@ -38,9 +82,8 @@
 		if (joined || joining) return;
 
 		joining = true;
-		error = null;
 
-		voiceStore.join(channel.id);
+		voiceStore.join(channel.id, me ?? undefined);
 	}
 
 	function leave(): void {
@@ -84,9 +127,72 @@
 		}
 	}
 
+	async function toggleCamera(): Promise<void> {
+		try {
+			await voiceStore.camera(!myCameraOn);
+		} catch (e) {
+			voiceStore.state.lastError =
+				e instanceof Error ? e.message : 'Falha ao alterar a câmera.';
+		}
+	}
+
+	async function toggleScreen(): Promise<void> {
+		try {
+			await voiceStore.screenShare(!myScreenOn);
+		} catch (e) {
+			voiceStore.state.lastError =
+				e instanceof Error ? e.message : 'Falha ao compartilhar a tela.';
+		}
+	}
+
 	function displayFor(id: string) {
 		return usersStore.state.byId.get(id);
 	}
+
+	function streamVideo(node: HTMLVideoElement, stream: MediaStream) {
+		const attach = (next: MediaStream) => {
+			node.srcObject = next;
+			void node.play().catch(() => {});
+		};
+
+		attach(stream);
+
+		return {
+			update(next: MediaStream) {
+				attach(next);
+			},
+			destroy() {
+				node.pause();
+				node.srcObject = null;
+			}
+		};
+	}
+
+	function mediaName(userId: string): string {
+		const user = displayFor(userId);
+		return user?.nickname || user?.username || 'Usuário';
+	}
+
+	function expandMedia(key: string): void {
+		expandedKey = key;
+	}
+
+	function closeExpanded(): void {
+		expandedKey = null;
+	}
+
+	$effect(() => {
+		const dialog = expandedDialog;
+		const shouldOpen = Boolean(expandedKey && expandedStream);
+
+		if (!dialog) return;
+
+		if (shouldOpen && !dialog.open) {
+			dialog.showModal();
+		} else if (!shouldOpen && dialog.open) {
+			dialog.close();
+		}
+	});
 </script>
 
 <div class="voice-room">
@@ -253,6 +359,81 @@
 			{/if}
 		</div>
 
+		{#if joined && (localCamera || localScreen || remoteMedia.length > 0)}
+			<div class="voice-divider"></div>
+
+			<div
+				class="voice-media-grid"
+				style:grid-template-columns={`repeat(${mediaGridColumns}, minmax(0, 1fr))`}
+			>
+				{#if localScreen}
+					<div class="voice-media-tile screen">
+						<video use:streamVideo={localScreen} autoplay playsinline muted></video>
+						<button
+							class="voice-media-expand"
+							onclick={() => expandMedia('local:screen')}
+							aria-label="Expandir sua tela"
+							title="Expandir"
+						>
+							<Icon name="arrows-out-simple" variant="light" />
+						</button>
+						<div class="voice-media-label">
+							<Icon name="monitor" variant="light" />
+							<span>Sua tela</span>
+						</div>
+					</div>
+				{/if}
+
+				{#if localCamera}
+					<div class="voice-media-tile">
+						<video
+							use:streamVideo={localCamera}
+							autoplay
+							playsinline
+							muted
+							class="mirror"
+						></video>
+						<button
+							class="voice-media-expand"
+							onclick={() => expandMedia('local:camera')}
+							aria-label="Expandir sua câmera"
+							title="Expandir"
+						>
+							<Icon name="arrows-out-simple" variant="light" />
+						</button>
+						<div class="voice-media-label">
+							<Icon name="video-camera" variant="light" />
+							<span>Você</span>
+						</div>
+					</div>
+				{/if}
+
+				{#each remoteMedia as media (media.key)}
+					<div class:screen={media.kind === 'screen'} class="voice-media-tile">
+						<video use:streamVideo={media.stream} autoplay playsinline></video>
+						<button
+							class="voice-media-expand"
+							onclick={() => expandMedia(media.key)}
+							aria-label="Expandir transmissão de {mediaName(media.userId)}"
+							title="Expandir"
+						>
+							<Icon name="arrows-out-simple" variant="light" />
+						</button>
+						<div class="voice-media-label">
+							<Icon
+								name={media.kind === 'screen' ? 'monitor' : 'video-camera'}
+								variant="light"
+							/>
+							<span>
+								{mediaName(media.userId)}
+								{media.kind === 'screen' ? ' — tela' : ''}
+							</span>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
+
 		{#if joined}
 			<div class="voice-divider"></div>
 
@@ -278,6 +459,31 @@
 				</button>
 
 				<button
+					class="voice-btn"
+					class:active={myCameraOn}
+					onclick={toggleCamera}
+					disabled={voiceStore.state.cameraBusy}
+					aria-label={myCameraOn ? 'Desligar câmera' : 'Ligar câmera'}
+				>
+					<Icon
+						name={myCameraOn ? 'video-camera-slash' : 'video-camera'}
+						variant="light"
+					/>
+					<span>{myCameraOn ? 'Câmera off' : 'Câmera'}</span>
+				</button>
+
+				<button
+					class="voice-btn"
+					class:active={myScreenOn}
+					onclick={toggleScreen}
+					disabled={voiceStore.state.screenBusy}
+					aria-label={myScreenOn ? 'Parar compartilhamento' : 'Compartilhar tela'}
+				>
+					<Icon name="monitor" variant="light" />
+					<span>{myScreenOn ? 'Parar tela' : 'Tela'}</span>
+				</button>
+
+				<button
 					class="voice-btn danger"
 					onclick={leave}
 					aria-label="Sair da voz"
@@ -289,6 +495,45 @@
 		{/if}
 	</div>
 </div>
+
+<dialog
+	bind:this={expandedDialog}
+	class="voice-media-modal"
+	aria-label={expandedTitle}
+	onclose={closeExpanded}
+	onclick={(event) => {
+		if (event.target === expandedDialog) closeExpanded();
+	}}
+>
+	{#if expandedKey && expandedStream}
+		<div class="voice-media-modal-panel">
+			<div class="voice-media-modal-header">
+				<div class="voice-media-modal-title">
+					<Icon name={expandedKind === 'screen' ? 'monitor' : 'video-camera'} variant="light" />
+					<span>{expandedTitle}</span>
+				</div>
+				<button
+					class="voice-media-modal-close"
+					onclick={closeExpanded}
+					aria-label="Fechar"
+					title="Fechar"
+				>
+					<Icon name="x" variant="light" />
+				</button>
+			</div>
+			<div class="voice-media-modal-video">
+				<video
+					use:streamVideo={expandedStream}
+					autoplay
+					playsinline
+					muted={expandedKey.startsWith('local:')}
+					class:mirror={expandedKey === 'local:camera'}
+					class:contain={expandedKind === 'screen'}
+				></video>
+			</div>
+		</div>
+	{/if}
+</dialog>
 
 <style>
 	.voice-room {
@@ -792,6 +1037,208 @@
 		font-size: 11px;
 	}
 
+	.voice-media-grid {
+		position: relative;
+		z-index: 1;
+
+		display: grid;
+		gap: 10px;
+		align-items: stretch;
+
+		width: 100%;
+		box-sizing: border-box;
+		padding: 10px;
+	}
+
+	.voice-media-tile {
+		position: relative;
+		overflow: hidden;
+		min-width: 0;
+		min-height: 0;
+		aspect-ratio: 16 / 9;
+
+		border: 1px solid rgba(255, 255, 255, 0.7);
+		border-radius: 12px;
+		background: rgba(15, 34, 48, 0.9);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.12),
+			0 4px 12px rgba(20, 70, 100, 0.16);
+	}
+
+	.voice-media-tile.screen {
+		grid-column: auto;
+	}
+
+	.voice-media-tile video {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		background: #0b1117;
+	}
+
+	.voice-media-tile.screen video {
+		object-fit: contain;
+	}
+
+	.voice-media-tile video.mirror {
+		transform: scaleX(-1);
+	}
+
+	.voice-media-expand {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		z-index: 2;
+
+		display: flex;
+		align-items: center;
+		justify-content: center;
+
+		width: 34px;
+		height: 34px;
+		padding: 0;
+
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		border-radius: 9px;
+		background: rgba(7, 18, 27, 0.68);
+		color: white;
+		backdrop-filter: blur(8px);
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 120ms ease, background 120ms ease;
+	}
+
+	.voice-media-tile:hover .voice-media-expand,
+	.voice-media-expand:focus-visible {
+		opacity: 1;
+	}
+
+	.voice-media-expand:hover {
+		background: rgba(12, 35, 50, 0.9);
+	}
+
+	.voice-media-label {
+		position: absolute;
+		left: 8px;
+		bottom: 8px;
+
+		display: flex;
+		align-items: center;
+		gap: 5px;
+
+		max-width: calc(100% - 16px);
+		padding: 4px 7px;
+
+		border-radius: 8px;
+		background: rgba(6, 17, 25, 0.7);
+		color: white;
+		font-size: 11px;
+		font-weight: 650;
+		backdrop-filter: blur(8px);
+	}
+
+	.voice-media-label span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.voice-media-modal {
+		width: 100vw;
+		height: 100dvh;
+		max-width: none;
+		max-height: none;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		overflow: hidden;
+	}
+
+	.voice-media-modal::backdrop {
+		background: rgba(4, 10, 15, 0.86);
+		backdrop-filter: blur(10px);
+	}
+
+	.voice-media-modal-panel {
+		position: relative;
+		z-index: 1;
+
+		display: flex;
+		flex-direction: column;
+
+		width: 100%;
+		height: 100%;
+		overflow: hidden;
+
+		border: 0;
+		border-radius: 0;
+		background: #0b1117;
+		box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+	}
+
+	.voice-media-modal-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		min-height: 48px;
+		padding: 8px 10px 8px 14px;
+		background: rgba(15, 28, 38, 0.96);
+		color: white;
+	}
+
+	.voice-media-modal-title {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		font-size: 13px;
+		font-weight: 700;
+	}
+
+	.voice-media-modal-title span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.voice-media-modal-close {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 34px;
+		height: 34px;
+		padding: 0;
+		border: 0;
+		border-radius: 9px;
+		background: rgba(255, 255, 255, 0.08);
+		color: white;
+		cursor: pointer;
+	}
+
+	.voice-media-modal-video {
+		flex: 1 1 auto;
+		min-height: 0;
+		background: #05090c;
+	}
+
+	.voice-media-modal-video video {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.voice-media-modal-video video.contain {
+		object-fit: contain;
+	}
+
+	.voice-media-modal-video video.mirror {
+		transform: scaleX(-1);
+	}
+
 	.voice-controls {
 		position: relative;
 		z-index: 1;
@@ -840,7 +1287,12 @@
 		cursor: pointer;
 	}
 
-	.voice-btn:hover {
+	.voice-btn:disabled {
+		opacity: 0.55;
+		cursor: wait;
+	}
+
+	.voice-btn:hover:not(:disabled) {
 		background:
 			linear-gradient(
 				180deg,
@@ -904,6 +1356,10 @@
 			);
 	}
 
+	:global([data-theme='dark']) .voice-media-tile {
+		border-color: rgba(156, 213, 242, 0.14);
+	}
+
 	:global([data-theme='dark']) .voice-member-state,
 	:global([data-theme='dark']) .voice-empty-icon {
 		border-color: rgba(176, 225, 248, 0.1);
@@ -933,5 +1389,30 @@
 				rgba(104, 179, 218, 0.27),
 				rgba(42, 100, 132, 0.3)
 			);
+	}
+	@media (max-width: 900px) {
+		.voice-media-grid {
+			grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+		}
+	}
+
+	@media (max-width: 560px) {
+		.voice-media-grid {
+			grid-template-columns: 1fr !important;
+		}
+
+		.voice-media-expand {
+			opacity: 1;
+		}
+
+
+
+		.voice-controls {
+			flex-wrap: wrap;
+		}
+
+		.voice-btn.danger {
+			margin-left: 0;
+		}
 	}
 </style>

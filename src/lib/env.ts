@@ -5,3 +5,13 @@ import { env } from '$env/dynamic/public';
 
 export const PUBLIC_API_URL: string = (env.PUBLIC_API_URL ?? '') as string;
 export const PUBLIC_WS_URL: string = (env.PUBLIC_WS_URL ?? '') as string;
+
+
+function publicInt(value: string | undefined, fallback: number): number {
+	const parsed = Number.parseInt(value ?? '', 10);
+	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+// Must match VOICE_VIDEO_SLOTS / VOICE_AUDIO_SLOTS on the backend.
+export const PUBLIC_VOICE_VIDEO_SLOTS = publicInt(env.PUBLIC_VOICE_VIDEO_SLOTS, 6);
+export const PUBLIC_VOICE_AUDIO_SLOTS = publicInt(env.PUBLIC_VOICE_AUDIO_SLOTS, 8);
