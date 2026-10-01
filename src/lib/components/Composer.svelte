@@ -219,7 +219,12 @@
 
 	function onPaste(e: ClipboardEvent): void {
 		if (!canSendAttachment) return;
-		const pasted = Array.from(e.clipboardData?.files ?? []);
+		const direct = Array.from(e.clipboardData?.files ?? []);
+		const fromItems = Array.from(e.clipboardData?.items ?? [])
+			.filter((item) => item.kind === 'file')
+			.map((item) => item.getAsFile())
+			.filter((file): file is File => file !== null);
+		const pasted = direct.length ? direct : fromItems;
 		if (pasted.length === 0) return;
 		e.preventDefault();
 		addFiles(pasted);
