@@ -117,7 +117,24 @@
 			setFeedback('', err instanceof Error ? err.message : 'Erro ao buscar usuários.');
 			searchHasMore = false;
 		} finally {
-			if (generation === searchGeneration) searchLoading = false;
+			if (generation === searchGeneration) {
+				searchLoading = false;
+				if (
+					searchHasMore &&
+					searchResults.length === 0 &&
+					searchQuery.trim() === query
+				) {
+					setTimeout(() => {
+						if (
+							generation === searchGeneration &&
+							searchQuery.trim() === query &&
+							!searchLoading
+						) {
+							void loadSearchPages(false);
+						}
+					}, 120);
+				}
+			}
 		}
 	}
 
