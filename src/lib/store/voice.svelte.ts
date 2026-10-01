@@ -744,6 +744,20 @@ export function onVoiceStateUpdate(ev: WsVoiceStateUpdate): void {
 		};
 
 		state.members = next;
+	} else {
+		// voice_joined só é enviado ao usuário que entrou. Para quem já estava
+		// na call, o primeiro voice_state_update é também o evento de entrada.
+		// Sem este upsert, usuários que entram depois nunca chegam em
+		// desiredRemoteMedia(), então câmera/tela deles não é assinada.
+		state.members = [
+			...state.members,
+			{
+				user_id: ev.user_id,
+				muted: ev.muted,
+				camera_on: ev.camera_on,
+				screen_sharing: ev.screen_sharing
+			}
+		];
 	}
 
 	if (ev.muted) {
