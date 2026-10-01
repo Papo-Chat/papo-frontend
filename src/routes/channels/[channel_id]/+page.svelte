@@ -16,6 +16,7 @@
 	import Chat from '$lib/components/Chat.svelte';
 	import Composer from '$lib/components/Composer.svelte';
 	import VoiceRoom from '$lib/components/VoiceRoom.svelte';
+	import VoiceTextDrawer from '$lib/components/VoiceTextDrawer.svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 
 	// Resolve o canal da URL (id exato, depois nome).
@@ -42,6 +43,7 @@
 	let searchOpen = $state(false);
 
 	let highlightMessageId: string | null = $state(null);
+	let lastVoiceChannelId: string | null = null;
 
 	const loading = $derived(!!ch && ch.loading);
 	const hasMoreNewer = $derived(!!ch && ch.hasMoreNewer);
@@ -74,6 +76,22 @@
 
 	const typingChars = $derived(Array.from(typingText));
 
+	$effect(() => {
+		const id = channel?.id ?? null;
+		const type = channel?.type;
+
+		if (type !== 'voice') {
+			lastVoiceChannelId = null;
+			uiState.voiceChatDrawerOpen = false;
+			return;
+		}
+
+		if (id && id !== lastVoiceChannelId) {
+			lastVoiceChannelId = id;
+			uiState.voiceChatDrawerOpen = true;
+		}
+	});
+
 	// Carrega histórico e mensagens fixadas quando o canal muda.
 	$effect(() => {
 		const id = channel?.id;
@@ -97,6 +115,12 @@
 
 		uiState.scrollToMessageId = null;
 		if (!channel) return;
+
+		if (channel.type === 'voice') {
+			uiState.channelsDrawerOpen = false;
+			uiState.membersDrawerOpen = false;
+			uiState.voiceChatDrawerOpen = true;
+		}
 
 		const { messageId, createdAt } = target;
 
@@ -157,6 +181,12 @@
 		const msgId = result.id;
 
 		if (channel && result.channel_id === channel.id) {
+			if (channel.type === 'voice') {
+				uiState.channelsDrawerOpen = false;
+				uiState.membersDrawerOpen = false;
+				uiState.voiceChatDrawerOpen = true;
+			}
+
 			void messagesStore
 				.gotoMessage(channel.id, msgId, result.created_at)
 				.then((found) => {
@@ -188,7 +218,38 @@
 	/>
 
 	{#if channel.type === 'voice'}
-		<VoiceRoom {channel} />
+		<div class="voice-content">
+			<VoiceRoom {channel} />
+			<VoiceTextDrawer
+				{channel}
+				open={uiState.voiceChatDrawerOpen}
+				{messages}
+				{loading}
+				{hasMoreNewer}
+				{hasMoreOlder}
+				{highlightMessageId}
+				{joinNotice}
+				{replyTo}
+				disabled={!messagesStore.getChannel(channel.id)}
+				{onReply}
+				{onReplyCancel}
+				onSend={SendMsg}
+				onOpenChange={(open) => (uiState.voiceChatDrawerOpen = open)}
+				onJumpToLatest={() => messagesStore.setLatest(channel.id)}
+				onJumpToLastRead={() =>
+					channel.last_read_message
+						? messagesStore.gotoMessage(channel.id, channel.last_read_message, null)
+						: Promise.resolve(false)
+				}
+				onLoadMoreOlder={() => messagesStore.loadMoreOlder(channel.id)}
+				onLoadMoreNewer={() => messagesStore.loadMoreNewer(channel.id)}
+				onReachLatest={(message) => {
+					if (message) {
+						channelsStore.markReadLocal(channel.id, message.id, message.created_at);
+					}
+				}}
+			/>
+		</div>
 	{:else}
 		{#key channel.id}<Chat
 			{messages}
@@ -277,6 +338,21 @@
 {/if}
 
 <style>
+	.voice-content {
+		position: relative;
+		min-width: 0;
+		min-height: 0;
+		overflow-x: hidden;
+		overflow-y: auto;
+	}
+
+	.voice-content :global(.voice-room) {
+		width: 100%;
+		max-width: 100%;
+		min-width: 0;
+		min-height: 100%;
+	}
+
 	.typing-wave {
 		display: inline-flex;
 	}

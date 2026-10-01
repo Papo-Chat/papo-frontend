@@ -39,11 +39,22 @@
 	const canManageChannel = $derived(can('manage_channels', ctx));
 
 	function openSidebar(): void {
+		state.voiceChatDrawerOpen = false;
 		state.channelsDrawerOpen = true;
 	}
 
 	function openMembers(): void {
+		state.voiceChatDrawerOpen = false;
 		state.membersDrawerOpen = true;
+	}
+
+	function toggleVoiceChat(): void {
+		const next = !state.voiceChatDrawerOpen;
+		if (next) {
+			state.channelsDrawerOpen = false;
+			state.membersDrawerOpen = false;
+		}
+		state.voiceChatDrawerOpen = next;
 	}
 
 	function openNotifications(): void {
@@ -84,6 +95,19 @@
 	</div>
 
 	<div class="actions">
+		{#if channel.type === 'voice'}
+			<button
+				class="pill circle header-icon-btn voice-chat-btn"
+				class:active={state.voiceChatDrawerOpen}
+				onclick={toggleVoiceChat}
+				aria-label={state.voiceChatDrawerOpen ? 'Fechar chat de texto' : 'Abrir chat de texto'}
+				title={state.voiceChatDrawerOpen ? 'Fechar chat de texto' : 'Abrir chat de texto'}
+				aria-pressed={state.voiceChatDrawerOpen}
+			>
+				<Icon name="chat-circle-text" variant="light" />
+				<span class="voice-chat-label">Chat</span>
+			</button>
+		{/if}
 		<button
 			class="pill circle header-icon-btn members-btn"
 			onclick={openMembers}
@@ -147,5 +171,44 @@
 		font: inherit;
 		-webkit-appearance: none;
 		appearance: none;
+	}
+
+	.pill.circle.voice-chat-btn {
+		width: auto;
+		padding: 0 12px;
+		display: inline-flex;
+		gap: 6px;
+		border-radius: 14px;
+	}
+
+	.voice-chat-btn.active {
+		border-color: color-mix(in srgb, var(--accent) 48%, transparent);
+		background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+		color: var(--accent);
+	}
+
+	.voice-chat-label {
+		font-size: 12px;
+		font-weight: 750;
+	}
+
+	@media (max-width: 700px) {
+		.pill.circle.voice-chat-btn {
+			width: 38px;
+			height: 38px;
+			padding: 0;
+			gap: 0;
+			display: grid;
+			place-items: center;
+			border-radius: 50%;
+		}
+
+		.voice-chat-btn :global(.icon) {
+			margin: 0;
+		}
+
+		.voice-chat-label {
+			display: none;
+		}
 	}
 </style>
