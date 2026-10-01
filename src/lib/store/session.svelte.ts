@@ -13,6 +13,8 @@ import { load as loadRoles, reset as rolesReset } from '../store/roles.svelte';
 import { seed as seedSettings, reset as settingsReset } from '../store/settings.svelte';
 import * as channelsStore from '../store/channels.svelte';
 import * as messagesStore from '../store/messages.svelte';
+import * as dmsStore from '../store/dms.svelte';
+import * as blocksStore from '../store/blocks.svelte';
 import * as notificationsStore from '../store/notifications.svelte';
 import * as emojisStore from '../store/emojis.svelte';
 import * as serverStore from '../store/server.svelte';
@@ -197,6 +199,8 @@ export async function load(): Promise<void> {
 		await loadRoles();
 		seedSettings(me.settings.config, me.settings.version);
 		notificationsStore.load();
+		void dmsStore.load().catch(() => {});
+		void blocksStore.load().catch(() => {});
 
 		// Emoji consumers always operate on the complete server list. Finish
 		// pagination once during bootstrap; picker/admin never paginate.
@@ -238,6 +242,8 @@ export function clearLocalSession(): void {
 	channelsStore.reset();
 	serverStore.reset();
 	messagesStore.reset();
+	dmsStore.reset();
+	blocksStore.reset();
 	usersReset();
 	rolesReset();
 	emojisStore.reset();
