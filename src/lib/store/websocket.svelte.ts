@@ -284,6 +284,9 @@ export function dispatchEvent(event: WsOutbound): void {
 		case 'active_speaker_update':
 			voiceStore.onActiveSpeakerUpdate(event);
 			break;
+		case 'voice_audio_routes':
+			voiceStore.onVoiceAudioRoutes(event);
+			break;
 		case 'voice_leave':
 			voiceStore.onVoiceLeave(event);
 			break;
