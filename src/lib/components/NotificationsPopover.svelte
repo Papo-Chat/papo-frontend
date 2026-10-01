@@ -46,6 +46,12 @@
 		}
 	}
 
+	function interactiveTarget(target: EventTarget | null): boolean {
+		return !!(target as HTMLElement | null)?.closest(
+			'button, a, input, select, textarea, video, audio, [role="slider"]'
+		);
+	}
+
 	function openNotification(n: NotificationSummary): void {
 		notificationsStore.markRead([n.id]);
 		setScrollTarget(n.message_id, n.created_at);
@@ -90,7 +96,9 @@
 							class="popover-item notification-item {!n.read ? 'unread' : ''}"
 							role="button"
 							tabindex={0}
-							onclick={() => openNotification(n)}
+							onclick={(e) => {
+								if (!interactiveTarget(e.target)) openNotification(n);
+							}}
 							onkeydown={(e: KeyboardEvent) => {
 								if (e.key === 'Enter' || e.key === ' ') {
 									e.preventDefault();
