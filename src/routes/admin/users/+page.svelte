@@ -40,21 +40,26 @@
 	const canManageRoles = $derived(can('manage_roles', adminCtx));
 	const canManageServer = $derived(can('manage_server', adminCtx));
 
-	// UserSummary hydration is global and walks every /users page in the
-	// background. Admin consumes the same store instead of starting a competing
-	// pagination request that could cancel the global preload. Retry at most
-	// once here if the bootstrap preload failed before this page mounted.
-	let requestedUserHydration = false;
+	// Admin consumes the same bounded directory window as Members.
 	$effect(() => {
-		if (
-			!requestedUserHydration &&
-			!usersStore.state.list.loading &&
-			!usersStore.state.list.fullyLoaded
-		) {
-			requestedUserHydration = true;
-			void usersStore.loadAll();
+		if (usersStore.state.list.items.length === 0 && !usersStore.state.list.loading) {
+			void usersStore.loadList();
 		}
 	});
+
+	function onUsersScroll(e: Event): void {
+		const sc = e.currentTarget as HTMLElement;
+		const bottom = sc.scrollHeight - sc.scrollTop - sc.clientHeight;
+		if (bottom < 220 && usersStore.state.list.hasMoreNext && !usersStore.state.list.loading) {
+			void usersStore.loadMore();
+		} else if (
+			sc.scrollTop < 120 &&
+			usersStore.state.list.hasMorePrevious &&
+			!usersStore.state.list.loading
+		) {
+			void usersStore.loadPrevious();
+		}
+	}
 
 	const users = $derived(usersStore.state.list.items);
 	const roles = $derived(rolesStore.state.list);
@@ -227,7 +232,7 @@
 			Membros
 		</div>
 		<div class="admin-card-body">
-			<div class="users-list">
+			<div class="users-list" onscroll={onUsersScroll}>
 				{#each visibleUsers as u (u.id)}
 					{#if !isBanned(u.id)}
 						<div class="user-row">
