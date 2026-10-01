@@ -1,6 +1,14 @@
 <script lang="ts">
 	import * as settingsStore from '$lib/store/settings.svelte';
 	import * as channelsStore from '$lib/store/channels.svelte';
+	import { state as sessionState } from '$lib/store/session.svelte';
+	import {
+		clearNotificationSound,
+		notificationSoundInfo,
+		playNotificationSound,
+		setNotificationSound,
+		type NotificationSoundInfo
+	} from '$lib/utils/notification-sound';
 	import type { NotificationSettings, UserConfig } from '$lib/types';
 	import Icon from '$lib/components/Icon.svelte';
 
@@ -15,6 +23,9 @@
 	let allNotificationSetting = $state<NotificationSettings>('only_mentions');
 	let applyingAll = $state(false);
 	let channelSaving = $state(new Set<string>());
+	let soundInfo = $state<NotificationSoundInfo>({ name: 'MSN padrão', type: 'audio/mpeg', custom: false });
+	let soundSaving = $state(false);
+	let soundInput: HTMLInputElement | null = null;
 
 	const channels = $derived(
 		channelsStore.state.ordered
@@ -38,6 +49,53 @@
 		};
 		seededVersion = version;
 	});
+
+	async function refreshSoundInfo(): Promise<void> {
+		if (!sessionState.userId) return;
+		soundInfo = await notificationSoundInfo(sessionState.userId);
+	}
+
+	$effect(() => {
+		const userId = sessionState.userId;
+		if (!userId) return;
+		void refreshSoundInfo();
+	});
+
+	async function chooseSound(e: Event): Promise<void> {
+		const file = (e.currentTarget as HTMLInputElement).files?.[0];
+		if (!file || !sessionState.userId || soundSaving) return;
+		soundSaving = true;
+		error = null;
+		try {
+			await setNotificationSound(sessionState.userId, file);
+			await refreshSoundInfo();
+			await playNotificationSound(sessionState.userId);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Erro ao salvar som.';
+		} finally {
+			soundSaving = false;
+			if (soundInput) soundInput.value = '';
+		}
+	}
+
+	async function restoreDefaultSound(): Promise<void> {
+		if (!sessionState.userId || soundSaving) return;
+		soundSaving = true;
+		error = null;
+		try {
+			await clearNotificationSound(sessionState.userId);
+			await refreshSoundInfo();
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Erro ao restaurar som padrão.';
+		} finally {
+			soundSaving = false;
+		}
+	}
+
+	async function testSound(): Promise<void> {
+		if (!sessionState.userId) return;
+		await playNotificationSound(sessionState.userId);
+	}
 
 	async function save(): Promise<void> {
 		if (!config || saving) return;
@@ -137,9 +195,37 @@
 					<input type="checkbox" bind:checked={config.notifications.sound} />
 					<span class="cb-text">
 						<strong>Som</strong>
-						<span class="hint">Tocar som ao receber uma notificação</span>
+						<span class="hint">Tocar som ao receber uma notificação enquanto estiver online ou ausente</span>
 					</span>
 				</label>
+				<div class="sound-setting">
+					<div class="sound-copy">
+						<strong>Som de notificação</strong>
+						<span>{soundInfo.name}</span>
+					</div>
+					<div class="sound-actions">
+						<input
+							bind:this={soundInput}
+							class="sound-file-input"
+							type="file"
+							accept=".mp3,.ogg,audio/mpeg,audio/ogg"
+							onchange={chooseSound}
+						/>
+						<button class="admin-btn" type="button" onclick={() => soundInput?.click()} disabled={soundSaving}>
+							<Icon name="upload-simple" variant="light" />
+							Alterar
+						</button>
+						<button class="admin-btn" type="button" onclick={testSound}>
+							<Icon name="speaker-high" variant="light" />
+							Testar
+						</button>
+						{#if soundInfo.custom}
+							<button class="admin-btn" type="button" onclick={restoreDefaultSound} disabled={soundSaving}>
+								Padrão
+							</button>
+						{/if}
+					</div>
+				</div>
 			</div>
 		</div>
 
@@ -204,16 +290,16 @@
 					<label for="set-font">Tamanho da fonte</label>
 					<select id="set-font" class="admin-select" bind:value={config.display.fontSize}>
 						<option value="small">Pequena</option>
-						<option value="normal">Normal</option>
-						<option value="large">Grande</option>
+						<option value="medium">Normal</option>
+						<option value="huge">Grande</option>
 					</select>
 				</div>
 				<div class="admin-field">
 					<label for="set-density">Densidade</label>
 					<select id="set-density" class="admin-select" bind:value={config.display.messageDensity}>
 						<option value="compact">Compacta</option>
+						<option value="normal">Normal</option>
 						<option value="comfortable">Confortável</option>
-						<option value="spacious">Espaçosa</option>
 					</select>
 				</div>
 				<label class="admin-checkbox">
@@ -266,10 +352,20 @@
 	.channel-copy span { font-size:11px; color:var(--muted-soft); }
 	.channel-notification-select { width:170px; height:38px; font-size:13px; }
 	.empty { color:var(--muted-soft); font-size:13px; padding:18px; text-align:center; }
+	.sound-setting { display:flex; align-items:center; gap:12px; padding:10px 0 2px; border-top:1px solid var(--border); }
+	.sound-copy { display:flex; flex:1; min-width:0; flex-direction:column; gap:2px; }
+	.sound-copy strong { font-size:13px; color:var(--text-primary); }
+	.sound-copy span { font-size:11px; color:var(--muted-soft); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+	.sound-actions { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+	.sound-file-input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+	:global([data-theme='dark']) .sound-setting { border-color:rgba(180,220,245,.12); }
+	:global(html[data-ui-flat]) .sound-setting { background:transparent; }
 	@media(max-width:700px) {
 		.channel-notification-card .admin-card-head { align-items:flex-start; flex-direction:column; }
 		.notification-bulk { width:100%; margin-left:0; flex-wrap:wrap; }
 		.notification-bulk .admin-select { flex:1; min-width:150px; }
 		.channel-notification-select { width:145px; }
+		.sound-setting { align-items:flex-start; flex-direction:column; }
+		.sound-actions { justify-content:flex-start; }
 	}
 </style>
