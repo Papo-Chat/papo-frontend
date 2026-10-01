@@ -29,6 +29,7 @@
 	const myScreenOn = $derived(localScreen !== null);
 
 	let expandedKey = $state<string | null>(null);
+	let expandedDialog: HTMLDialogElement | null = null;
 	const expandedRemote = $derived(
 		expandedKey && !expandedKey.startsWith('local:')
 			? remoteMedia.find((media) => media.key === expandedKey) ?? null
@@ -173,6 +174,19 @@
 	function closeExpanded(): void {
 		expandedKey = null;
 	}
+
+	$effect(() => {
+		const dialog = expandedDialog;
+		const shouldOpen = Boolean(expandedKey && expandedStream);
+
+		if (!dialog) return;
+
+		if (shouldOpen && !dialog.open) {
+			dialog.showModal();
+		} else if (!shouldOpen && dialog.open) {
+			dialog.close();
+		}
+	});
 </script>
 
 <div class="voice-room">
@@ -473,13 +487,16 @@
 	</div>
 </div>
 
-{#if expandedKey && expandedStream}
-	<div class="voice-media-modal" role="dialog" aria-modal="true" aria-label={expandedTitle}>
-		<button
-			class="voice-media-modal-backdrop"
-			onclick={closeExpanded}
-			aria-label="Fechar transmissão expandida"
-		></button>
+<dialog
+	bind:this={expandedDialog}
+	class="voice-media-modal"
+	aria-label={expandedTitle}
+	onclose={closeExpanded}
+	onclick={(event) => {
+		if (event.target === expandedDialog) closeExpanded();
+	}}
+>
+	{#if expandedKey && expandedStream}
 		<div class="voice-media-modal-panel">
 			<div class="voice-media-modal-header">
 				<div class="voice-media-modal-title">
@@ -506,8 +523,8 @@
 				></video>
 			</div>
 		</div>
-	</div>
-{/if}
+	{/if}
+</dialog>
 
 <style>
 	.voice-room {
@@ -1119,23 +1136,20 @@
 	}
 
 	.voice-media-modal {
-		position: fixed;
-		inset: 0;
-		z-index: 1000;
-
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 24px;
+		width: 100vw;
+		height: 100dvh;
+		max-width: none;
+		max-height: none;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		overflow: hidden;
 	}
 
-	.voice-media-modal-backdrop {
-		position: absolute;
-		inset: 0;
-		border: 0;
-		background: rgba(4, 10, 15, 0.82);
+	.voice-media-modal::backdrop {
+		background: rgba(4, 10, 15, 0.86);
 		backdrop-filter: blur(10px);
-		cursor: default;
 	}
 
 	.voice-media-modal-panel {
@@ -1145,12 +1159,12 @@
 		display: flex;
 		flex-direction: column;
 
-		width: min(94vw, 1500px);
-		height: min(90vh, 960px);
+		width: 100%;
+		height: 100%;
 		overflow: hidden;
 
-		border: 1px solid rgba(255, 255, 255, 0.18);
-		border-radius: 16px;
+		border: 0;
+		border-radius: 0;
 		background: #0b1117;
 		box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
 	}
@@ -1376,15 +1390,7 @@
 			opacity: 1;
 		}
 
-		.voice-media-modal {
-			padding: 0;
-		}
 
-		.voice-media-modal-panel {
-			width: 100vw;
-			height: 100dvh;
-			border-radius: 0;
-		}
 
 		.voice-media-tile.screen {
 			grid-column: span 1;
