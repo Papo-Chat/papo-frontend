@@ -5,6 +5,7 @@
 	import * as usersStore from '$lib/store/users.svelte';
 	import * as channelsStore from '$lib/store/channels.svelte';
 	import * as messagesStore from '$lib/store/messages.svelte';
+	import * as notificationsStore from '$lib/store/notifications.svelte';
 	import * as rolesStore from '$lib/store/roles.svelte';
 	import { state as serverState } from '$lib/store/server.svelte';
 	import { channelAccess, can } from '$lib/store/roles.svelte';
@@ -142,7 +143,9 @@
 	}
 
 	function doDelete(): void {
-		messagesStore.remove(message.id);
+		void messagesStore.remove(message.id).then(() => {
+			notificationsStore.removeByMessage(message.id);
+		});
 		showDeleteConfirm = false;
 		showActions = false;
 	}
