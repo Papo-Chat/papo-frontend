@@ -382,7 +382,7 @@
                     </label>
 
                     <label class="search-link-check">
-                        <span>Contém link</span>
+                        <span>Contém Link</span>
                         <input type="checkbox" bind:checked={filters.hasLink} />
                     </label>
 
