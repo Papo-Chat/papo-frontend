@@ -437,6 +437,14 @@
 		}
 		if (currentLastId === lastMessageId) return;
 
+		// Forward pagination is navigation through already-existing history,
+		// not arrival of a new unread message.
+		if (loadingNewer) {
+			lastMessageId = currentLastId;
+			animatedMessageId = null;
+			return;
+		}
+
 		const previousLastId = lastMessageId;
 		const previousIndex = messages.findIndex((m) => m.id === previousLastId);
 
