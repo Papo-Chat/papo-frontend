@@ -8,11 +8,13 @@
 	let {
 		content = null,
 		message = null,
-		highlightText = ''
+		highlightText = '',
+		pinned = false
 	} = $props<{
 		content?: string | null;
 		message?: MessageWithAttachment | null;
 		highlightText?: string;
+		pinned?: boolean;
 	}>();
 
 	const text = $derived(message?.content ?? content ?? '');
@@ -29,7 +31,7 @@
 		{#if message.attachments.length}
 			<div class="compact-attachments">
 				{#each message.attachments as attachment (attachment.id)}
-					<Attachment {attachment} />
+					<Attachment {attachment} {pinned} />
 				{/each}
 			</div>
 		{/if}
