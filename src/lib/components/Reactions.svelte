@@ -61,6 +61,7 @@
 				id: u.user_id,
 				username: '',
 				nickname: null,
+				banned: false,
 				status: null,
 				status_message: null,
 				typing: null,
