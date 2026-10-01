@@ -32,14 +32,9 @@ function cacheUser(dm: DirectConversation): void {
 
 export function upsert(dm: DirectConversation): void {
 	cacheUser(dm);
-	const current = state.byId.get(dm.id);
 	state.byId.set(dm.id, {
 		...dm,
-		unread_count: state.openDmId === dm.id ? 0 : dm.unread_count,
-		last_read_message:
-			state.openDmId === dm.id
-				? (current?.last_message?.id ?? dm.last_read_message)
-				: dm.last_read_message
+		unread_count: state.openDmId === dm.id ? 0 : dm.unread_count
 	});
 	rebuildOrdered();
 }
