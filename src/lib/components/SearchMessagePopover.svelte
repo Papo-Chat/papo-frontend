@@ -352,17 +352,16 @@
                         </select>
                     </label>
 
-                    {#if authorOptions.length}
-                        <label class="search-control search-control-wide">
-                            <span>Autor</span>
-                            <select class="admin-select" bind:value={filters.author} aria-label="Autor">
-                                <option class="admin-option" value="">Todos os autores</option>
-                                {#each authorOptions as u (u.id)}
-                                    <option class="admin-option" value={u.id}>{u.nickname || u.username}</option>
-                                {/each}
-                            </select>
-                        </label>
-                    {/if}
+                    <label class="search-control search-control-wide">
+                        <span>Autor</span>
+                        <input
+                            class="admin-select"
+                            list="search-author-options"
+                            bind:value={filters.author}
+                            placeholder="UUID ou usuário conhecido"
+                            aria-label="Autor"
+                        />
+                    </label>
 
                     <label class="search-control search-control-wide">
                         <span>Canal</span>
@@ -376,17 +375,16 @@
                         </select>
                     </label>
 
-                    {#if authorOptions.length}
-                        <label class="search-control search-control-wide">
-                            <span>Menciona</span>
-                            <select class="admin-select" bind:value={filters.mention} aria-label="Usuário mencionado">
-                                <option class="admin-option" value="">Qualquer usuário</option>
-                                {#each authorOptions as u (u.id)}
-                                    <option class="admin-option" value={u.id}>{u.nickname || u.username}</option>
-                                {/each}
-                            </select>
-                        </label>
-                    {/if}
+                    <label class="search-control search-control-wide">
+                        <span>Menciona</span>
+                        <input
+                            class="admin-select"
+                            list="search-author-options"
+                            bind:value={filters.mention}
+                            placeholder="UUID ou usuário conhecido"
+                            aria-label="Usuário mencionado"
+                        />
+                    </label>
 
                     <label class="search-control search-check">
                         <input type="checkbox" bind:checked={filters.hasLink} />
@@ -403,6 +401,12 @@
                         <input class="admin-select" type="date" bind:value={filters.dateEnd} aria-label="Data final" />
                     </label>
                 </div>
+
+                <datalist id="search-author-options">
+                    {#each authorOptions as u (u.id)}
+                        <option value={u.id}>{u.nickname || u.username}</option>
+                    {/each}
+                </datalist>
             </div>
 
             <div class="search-feedback" aria-live="polite">
