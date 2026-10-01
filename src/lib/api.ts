@@ -359,8 +359,14 @@ export const auth = {
 // ── users ──────────────────────────────────────────────
 
 export const users = {
-	list(q?: { since?: string; last_id?: string }): Promise<UserList> {
+	list(q?: { since?: string; last_id?: string; order?: 'asc' | 'desc' }): Promise<UserList> {
 		return request<UserList>('/users', { query: q });
+	},
+	summaryBatch(ids: string[]): Promise<import('./types').UserSummary[]> {
+		return request<import('./types').UserSummary[]>('/users/user_summary_batch', {
+			method: 'POST',
+			body: { ids }
+		});
 	},
 	profile(id: string): Promise<UserProfile> {
 		return request<UserProfile>(`/users/${encodeURIComponent(id)}/profile`);
@@ -528,6 +534,12 @@ export const channels = {
 			{ method: 'PUT', body: req }
 		);
 	},
+	removeRolePermissions(id: string, roleId: string): Promise<void> {
+		return request<void>(
+			`/channels/${encodeURIComponent(id)}/role/${encodeURIComponent(roleId)}`,
+			{ method: 'DELETE' }
+		);
+	},
 	setChannelUserSetting(
 		channelId: string,
 		userId: string,
@@ -543,7 +555,10 @@ export const channels = {
 // ── messages ───────────────────────────────────────────
 
 export const messages = {
-	list(channelId: string, q?: { since?: string; last_id?: string }): Promise<MessageList> {
+	list(
+		channelId: string,
+		q?: { since?: string; last_id?: string; order?: 'asc' | 'desc' }
+	): Promise<MessageList> {
 		return request<MessageList>(`/channels/${encodeURIComponent(channelId)}/messages`, {
 			query: q
 		});
