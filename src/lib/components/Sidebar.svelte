@@ -72,6 +72,12 @@
 		{ to: '/user/settings', icon: 'gear', variant: 'light' as const, label: 'Ajustes' }
 	]);
 
+	function openDirectMessages(): void {
+		state.channelsDrawerOpen = false;
+		state.membersDrawerOpen = false;
+		state.railDrawerOpen = true;
+	}
+
 	function navigateShortcut(to: string): void {
 		state.channelsDrawerOpen = false;
 		goto(to);
@@ -128,6 +134,16 @@
 	<div class="mobile-rail-shortcuts">
 		<div class="section-title">ATALHOS</div>
 		<div class="mobile-rail-dock" role="toolbar" aria-label="Atalhos">
+			<button
+				class="mobile-rail-action"
+				aria-label="Mensagens diretas"
+				onclick={openDirectMessages}
+			>
+				<span class="mobile-rail-icon">
+					<Icon name="chat-circle-dots" variant="light" />
+				</span>
+				<span>Mensagens</span>
+			</button>
 			{#each shortcuts as s}
 				<button
 					class="mobile-rail-action"
