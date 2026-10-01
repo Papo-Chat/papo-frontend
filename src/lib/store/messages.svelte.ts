@@ -1149,7 +1149,7 @@ export function ensureLoaded(channelId: string): Promise<void> {
 export function loadMoreOlder(channelId: string): Promise<void> {
 	const ch = state.channels.get(channelId);
 	// Guard: no in-flight page + a cursor to continue from (P1.11).
-	if (!ch || ch.loading || !ch.cursorOlder) {
+	if (!ch || ch.loading || !ch.hasMoreOlder || !ch.cursorOlder) {
 		return Promise.resolve();
 	}
 	// Navigating up → historical window.
