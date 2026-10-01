@@ -16,8 +16,12 @@ let joinNoticeSerial = 0;
 const PROFILE_CACHE_TARGET = 75;
 const PROFILE_CACHE_MAX = 120;
 const USER_LIST_MAX = 300;
+const SUMMARY_CACHE_TARGET = 1000;
+const SUMMARY_CACHE_MAX = 1500;
 
 const summaryInFlight = new Map<string, Promise<UserSummary | null>>();
+const summaryLastUsed = new Map<string, number>();
+let summaryTouchSeq = 0;
 
 // Profile cache metadata stays outside Svelte state: it is eviction/request
 // bookkeeping, not UI state.
@@ -67,6 +71,35 @@ export const state = $state({
         loadGeneration: 0
     }
 });
+
+function touchSummary(id: string): void {
+    summaryLastUsed.set(id, (summaryTouchSeq += 1));
+}
+
+function summaryIsProtected(id: string): boolean {
+    return (
+        state.list.items.some((user) => user.id === id) ||
+        state.presence.has(id) ||
+        state.profiles.has(id) ||
+        retainedProfileCounts.has(id) ||
+        state.joinNotice?.userId === id
+    );
+}
+
+function evictSummaries(): void {
+    if (state.byId.size <= SUMMARY_CACHE_MAX) return;
+
+    const candidates = [...state.byId.keys()]
+        .filter((id) => !summaryIsProtected(id))
+        .sort((a, b) => (summaryLastUsed.get(a) ?? 0) - (summaryLastUsed.get(b) ?? 0));
+
+    for (const id of candidates) {
+        if (state.byId.size <= SUMMARY_CACHE_TARGET) break;
+        state.byId.delete(id);
+        summaryLastUsed.delete(id);
+        state.bannedIds.delete(id);
+    }
+}
 
 function touchProfile(id: string): void {
     profileLastUsed.set(id, (profileTouchSeq += 1));
@@ -167,11 +200,14 @@ function publishUserWindow(items: UserSummary[], hasPrev: boolean, hasNext: bool
     state.list.cursorStart = cursorFor(state.list.items[0]);
     state.list.cursorEnd = cursorFor(state.list.items.at(-1));
     state.list.cursor = state.list.cursorEnd;
+    for (const user of state.list.items) touchSummary(user.id);
+    evictSummaries();
 }
 
 function ingestSummaries(summaries: UserSummary[]): void {
     for (const summary of summaries) {
         state.byId.set(summary.id, summary);
+        touchSummary(summary.id);
         if (summary.banned) state.bannedIds.add(summary.id);
         else state.bannedIds.delete(summary.id);
     }
@@ -183,7 +219,10 @@ export async function ensureSummaries(ids: string[]): Promise<UserSummary[]> {
     const missing: string[] = [];
 
     for (const id of unique) {
-        if (state.byId.has(id)) continue;
+        if (state.byId.has(id)) {
+            touchSummary(id);
+            continue;
+        }
         const pending = summaryInFlight.get(id);
         if (pending) waits.add(pending);
         else missing.push(id);
@@ -210,6 +249,7 @@ export async function ensureSummaries(ids: string[]): Promise<UserSummary[]> {
     }
 
     if (waits.size) await Promise.all(waits);
+    evictSummaries();
     return unique
         .map((id) => state.byId.get(id) ?? null)
         .filter((user): user is UserSummary => user !== null);
@@ -364,6 +404,7 @@ function syncSummaries(summaries: UserSummary[]): void {
         state.byId.set(summary.id, summary);
         if (summary.banned) state.bannedIds.add(summary.id);
         else state.bannedIds.delete(summary.id);
+        touchSummary(summary.id);
         updates.set(summary.id, summary);
     }
 
@@ -522,6 +563,7 @@ export function setPresence(
         });
     }
     state.presence = next;
+    evictSummaries();
 }
 
 // ── typing (TTL) ────────────────────────────────────────
@@ -719,6 +761,8 @@ export function reset(): void {
     retainedProfileCounts.clear();
     profileInFlight.clear();
     summaryInFlight.clear();
+    summaryLastUsed.clear();
+    summaryTouchSeq = 0;
     profileLoadQueue.clear();
     profileLoadFlushQueued = false;
     profileTouchSeq = 0;
