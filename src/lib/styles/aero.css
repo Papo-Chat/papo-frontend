@@ -690,13 +690,6 @@ button.name:focus-visible {
 		box-shadow 0.22s ease,
 		border-color 0.22s ease;
 }
-.bubble.giphy-bubble {
-	display: inline-flex;
-	width: auto;
-	max-width: 100%;
-	box-sizing: border-box;
-	padding: 8px;
-}
 .bubble::after {
 	content: '';
 	position: absolute;
