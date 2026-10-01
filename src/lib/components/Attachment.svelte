@@ -11,6 +11,8 @@
 
 	let lightboxOpen = $state(false);
 	let lightbox: HTMLDialogElement | undefined = $state();
+	let downloading = $state(false);
+	let downloadError = $state('');
 
 	const thumbUrl = $derived(
 		attachment.thumbnail_id !== null ? attachmentThumbnailUrl(attachment.id) : ''
@@ -92,6 +94,28 @@
 	onDestroy(() => {
 		if (audioObjectUrl) URL.revokeObjectURL(audioObjectUrl);
 	});
+
+	async function downloadAttachment(): Promise<void> {
+		if (downloading) return;
+		downloading = true;
+		downloadError = '';
+		try {
+			const blob = await fetchMediaBlob(fullUrl);
+			const objectUrl = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = objectUrl;
+			link.download = name;
+			link.style.display = 'none';
+			document.body.appendChild(link);
+			link.click();
+			link.remove();
+			setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+		} catch {
+			downloadError = 'Não foi possível baixar o anexo.';
+		} finally {
+			downloading = false;
+		}
+	}
 
 	function openLightbox(): void {
 		lightboxOpen = true;
@@ -191,20 +215,30 @@
 			<span class="audio-duration">/ {audioDuration > 0 ? formatAudioTime(audioDuration) : (audioLoading ? '…' : '--:--')}</span>
 		</span>
 	</div>
-{:else if (attachment.mime_type.startsWith('video/') || attachment.mime_type.startsWith('application/octet-stream')) }
-	<!-- Vídeo / binário genérico: player inline quando não foi reconhecido como áudio. -->
+{:else if attachment.mime_type.startsWith('video/')}
+	<!-- Vídeo: player inline. Binários genéricos seguem para o download abaixo. -->
 	<div class="attachment-media">
 		<video src={fullUrl} controls class:pinned-attachment={pinned}></video>
 	</div>
 {:else}
 	<!-- Arquivo: chip de download. -->
-	<a class="attachment-file pill" class:pinned-attachment={pinned} href={fullUrl} download={name} target="_blank" rel="noopener">
-		<span class="attachment-icon">📎</span>
-		<span class="attachment-name">{name}</span>
+	<button
+		type="button"
+		class="attachment-file pill"
+		class:pinned-attachment={pinned}
+		disabled={downloading}
+		onclick={downloadAttachment}
+		aria-label={`Baixar ${name}`}
+	>
+		<span class="attachment-icon" aria-hidden="true">📎</span>
+		<span class="attachment-name">{downloading ? 'Baixando…' : name}</span>
 		{#if attachment.size_bytes > 0}
 			<span class="attachment-size">{formatBytes(attachment.size_bytes)}</span>
 		{/if}
-	</a>
+	</button>
+	{#if downloadError}
+		<span class="attachment-error" role="alert">{downloadError}</span>
+	{/if}
 {/if}
 
 <style>
@@ -330,8 +364,19 @@
 		background: var(--hover);
 		transform: translateY(-2px);
 	}
-	.attachment-file:active {
+	.attachment-file:active:not(:disabled) {
 		transform: translateY(0) scale(0.995);
+	}
+	.attachment-file:disabled {
+		opacity: 0.68;
+		cursor: wait;
+		transform: none;
+	}
+	.attachment-error {
+		display: block;
+		margin: 2px 0 0 6px;
+		font-size: 11px;
+		color: var(--danger);
 	}
 	.attachment-icon {
 		font-size: 12px;
