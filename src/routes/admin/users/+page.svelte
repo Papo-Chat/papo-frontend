@@ -82,6 +82,25 @@
 
 		const generation = searchGeneration;
 		searchLoading = true;
+
+		if (
+			reset &&
+			/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(query)
+		) {
+			try {
+				const user = await usersStore.ensureSummary(query);
+				if (generation === searchGeneration) {
+					searchResults = user ? [user] : [];
+					searchHasMore = false;
+				}
+			} catch (err) {
+				setFeedback('', err instanceof Error ? err.message : 'Erro ao buscar usuário.');
+			} finally {
+				if (generation === searchGeneration) searchLoading = false;
+			}
+			return;
+		}
+
 		try {
 			let pages = 0;
 			let added = 0;
@@ -112,6 +131,7 @@
 				pages += 1;
 
 				if (!searchHasMore || added >= 30) break;
+				await new Promise<void>((resolve) => setTimeout(resolve, 60));
 			}
 		} catch (err) {
 			setFeedback('', err instanceof Error ? err.message : 'Erro ao buscar usuários.');
