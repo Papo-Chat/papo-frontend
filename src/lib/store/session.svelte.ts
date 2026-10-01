@@ -19,6 +19,7 @@ import * as serverStore from '../store/server.svelte';
 import * as websocketStore from '../store/websocket.svelte';
 import * as voiceStore from '../store/voice.svelte';
 import type { RoleSummary } from '../types';
+import { prepareNotificationSound } from '../utils/notification-sound';
 import {
 	bumpSessionEpoch,
 	currentSessionEpoch,
@@ -190,6 +191,7 @@ export async function load(): Promise<void> {
 		state.avatarFormat = me.avatar_format;
 		state.status = me.status;
 		state.roles = me.roles;
+		void prepareNotificationSound(me.id).catch(() => {});
 		// Seed the dependent stores.
 		seedMe(me);
 		await loadRoles();
