@@ -100,7 +100,10 @@
 								if (!interactiveTarget(e.target)) openNotification(n);
 							}}
 							onkeydown={(e: KeyboardEvent) => {
-								if (e.key === 'Enter' || e.key === ' ') {
+								if (
+									(e.key === 'Enter' || e.key === ' ') &&
+									e.target === e.currentTarget
+								) {
 									e.preventDefault();
 									openNotification(n);
 								}
