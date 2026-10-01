@@ -221,7 +221,7 @@ export function clearLocalSession(): void {
 	stopAutoAway();
 	// Stop the refresh timer, disconnect the WS (no reconnect), drop voice.
 	websocketStore.disconnect();
-	voiceStore.onSocketClose();
+	// disconnect() already tears down voice state.
 	// Clear the session itself.
 	state.userId = null;
 	state.username = null;
