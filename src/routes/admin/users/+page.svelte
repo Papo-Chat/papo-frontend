@@ -203,12 +203,12 @@
 		)
 	);
 
-	const banned = $derived(visibleUsers.filter((user) => user.banned ?? usersStore.state.bannedIds.has(user.id)));
-	const activeCount = $derived(visibleUsers.filter((user) => !(user.banned ?? usersStore.state.bannedIds.has(user.id))).length);
+	const banned = $derived(visibleUsers.filter((user) => isBanned(user.id)));
+	const activeCount = $derived(visibleUsers.filter((user) => !isBanned(user.id)).length);
 
 	function isBanned(id: string): boolean {
 		const user = usersStore.state.byId.get(id);
-		return user?.banned ?? usersStore.state.bannedIds.has(id);
+		return user?.banned === true || usersStore.state.bannedIds.has(id);
 	}
 
 	async function toggleBan(u: UserSummary): Promise<void> {
@@ -219,6 +219,9 @@
 		const nextBan = !isBanned(u.id);
 		try {
 			await usersStore.setBanState(u.id, nextBan);
+			searchResults = searchResults.map((user) =>
+				user.id === u.id ? { ...user, banned: nextBan } : user
+			);
 			setFeedback(nextBan ? 'Usuário banido.' : 'Usuário desbanido.');
 		} catch (err) {
 			setFeedback('', err instanceof Error ? err.message : 'Erro ao alterar banimento.');
