@@ -26,7 +26,7 @@ O dev server faz proxy de todos os prefixos de API e do WebSocket para o backend
 npm run build
 ```
 
-Sobe o build atrás do nginx, que faz o upgrade de WebSocket no caminho `/ws`. Em produção o API/WS ficam na mesma origem (deixe `PUBLIC_API_URL` e `PUBLIC_WS_URL` vazios).
+Sobe o build estático atrás do nginx. Em produção, o frontend pode usar uma API pública em outro origin, por exemplo `https://api.papo.example.com`, configurando `PUBLIC_API_URL` e `PUBLIC_WS_URL`.
 
 Guia de deploy em VPS com nginx e Cloudflare: [`docs/production.md`](docs/production.md).
 
@@ -46,5 +46,5 @@ npm run check
 
 | Variável         | Descrição                                                               |
 | ---------------- | ----------------------------------------------------------------------- |
-| `PUBLIC_API_URL` | Base URL da API. Vazio = same-origin.                                   |
-| `PUBLIC_WS_URL`  | Base URL do WebSocket (ex: `ws://localhost:8080`). Vazio = same-origin. |
+| `PUBLIC_API_URL` | Base URL pública da API. Vazio = same-origin. Ex.: `https://api.papo.example.com`. |
+| `PUBLIC_WS_URL`  | URL do WebSocket. Vazio = same-origin. Ex.: `wss://api.papo.example.com/ws`. |

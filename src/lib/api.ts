@@ -182,6 +182,9 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 		return new Promise<T>((resolve, reject) => {
 			const xhr = new XMLHttpRequest();
 			xhr.open(method, buildUrl(path, q), true);
+			// Multipart uploads must carry the HttpOnly Auth cookie when the
+			// frontend and API use different origins (e.g. papo.* → api.papo.*).
+			xhr.withCredentials = true;
 			for (const [k, v] of Object.entries(headers)) {
 				xhr.setRequestHeader(k, v);
 			}
