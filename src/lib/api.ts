@@ -71,6 +71,29 @@ import type {
 
 // ── ApiError (RFC 7807) ─────────────────────────────────
 
+function apiErrorText(value: unknown): string | null {
+	if (typeof value === 'string') {
+		const text = value.trim();
+		return text || null;
+	}
+	if (value == null || typeof value !== 'object') {
+		return null;
+	}
+
+	const record = value as Record<string, unknown>;
+	for (const key of ['detail', 'title', 'message', 'error']) {
+		const text = apiErrorText(record[key]);
+		if (text) return text;
+	}
+
+	try {
+		const json = JSON.stringify(value);
+		return json && json !== '{}' ? json : null;
+	} catch {
+		return null;
+	}
+}
+
 export class ApiError extends Error {
 	type: string;
 	title: string;
@@ -82,13 +105,13 @@ export class ApiError extends Error {
 	constructor(data: unknown, requestId: string | null) {
 		const d =
 			typeof data === 'string' ? { detail: data } : ((data ?? {}) as Record<string, unknown>);
-		const msg = String(d.detail ?? d.title ?? String(d));
+		const msg = apiErrorText(d) ?? 'Erro na requisição';
 		super(msg);
 		this.name = 'ApiError';
 		this.type = typeof d.type === 'string' ? d.type : 'about:blank';
 		this.title = typeof d.title === 'string' ? d.title : 'Error';
 		this.status = typeof d.status === 'number' ? d.status : 0;
-		this.detail = typeof d.detail === 'string' ? d.detail : String(d.detail ?? '');
+		this.detail = apiErrorText(d.detail) ?? apiErrorText(d.message) ?? msg;
 		this.instance = d.instance == null ? null : String(d.instance);
 		this.requestId = requestId;
 	}
