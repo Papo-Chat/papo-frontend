@@ -16,14 +16,15 @@
 		onClose: () => void;
 	}>();
 
-	const name = $derived(dm.user.nickname || dm.user.username);
-	const status = $derived(usersStore.effectiveStatus(dm.user.id));
+	const user = $derived(usersStore.state.byId.get(dm.user.id) ?? dm.user);
+	const name = $derived(user.nickname || user.username);
+	const status = $derived(usersStore.effectiveStatus(user.id));
 	const unread = $derived(Math.max(0, dm.unread_count));
 </script>
 
 <div class="dm-rail-item" class:active>
 	<button class="dm-open" type="button" onclick={onOpen} aria-label={`Abrir conversa com ${name}`} title={name}>
-		<Avatar user={dm.user} size={46} />
+		<Avatar {user} size={46} />
 		<span class="dm-status {status}" aria-hidden="true"></span>
 		{#if unread > 0}
 			<span class="dm-unread" aria-label={`${unread} mensagens não lidas`}>{unread > 99 ? '99+' : unread}</span>
