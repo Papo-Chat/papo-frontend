@@ -4,11 +4,14 @@
     // localmente ou navegar (com scroll target).
     import { api } from '$lib/api';
     import * as usersStore from '$lib/store/users.svelte';
+    import * as channelsStore from '$lib/store/channels.svelte';
+    import * as messagesStore from '$lib/store/messages.svelte';
     import type { SearchRequest, SearchResult, UserSummary } from '$lib/types';
     import { formatTime } from '$lib/utils/time';
     import { nextCursor, type KeysetCursor } from '$lib/utils/keyset';
     import Icon from './Icon.svelte';
     import Avatar from './Avatar.svelte';
+    import CompactMessageContent from './CompactMessageContent.svelte';
 
     let {
         open = $bindable(false),
@@ -45,22 +48,36 @@
         dateEnd: string;
         order: 'asc' | 'desc';
         containsAttachment: AttachmentFilter;
+        channelId: string;
+        mention: string;
+        hasLink: boolean;
     }>({
         author: '',
         dateStart: '',
         dateEnd: '',
         order: 'desc',
-        containsAttachment: ''
+        containsAttachment: '',
+        channelId: '',
+        mention: '',
+        hasLink: false
     });
 
-    const authorOptions = $derived(usersStore.state.list.items);
+    const authorOptions = $derived([...usersStore.state.byId.values()]);
+    const channelOptions = $derived(
+        channelsStore.state.ordered
+            .map((id) => channelsStore.state.byId.get(id))
+            .filter((channel) => channel && channel.type === 'text')
+    );
 
     const hasActiveFilters = $derived(
         searchQuery.trim() !== '' ||
         filters.author !== '' ||
         filters.dateStart !== '' ||
         filters.dateEnd !== '' ||
-        filters.containsAttachment !== ''
+        filters.containsAttachment !== '' ||
+        filters.channelId !== '' ||
+        filters.mention !== '' ||
+        filters.hasLink
     );
 
     // Used by the debounce effect so every searchable filter participates in
@@ -73,7 +90,10 @@
             filters.dateStart,
             filters.dateEnd,
             filters.order,
-            filters.containsAttachment
+            filters.containsAttachment,
+            filters.channelId,
+            filters.mention,
+            filters.hasLink ? 'link' : ''
         ].join('|')
     );
 
@@ -94,6 +114,9 @@
         if (filters.dateEnd) {
             req.date_end = filters.dateEnd;
         }
+        if (filters.channelId) req.channel_id = filters.channelId;
+        if (filters.mention) req.mention = filters.mention;
+        if (filters.hasLink) req.has = 'link';
         if (filters.order !== 'desc') {
             req.order = filters.order;
         }
@@ -206,57 +229,6 @@
         return result.author_id ? usersStore.state.byId.get(result.author_id) : undefined;
     }
 
-    type HighlightPart = { text: string; match: boolean };
-
-    function searchExcerpt(content: string, query: string): string {
-        const q = query.trim();
-        if (!q) return content;
-
-        const lower = content.toLocaleLowerCase();
-        const needle = q.toLocaleLowerCase();
-        const matchAt = lower.indexOf(needle);
-        const maxChars = 260;
-
-        if (content.length <= maxChars) return content;
-        if (matchAt < 0) return content.slice(0, maxChars).trimEnd() + '…';
-
-        const room = Math.max(0, maxChars - q.length);
-        let start = Math.max(0, matchAt - Math.floor(room / 2));
-        let end = Math.min(content.length, start + maxChars);
-
-        if (end === content.length) {
-            start = Math.max(0, end - maxChars);
-        }
-
-        return `${start > 0 ? '…' : ''}${content.slice(start, end)}${end < content.length ? '…' : ''}`;
-    }
-
-    function highlightParts(content: string, query: string): HighlightPart[] {
-        const excerpt = searchExcerpt(content, query);
-        const q = query.trim();
-        if (!q) return [{ text: excerpt, match: false }];
-
-        const lower = excerpt.toLocaleLowerCase();
-        const needle = q.toLocaleLowerCase();
-        const parts: HighlightPart[] = [];
-        let cursor = 0;
-
-        while (cursor < excerpt.length) {
-            const at = lower.indexOf(needle, cursor);
-            if (at < 0) {
-                parts.push({ text: excerpt.slice(cursor), match: false });
-                break;
-            }
-            if (at > cursor) {
-                parts.push({ text: excerpt.slice(cursor, at), match: false });
-            }
-            parts.push({ text: excerpt.slice(at, at + q.length), match: true });
-            cursor = at + q.length;
-        }
-
-        return parts.length ? parts : [{ text: excerpt, match: false }];
-    }
-
     function close(): void {
         if (open) {
             open = false;
@@ -267,8 +239,17 @@
             filters.dateEnd = '';
             filters.order = 'desc';
             filters.containsAttachment = '';
+            filters.channelId = '';
+            filters.mention = '';
+            filters.hasLink = false;
         }
     }
+
+    $effect(() => {
+        if (!open || results.length === 0) return;
+        const ids = results.map((result) => result.author_id).filter((id): id is string => !!id);
+        if (ids.length) void usersStore.ensureSummaries(ids).catch(() => {});
+    });
 
     // Autofocus the input when the popover opens.
     $effect(() => {
@@ -372,6 +353,35 @@
                         </label>
                     {/if}
 
+                    <label class="search-control search-control-wide">
+                        <span>Canal</span>
+                        <select class="admin-select" bind:value={filters.channelId} aria-label="Canal">
+                            <option class="admin-option" value="">Todos os canais</option>
+                            {#each channelOptions as channel (channel?.id)}
+                                {#if channel}
+                                    <option class="admin-option" value={channel.id}>#{channel.name}</option>
+                                {/if}
+                            {/each}
+                        </select>
+                    </label>
+
+                    {#if authorOptions.length}
+                        <label class="search-control search-control-wide">
+                            <span>Menciona</span>
+                            <select class="admin-select" bind:value={filters.mention} aria-label="Usuário mencionado">
+                                <option class="admin-option" value="">Qualquer usuário</option>
+                                {#each authorOptions as u (u.id)}
+                                    <option class="admin-option" value={u.id}>{u.nickname || u.username}</option>
+                                {/each}
+                            </select>
+                        </label>
+                    {/if}
+
+                    <label class="search-control search-check">
+                        <input type="checkbox" bind:checked={filters.hasLink} />
+                        <span>Contém link</span>
+                    </label>
+
                     <label class="search-control">
                         <span>De</span>
                         <input class="admin-select" type="date" bind:value={filters.dateStart} aria-label="Data inicial" />
@@ -434,19 +444,14 @@
                                             <span class="time">{formatTime(m.created_at)}</span>
                                         </div>
 
-                                        {#if m.content}
-                                            <div class="content search-message-content">
-                                                {#each highlightParts(m.content, searchQuery) as part}
-                                                    {#if part.match}
-                                                        <mark>{part.text}</mark>
-                                                    {:else}
-                                                        {part.text}
-                                                    {/if}
-                                                {/each}
-                                            </div>
-                                        {:else}
-                                            <div class="content search-message-content"><span class="content-attachment">Anexo</span></div>
-                                        {/if}
+                                        {@const cachedMessage = messagesStore.getMessage(m.channel_id, m.id)}
+                                        <div class="content search-message-content">
+                                            <CompactMessageContent
+                                                content={m.content}
+                                                message={cachedMessage}
+                                                highlightText={searchQuery}
+                                            />
+                                        </div>
                                     </div>
                                 </button>
                             {/each}
@@ -556,6 +561,14 @@
     .search-input::-webkit-search-cancel-button {
         opacity: 0.62;
         cursor: pointer;
+    }
+
+    .search-check {
+        display: flex;
+        align-items: center;
+        flex-direction: row;
+        gap: 8px;
+        min-height: 36px;
     }
 
     .search-filter-panel {
