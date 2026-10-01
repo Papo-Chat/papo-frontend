@@ -81,6 +81,6 @@
 		disabled={loggingOut}
 		onclick={doLogout}
 	>
-		<Icon name="sign-out" variant="light" />
+		<Icon name="door-open" variant="light" />
 	</button>
 </aside>
