@@ -1137,8 +1137,6 @@
 				rgba(42, 100, 132, 0.3)
 			);
 	}
-</style>
-<style>
 	@media (max-width: 720px) {
 		.voice-media-grid {
 			grid-template-columns: 1fr;
