@@ -104,6 +104,15 @@ export function handleNewNotification(): void {
 	refetch.run();
 }
 
+export function removeByMessage(messageId: string): void {
+	const removed = state.items.filter((notification) => notification.message_id === messageId);
+	if (removed.length === 0) return;
+
+	const unreadRemoved = removed.filter((notification) => !notification.read).length;
+	state.items = state.items.filter((notification) => notification.message_id !== messageId);
+	state.unreadCount = Math.max(0, state.unreadCount - unreadRemoved);
+}
+
 // Full reset (logout / 401 / account switch).
 export function reset(): void {
 	state.loadGeneration += 1;
