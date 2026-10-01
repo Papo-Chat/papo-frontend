@@ -31,6 +31,7 @@
     let results = $state<SearchResult[]>([]);
     let loading = $state(false);
     let error: string | null = $state(null);
+    let filtersOpen = $state(false);
     // Cursor de paginação (keyset since + last_id) e flag de página seguinte.
     let cursor: KeysetCursor | null = $state(null);
     let hasMore = $state(false);
@@ -324,12 +325,24 @@
             </div>
 
             <div class="search-filter-panel" aria-label="Filtros de busca">
-                <div class="search-filter-heading">
-                    <strong>Filtros</strong>
-                    <span>Opcionais</span>
-                </div>
+                <button
+                    class="search-filter-heading"
+                    type="button"
+                    onclick={() => (filtersOpen = !filtersOpen)}
+                    aria-expanded={filtersOpen}
+                    aria-controls="search-filter-content"
+                >
+                    <span class="search-filter-heading-copy">
+                        <strong>Filtros</strong>
+                        <span>Opcionais</span>
+                    </span>
+                    <span class="search-filter-caret" class:open={filtersOpen} aria-hidden="true">
+                        <Icon name="caret-down" variant="light" />
+                    </span>
+                </button>
 
-                <div class="search-filter-grid">
+                {#if filtersOpen}
+                <div class="search-filter-grid" id="search-filter-content">
                     <label class="search-control">
                         <span>Ordem</span>
                         <select class="admin-select" bind:value={filters.order} aria-label="Ordem">
@@ -396,6 +409,7 @@
                         <input class="admin-select" type="date" bind:value={filters.dateEnd} aria-label="Data final" />
                     </label>
                 </div>
+                {/if}
 
                 <datalist id="search-author-options">
                     {#each authorOptions as u (u.id)}
@@ -627,10 +641,25 @@
     }
 
     .search-filter-heading {
+        width: 100%;
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0 2px;
+        gap: 10px;
+        padding: 2px;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .search-filter-heading-copy {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
     }
 
     .search-filter-heading strong {
@@ -641,9 +670,25 @@
         color: var(--muted);
     }
 
-    .search-filter-heading > span {
+    .search-filter-heading-copy > span {
         font-size: 11px;
         color: var(--muted-soft);
+    }
+
+    .search-filter-caret {
+        display: grid;
+        place-items: center;
+        flex: none;
+        color: var(--muted-soft);
+        transition: transform 160ms ease;
+    }
+
+    .search-filter-caret.open {
+        transform: rotate(180deg);
+    }
+
+    .search-filter-caret :global(i) {
+        font-size: 14px;
     }
 
     .search-filter-grid {
@@ -895,6 +940,12 @@
 
     :global([data-theme='dark']) .search-result .channel-name {
         background: rgba(119, 194, 235, 0.08);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .search-filter-caret {
+            transition: none;
+        }
     }
 
     @media (max-width: 700px) {
