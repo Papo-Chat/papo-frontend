@@ -7,6 +7,7 @@ import type { UserSummary } from '../types';
 export const state = $state({
 	channelsDrawerOpen: false,
 	railDrawerOpen: false,
+	dmDirectoryOpen: false,
 	membersDrawerOpen: false,
 	voiceChatDrawerOpen: false,
 	notificationsPopoverOpen: false,
