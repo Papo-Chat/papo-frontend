@@ -308,6 +308,7 @@
 
 			lastScrollTop = list.scrollTop;
 			loadingNewer = false;
+			updateReturnRecent();
 
 			if (!hasMoreNewer && distanceFromBottom() <= BOTTOM_THRESHOLD) {
 				clearUnreadAtBottom();
@@ -614,6 +615,15 @@
 			list.removeEventListener('loadedmetadata', settleBottom, true);
 			window.removeEventListener('resize', settleBottom);
 		};
+	});
+
+	$effect(() => {
+		const count = messages.length;
+		const newer = hasMoreNewer;
+		void count;
+		void newer;
+		if (!initialScrollDone) return;
+		queueMicrotask(updateReturnRecent);
 	});
 
 	$effect(() => {
