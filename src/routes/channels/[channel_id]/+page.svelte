@@ -16,6 +16,7 @@
 	import Chat from '$lib/components/Chat.svelte';
 	import Composer from '$lib/components/Composer.svelte';
 	import VoiceRoom from '$lib/components/VoiceRoom.svelte';
+	import VoiceTextDrawer from '$lib/components/VoiceTextDrawer.svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 
 	// Resolve o canal da URL (id exato, depois nome).
@@ -188,7 +189,37 @@
 	/>
 
 	{#if channel.type === 'voice'}
-		<VoiceRoom {channel} />
+		<div class="voice-content">
+			<VoiceRoom {channel} />
+			<VoiceTextDrawer
+				{channel}
+				open={uiState.voiceChatDrawerOpen}
+				{messages}
+				{loading}
+				{hasMoreNewer}
+				{hasMoreOlder}
+				{highlightMessageId}
+				{joinNotice}
+				{replyTo}
+				{onReply}
+				{onReplyCancel}
+				onSend={SendMsg}
+				onOpenChange={(open) => (uiState.voiceChatDrawerOpen = open)}
+				onJumpToLatest={() => messagesStore.setLatest(channel.id)}
+				onJumpToLastRead={() =>
+					channel.last_read_message
+						? messagesStore.gotoMessage(channel.id, channel.last_read_message, null)
+						: Promise.resolve(false)
+				}
+				onLoadMoreOlder={() => messagesStore.loadMoreOlder(channel.id)}
+				onLoadMoreNewer={() => messagesStore.loadMoreNewer(channel.id)}
+				onReachLatest={(message) => {
+					if (message) {
+						channelsStore.markReadLocal(channel.id, message.id, message.created_at);
+					}
+				}}
+			/>
+		</div>
 	{:else}
 		{#key channel.id}<Chat
 			{messages}
@@ -277,6 +308,17 @@
 {/if}
 
 <style>
+	.voice-content {
+		position: relative;
+		min-width: 0;
+		min-height: 0;
+		overflow: auto;
+	}
+
+	.voice-content :global(.voice-room) {
+		min-height: 100%;
+	}
+
 	.typing-wave {
 		display: inline-flex;
 	}
