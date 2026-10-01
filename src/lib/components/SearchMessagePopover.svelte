@@ -877,6 +877,16 @@
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
     }
 
+    :global(html[data-ui-flat]) .search-filter-panel {
+        border-color: var(--border);
+        background: var(--surface);
+        box-shadow: none;
+    }
+
+    :global(html[data-ui-flat][data-theme='dark']) .search-filter-panel {
+        background: #15384d;
+    }
+
     :global([data-theme='dark']) .search-result:hover,
     :global([data-theme='dark']) .search-result:focus-visible {
         border-color: rgba(182, 224, 250, 0.11);
