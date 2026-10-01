@@ -13,7 +13,6 @@
 
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
-import { nextCursor } from '../utils/keyset';
 import type { ChannelMessagesState, MessagesState } from './messages.types';
 import type {
 	LinkPreview,
