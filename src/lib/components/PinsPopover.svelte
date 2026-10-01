@@ -14,6 +14,7 @@
 	import { formatTime } from '$lib/utils/time';
 	import Icon from './Icon.svelte';
 	import Avatar from './Avatar.svelte';
+	import CompactMessageContent from './CompactMessageContent.svelte';
 
 	let el: HTMLElement | null = null;
 	let open = $derived(state.pinsPopoverOpen);
@@ -26,6 +27,11 @@
 	function close(): void {
 		state.pinsPopoverOpen = false;
 	}
+
+	$effect(() => {
+		const ids = pinned.map((message) => message.author_id).filter((id): id is string => !!id);
+		if (ids.length) void usersStore.ensureSummaries(ids).catch(() => {});
+	});
 
 	function openPin(m: MessageWithAttachment): void {
 		setScrollTarget(m.id, m.created_at);
@@ -83,13 +89,7 @@
 									<span class="name">{author?.nickname || author?.username || 'Usuário'}</span>
 									<span class="time">{formatTime(m.created_at)}</span>
 								</div>
-								{#if m.content}
-									<div class="content pin-content">{m.content}</div>
-								{:else}
-									{#if m.previews.length}
-										<div class="content pin-content">{m.previews[0].title}</div>
-									{/if}
-								{/if}
+								<CompactMessageContent message={m} />
 							</div>
 							<span class="pin-badge" aria-hidden="true"><Icon name="push-pin" variant="duotone" size={13} /></span>
 						</div>
