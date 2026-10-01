@@ -8,6 +8,7 @@ export interface PresenceMember {
 	user_id: string;
 	status: PresenceStatus;
 	status_message: string | null;
+	user_voice: string[];
 }
 
 export interface VoiceError {
