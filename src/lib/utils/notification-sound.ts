@@ -17,27 +17,21 @@ export type NotificationSoundInfo = {
 	custom: boolean;
 };
 
-let player: HTMLAudioElement | null = null;
+let audioContext: AudioContext | null = null;
 let preparedUserId: string | null = null;
-let playerObjectUrl: string | null = null;
+let preparedBuffer: AudioBuffer | null = null;
+let prepareGeneration = 0;
 let unlockInstalled = false;
-let unlocked = false;
-let pendingPlay = false;
+let pendingUserId: string | null = null;
 
-function getPlayer(): HTMLAudioElement | null {
-	if (typeof window === 'undefined' || typeof Audio === 'undefined') return null;
-	if (!player) {
-		player = new Audio(DEFAULT_SOUND_URL);
-		player.preload = 'auto';
-		player.playsInline = true;
+function getAudioContext(): AudioContext | null {
+	if (typeof window === 'undefined' || typeof AudioContext === 'undefined') return null;
+
+	if (!audioContext || audioContext.state === 'closed') {
+		audioContext = new AudioContext();
 	}
-	return player;
-}
 
-function revokePlayerObjectUrl(): void {
-	if (!playerObjectUrl) return;
-	URL.revokeObjectURL(playerObjectUrl);
-	playerObjectUrl = null;
+	return audioContext;
 }
 
 function openDb(): Promise<IDBDatabase | null> {
@@ -73,62 +67,73 @@ async function getRecord(userId: string): Promise<SoundRecord | null> {
 	});
 }
 
-// Preload the current user's source before a notification arrives. This keeps
-// Chrome's actual notification playback free of IndexedDB/fetch awaits.
-export async function prepareNotificationSound(userId: string): Promise<void> {
-	const audio = getPlayer();
-	if (!audio) return;
+async function defaultSoundBytes(): Promise<ArrayBuffer> {
+	const response = await fetch(DEFAULT_SOUND_URL, {
+		cache: 'force-cache',
+		credentials: 'same-origin'
+	});
 
-	const record = await getRecord(userId);
-	audio.pause();
-	audio.currentTime = 0;
-	revokePlayerObjectUrl();
-
-	if (record) {
-		playerObjectUrl = URL.createObjectURL(record.blob);
-		audio.src = playerObjectUrl;
-	} else {
-		audio.src = DEFAULT_SOUND_URL;
+	if (!response.ok) {
+		throw new Error(`Falha ao carregar som padrão: ${response.status}`);
 	}
 
-	preparedUserId = userId;
-	audio.load();
+	return response.arrayBuffer();
 }
 
-// Chrome blocks audible playback until the origin receives a user gesture.
-// Prime the same persistent media element used by notifications. A tiny volume
-// avoids an audible click while still exercising the audible media path.
+// Decode the selected sound ahead of time. When a WebSocket notification
+// arrives there is no IndexedDB/fetch/decode work left in the playback path.
+export async function prepareNotificationSound(userId: string): Promise<void> {
+	const ctx = getAudioContext();
+	if (!ctx) return;
+
+	const generation = ++prepareGeneration;
+	const record = await getRecord(userId);
+	const bytes = record ? await record.blob.arrayBuffer() : await defaultSoundBytes();
+	const buffer = await ctx.decodeAudioData(bytes.slice(0));
+
+	if (generation !== prepareGeneration) return;
+
+	preparedUserId = userId;
+	preparedBuffer = buffer;
+}
+
+function playPreparedBuffer(ctx: AudioContext): boolean {
+	if (!preparedBuffer) return false;
+
+	const source = ctx.createBufferSource();
+	source.buffer = preparedBuffer;
+	source.connect(ctx.destination);
+	source.start(0);
+	return true;
+}
+
+// Chrome requires AudioContext.resume() to happen from a real user gesture.
+// Resume the exact context used for notifications on the first interaction.
 export function installNotificationSoundUnlock(): void {
 	if (typeof window === 'undefined' || unlockInstalled) return;
 	unlockInstalled = true;
 
 	const unlock = () => {
-		const audio = getPlayer();
-		if (!audio || unlocked) return;
+		const ctx = getAudioContext();
+		if (!ctx) return;
 
-		const previousVolume = audio.volume;
-		audio.volume = 0.0001;
-		audio.currentTime = 0;
-
-		void audio
-			.play()
+		void ctx
+			.resume()
 			.then(() => {
-				audio.pause();
-				audio.currentTime = 0;
-				audio.volume = previousVolume;
-				unlocked = true;
+				if (ctx.state !== 'running') return;
+
 				window.removeEventListener('pointerdown', unlock, true);
 				window.removeEventListener('keydown', unlock, true);
 				window.removeEventListener('touchstart', unlock, true);
-				if (pendingPlay) {
-					pendingPlay = false;
-					queueMicrotask(() => {
-						void playPrepared();
-					});
+
+				const userId = pendingUserId;
+				pendingUserId = null;
+				if (userId) {
+					void playNotificationSound(userId);
 				}
 			})
-			.catch(() => {
-				audio.volume = previousVolume;
+			.catch((err) => {
+				console.warn('[notification-sound] Chrome audio unlock failed', err);
 			});
 	};
 
@@ -200,31 +205,36 @@ export async function clearNotificationSound(userId: string): Promise<void> {
 	await prepareNotificationSound(userId);
 }
 
-async function playPrepared(): Promise<boolean> {
-	const audio = getPlayer();
-	if (!audio) return false;
-
-	try {
-		audio.pause();
-		audio.currentTime = 0;
-		audio.volume = 1;
-		await audio.play();
-		return true;
-	} catch (err) {
-		if (err instanceof DOMException && err.name === 'NotAllowedError') {
-			pendingPlay = true;
-		}
-		return false;
-	}
-}
-
 export async function playNotificationSound(userId: string): Promise<boolean> {
+	const ctx = getAudioContext();
+	if (!ctx) return false;
+
+	// Important for Chrome: resume is attempted before any other await. When
+	// this function is called by the "Testar" button, the call is still inside
+	// the user activation event.
+	if (ctx.state !== 'running') {
+		try {
+			await ctx.resume();
+		} catch (err) {
+			pendingUserId = userId;
+			console.warn('[notification-sound] playback blocked until user interaction', err);
+			return false;
+		}
+	}
+
 	try {
-		if (preparedUserId !== userId) {
+		if (preparedUserId !== userId || !preparedBuffer) {
 			await prepareNotificationSound(userId);
 		}
-		return await playPrepared();
-	} catch {
+
+		if (ctx.state !== 'running') {
+			pendingUserId = userId;
+			return false;
+		}
+
+		return playPreparedBuffer(ctx);
+	} catch (err) {
+		console.warn('[notification-sound] playback failed', err);
 		return false;
 	}
 }
