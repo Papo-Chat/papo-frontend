@@ -192,6 +192,12 @@
 		font-weight: 750;
 	}
 
+	@media (min-width: 701px) {
+		.members-btn {
+			display: none;
+		}
+	}
+
 	@media (max-width: 700px) {
 		.pill.circle.voice-chat-btn {
 			width: 38px;
