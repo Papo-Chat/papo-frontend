@@ -18,6 +18,7 @@
 
 	let el: HTMLElement | null = null;
 	let open = $derived(state.notificationsPopoverOpen);
+	const hasUnread = $derived(notificationsStore.state.items.some((notification) => !notification.read));
 
 	function close(): void {
 		state.notificationsPopoverOpen = false;
@@ -83,9 +84,21 @@
 				<Icon name="bell" variant="light" />
 				<strong>Notificações</strong>
 			</div>
-			<button class="popover-close" onclick={close} aria-label="Fechar">
-				<Icon name="x" variant="light" />
-			</button>
+			<div class="popover-head-actions">
+				{#if hasUnread}
+					<button
+						class="notifications-mark-read"
+						onclick={notificationsStore.markAllRead}
+						aria-label="Marcar como lidas"
+						title="Marcar como lidas"
+					>
+						<Icon name="check" variant="light" />
+					</button>
+				{/if}
+				<button class="popover-close" onclick={close} aria-label="Fechar">
+					<Icon name="x" variant="light" />
+				</button>
+			</div>
 		</div>
 		<div class="popover-body" onscroll={onBodyScroll}>
 			{#if notificationsStore.state.items.length}
@@ -139,6 +152,31 @@
 {/if}
 
 <style>
+	.popover-head-actions {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	.notifications-mark-read {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 30px;
+		height: 30px;
+		padding: 0;
+		border: 1px solid rgba(151, 27, 27, 0.7);
+		border-radius: 8px;
+		background: linear-gradient(180deg, #ef5350, #c62828);
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+		color: #fff;
+		cursor: pointer;
+	}
+
+	.notifications-mark-read:hover {
+		filter: brightness(1.06);
+	}
+
 	.unread-dot {
 		display: inline-block;
 		width: 8px;
