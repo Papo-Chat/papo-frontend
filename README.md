@@ -28,6 +28,8 @@ npm run build
 
 Sobe o build atrás do nginx, que faz o upgrade de WebSocket no caminho `/ws`. Em produção o API/WS ficam na mesma origem (deixe `PUBLIC_API_URL` e `PUBLIC_WS_URL` vazios).
 
+Guia de deploy em VPS com nginx e Cloudflare: [`docs/production.md`](docs/production.md).
+
 ## Testes
 
 ```bash
