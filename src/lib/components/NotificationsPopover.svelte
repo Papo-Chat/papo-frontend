@@ -73,7 +73,8 @@
 			const dm = await dmsStore.openById(n.channel_id);
 			await goto(`/dm/${dm.id}`);
 		} catch {
-			await goto(`/channels/${n.channel_id}`);
+			const home = channelsStore.homeChannel();
+			await goto(home ? `/channels/${home.id}` : '/');
 		}
 	}
 
