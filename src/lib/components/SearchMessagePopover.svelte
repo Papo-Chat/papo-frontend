@@ -97,6 +97,11 @@
         ].join('|')
     );
 
+    function dateBoundary(value: string, end = false): string {
+        const date = new Date(`${value}T${end ? '23:59:59.999' : '00:00:00.000'}`);
+        return date.toISOString();
+    }
+
     // Request com os filtros atuais. O backend aceita qualquer combinação
     // com pelo menos um filtro real; texto é opcional.
     function buildRequest(): SearchRequest {
@@ -109,10 +114,10 @@
             req.author = filters.author;
         }
         if (filters.dateStart) {
-            req.date_start = filters.dateStart;
+            req.date_start = dateBoundary(filters.dateStart);
         }
         if (filters.dateEnd) {
-            req.date_end = filters.dateEnd;
+            req.date_end = dateBoundary(filters.dateEnd, true);
         }
         if (filters.channelId) req.channel_id = filters.channelId;
         if (filters.mention) req.mention = filters.mention;
@@ -794,16 +799,12 @@
     }
 
     .search-result .content {
-        display: -webkit-box;
         max-width: none;
-        overflow: hidden;
+        min-width: 0;
         color: var(--text);
         font-size: 12px;
         line-height: 1.42;
-        white-space: pre-wrap;
         overflow-wrap: anywhere;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 3;
     }
 
     .search-message-content mark {
