@@ -2,7 +2,10 @@
 // channel. All signalling (offer/answer/ICE candidates) goes over the
 // WebSocket; the peer is the single data/media channel (F20).
 //
-// Audio-only (P0.1). Camera/screen share are no-op
+// Audio + camera + screen share over the same SFU PeerConnection.
+// Camera/screen intent is signalled before each client offer, matching the
+// backend contract. Remote video is explicitly subscribed into the SFU's
+// preallocated video slots.
 //
 // Rules that avoid big bugs:
 // - All WebRTC signalling is serialized in a `queue` Promise.
@@ -27,7 +30,31 @@ import type {
 	WsVoiceStateUpdate,
 	PresenceMember
 } from '../types';
-import type { WsInbound } from '../types';
+import type { WsInbound, WsError } from '../types';
+
+export type VoiceMediaKind = 'video' | 'screen';
+
+export interface VoiceRemoteMedia {
+	key: string;
+	userId: string;
+	kind: VoiceMediaKind;
+	stream: MediaStream;
+}
+
+type RemoteVideoSlot = {
+	transceiver: RTCRtpTransceiver;
+	track: MediaStreamTrack;
+	stream: MediaStream;
+	assignmentKey: string | null;
+};
+
+type PendingAnswer = {
+	conn: RTCPeerConnection;
+	channelId: string;
+	resolve: () => void;
+	reject: (error: Error) => void;
+	timer: ReturnType<typeof setTimeout>;
+};
 
 export const state = $state({
 	iceServers: [] as ICEServer[],
@@ -47,12 +74,29 @@ export const state = $state({
 	connected: false,
 	// Canal do room atual, reativo: o `currentChannelId` (módulo, não
 	// rastreado) é usado só internamente; o UI precisa da versão reativa.
-	channelId: null as string | null
+	channelId: null as string | null,
+	localCameraStream: null as MediaStream | null,
+	localScreenStream: null as MediaStream | null,
+	remoteMedia: new SvelteMap<string, VoiceRemoteMedia>(),
+	cameraBusy: false,
+	screenBusy: false,
+	lastError: null as string | null
 });
 
 let peer: RTCPeerConnection | null = null;
 let currentChannelId: string | null = null;
+let currentUserId: string | null = null;
 let mediaStream: MediaStream | null = null;
+let cameraTransceiver: RTCRtpTransceiver | null = null;
+let screenTransceiver: RTCRtpTransceiver | null = null;
+
+const remoteVideoSlots: RemoteVideoSlot[] = [];
+const remoteSubscriptions = new Map<string, RemoteVideoSlot>();
+const subscribeRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+let pendingAnswer: PendingAnswer | null = null;
+let offerChain: Promise<void> = Promise.resolve();
+let mediaActionChain: Promise<void> = Promise.resolve();
 
 let voiceGeneration = 0;
 let joinResolve: (() => void) | null = null;
@@ -137,7 +181,7 @@ async function flushQueuedCandidates(conn: RTCPeerConnection): Promise<void> {
 
 // ── lifecycle ─────────────────────────────────────────────
 
-export function join(channelId: string): void {
+export function join(channelId: string, userId?: string): void {
 	if (typeof navigator === 'undefined' || !navigator.mediaDevices) {
 		return;
 	}
@@ -149,6 +193,8 @@ export function join(channelId: string): void {
 	const generation = ++voiceGeneration;
 
 	currentChannelId = channelId;
+	currentUserId = userId ?? null;
+	state.lastError = null;
 
 	void (async () => {
 		let stream: MediaStream | null = null;
@@ -244,7 +290,7 @@ export function join(channelId: string): void {
 				conn.addTrack(audioTrack, stream);
 			}
 
-			sendOffer();
+			await sendOffer();
 		} catch {
 			stream?.getTracks().forEach((track) => track.stop());
 
@@ -259,28 +305,94 @@ export function join(channelId: string): void {
 	})();
 }
 
-function sendOffer(): void {
+function clearPendingAnswer(error?: Error): void {
+	const pending = pendingAnswer;
+	if (!pending) return;
+
+	clearTimeout(pending.timer);
+	pendingAnswer = null;
+
+	if (error) {
+		pending.reject(error);
+	} else {
+		pending.resolve();
+	}
+}
+
+function waitVoiceAnswer(conn: RTCPeerConnection, channelId: string, timeoutMs = 12_000): Promise<void> {
+	clearPendingAnswer(new Error('renegociação substituída'));
+
+	return new Promise<void>((resolve, reject) => {
+		const timer = setTimeout(() => {
+			if (pendingAnswer?.conn === conn && pendingAnswer.channelId === channelId) {
+				pendingAnswer = null;
+			}
+			reject(new Error('voice_answer timeout'));
+		}, timeoutMs);
+
+		pendingAnswer = {
+			conn,
+			channelId,
+			resolve,
+			reject,
+			timer
+		};
+	});
+}
+
+async function sendOfferOnce(): Promise<void> {
 	if (!peer || !currentChannelId) return;
 
 	const conn = peer;
 	const cid = currentChannelId;
+	const answer = waitVoiceAnswer(conn, cid);
 
-	void enqueue(async () => {
-		const offer = await conn.createOffer();
-		await conn.setLocalDescription(offer);
+	try {
+		await enqueue(async () => {
+			if (peer !== conn || currentChannelId !== cid) {
+				throw new Error('peer stale');
+			}
 
-		await waitForIceGatheringComplete(conn);
+			if (conn.signalingState !== 'stable') {
+				throw new Error(`signaling state inválido: ${conn.signalingState}`);
+			}
 
-		if (peer !== conn || currentChannelId !== cid || !conn.localDescription) {
-			return;
-		}
+			const offer = await conn.createOffer();
+			await conn.setLocalDescription(offer);
 
-		wsSend({
-			type: 'voice_offer',
-			channel_id: cid,
-			sdp: conn.localDescription.sdp
-		} as WsInbound);
-	}).catch(() => {});
+			await waitForIceGatheringComplete(conn);
+
+			if (peer !== conn || currentChannelId !== cid || !conn.localDescription) {
+				throw new Error('peer stale');
+			}
+
+			if (
+				!wsSend({
+					type: 'voice_offer',
+					channel_id: cid,
+					sdp: conn.localDescription.sdp
+				} as WsInbound)
+			) {
+				throw new Error('ws not open');
+			}
+		});
+	} catch (error) {
+		clearPendingAnswer(error instanceof Error ? error : new Error(String(error)));
+		throw error;
+	}
+
+	await answer;
+}
+
+function sendOffer(): Promise<void> {
+	const run = offerChain.then(sendOfferOnce, sendOfferOnce);
+
+	offerChain = run.then(
+		() => undefined,
+		() => undefined
+	);
+
+	return run;
 }
 
 export function leave(channelId: string | null): void {
@@ -311,6 +423,10 @@ export function leave(channelId: string | null): void {
 	}
 
 	signalQueue = Promise.resolve();
+	offerChain = Promise.resolve();
+	mediaActionChain = Promise.resolve();
+	clearPendingAnswer(new Error('voice left'));
+	cleanupVideoMedia();
 
 	peer = null;
 	state.peer = null;
@@ -325,6 +441,8 @@ export function leave(channelId: string | null): void {
 	// não apenas o canal em que este usuário está conectado.
 
 	currentChannelId = null;
+	currentUserId = null;
+	state.lastError = null;
 
 	cleanupRemoteAudio();
 }
@@ -415,6 +533,10 @@ export function onSocketClose(): void {
 	}
 
 	signalQueue = Promise.resolve();
+	offerChain = Promise.resolve();
+	mediaActionChain = Promise.resolve();
+	clearPendingAnswer(new Error('socket closed'));
+	cleanupVideoMedia();
 
 	peer = null;
 	state.peer = null;
@@ -426,6 +548,7 @@ export function onSocketClose(): void {
 	state.channelMembers.clear();
 
 	currentChannelId = null;
+	currentUserId = null;
 
 	cleanupRemoteAudio();
 }
@@ -448,8 +571,10 @@ export function onVoiceJoined(ev: WsVoiceJoined): void {
 
 	state.connected = true;
 	state.channelId = ev.channel_id;
+	state.lastError = null;
 
 	joinResolve?.();
+	queueMicrotask(reconcileRemoteVideoSubscriptions);
 }
 
 // Answer to our voice_offer (unicast).
@@ -476,7 +601,11 @@ export function onVoiceAnswer(ev: WsVoiceAnswer): void {
 		}
 
 		await flushQueuedCandidates(conn);
-	}).catch(() => {});
+		clearPendingAnswer();
+		reconcileRemoteVideoSubscriptions();
+	}).catch((error) => {
+		clearPendingAnswer(error instanceof Error ? error : new Error(String(error)));
+	});
 }
 
 function waitForIceGatheringComplete(conn: RTCPeerConnection, timeoutMs = 4500): Promise<void> {
@@ -522,6 +651,7 @@ export function onVoiceOffer(ev: WsVoiceOffer): void {
 		if (conn.signalingState !== 'stable') {
 			try {
 				await conn.setLocalDescription({ type: 'rollback' });
+				clearPendingAnswer(new Error('renegociação iniciada pelo servidor'));
 			} catch {
 				return;
 			}
@@ -614,6 +744,8 @@ export function onVoiceStateUpdate(ev: WsVoiceStateUpdate): void {
 			state.activeSpeaker = null;
 		}
 	}
+
+	reconcileRemoteVideoSubscriptions();
 }
 
 export function onActiveSpeakerUpdate(ev: WsActiveSpeakerUpdate): void {
@@ -639,6 +771,7 @@ export function onVoiceLeave(ev: WsVoiceLeave): void {
 	if (state.activeSpeaker === ev.user_id) {
 		state.activeSpeaker = null;
 	}
+	reconcileRemoteVideoSubscriptions();
 }
 
 // ── local controls (mute / camera / screen share) ────────
@@ -658,12 +791,350 @@ export function mute(muted: boolean): void {
 	}
 }
 
-export function camera(): void {
-	// TODO: implementar track + renegociação.
+function serializeMediaAction(fn: () => Promise<void>): Promise<void> {
+	const run = mediaActionChain.then(fn, fn);
+	mediaActionChain = run.then(
+		() => undefined,
+		() => undefined
+	);
+	return run;
 }
 
-export function screenShare(): void {
-	// TODO: implementar track + renegociação.
+function ensureActivePeer(): { conn: RTCPeerConnection; channelId: string } {
+	if (!peer || !currentChannelId || !state.connected) {
+		throw new Error('Entre no canal de voz antes de compartilhar mídia.');
+	}
+	return { conn: peer, channelId: currentChannelId };
+}
+
+async function rollbackLocalOffer(conn: RTCPeerConnection): Promise<void> {
+	if (conn.signalingState !== 'have-local-offer') return;
+	try {
+		await conn.setLocalDescription({ type: 'rollback' });
+	} catch {
+		// A conexão pode ter fechado enquanto a permissão de mídia estava aberta.
+	}
+}
+
+function stopStream(stream: MediaStream | null): void {
+	if (!stream) return;
+	for (const track of stream.getTracks()) {
+		track.onended = null;
+		track.stop();
+	}
+}
+
+async function setCamera(targetOn: boolean): Promise<void> {
+	const { conn, channelId } = ensureActivePeer();
+	const currentlyOn = state.localCameraStream !== null;
+	if (targetOn === currentlyOn) return;
+
+	state.cameraBusy = true;
+	state.lastError = null;
+
+	try {
+		if (targetOn) {
+			const stream = await navigator.mediaDevices.getUserMedia({
+				audio: false,
+				video: {
+					width: { ideal: 1280 },
+					height: { ideal: 720 },
+					frameRate: { ideal: 30, max: 30 }
+				}
+			});
+			const track = stream.getVideoTracks().at(0);
+			if (!track) {
+				stopStream(stream);
+				throw new Error('Nenhuma câmera disponível.');
+			}
+			if (peer !== conn || currentChannelId !== channelId) {
+				stopStream(stream);
+				throw new Error('A chamada foi encerrada.');
+			}
+
+			if (!cameraTransceiver) {
+				cameraTransceiver = conn.addTransceiver(track, {
+					direction: 'sendonly',
+					streams: [stream]
+				});
+			} else {
+				await cameraTransceiver.sender.replaceTrack(track);
+				cameraTransceiver.direction = 'sendonly';
+			}
+			state.localCameraStream = stream;
+
+			if (!wsSend({ type: 'voice_camera', channel_id: channelId, on: true } as WsInbound)) {
+				throw new Error('WebSocket desconectado.');
+			}
+
+			try {
+				await sendOffer();
+			} catch (error) {
+				await rollbackLocalOffer(conn);
+				await cameraTransceiver.sender.replaceTrack(null);
+				cameraTransceiver.direction = 'inactive';
+				stopStream(stream);
+				if (state.localCameraStream === stream) state.localCameraStream = null;
+				wsSend({ type: 'voice_camera', channel_id: channelId, on: false } as WsInbound);
+				throw error;
+			}
+		} else {
+			if (!wsSend({ type: 'voice_camera', channel_id: channelId, on: false } as WsInbound)) {
+				throw new Error('WebSocket desconectado.');
+			}
+
+			const previous = state.localCameraStream;
+			state.localCameraStream = null;
+			if (cameraTransceiver) {
+				await cameraTransceiver.sender.replaceTrack(null);
+				cameraTransceiver.direction = 'inactive';
+			}
+			stopStream(previous);
+
+			try {
+				await sendOffer();
+			} catch (error) {
+				await rollbackLocalOffer(conn);
+				throw error;
+			}
+		}
+	} finally {
+		state.cameraBusy = false;
+	}
+}
+
+export function camera(on?: boolean): Promise<void> {
+	const target = on ?? state.localCameraStream === null;
+	return serializeMediaAction(() => setCamera(target));
+}
+
+async function setScreenShare(targetOn: boolean): Promise<void> {
+	const { conn, channelId } = ensureActivePeer();
+	const currentlyOn = state.localScreenStream !== null;
+	if (targetOn === currentlyOn) return;
+
+	state.screenBusy = true;
+	state.lastError = null;
+
+	try {
+		if (targetOn) {
+			if (!navigator.mediaDevices.getDisplayMedia) {
+				throw new Error('Compartilhamento de tela não é suportado neste navegador.');
+			}
+
+			const stream = await navigator.mediaDevices.getDisplayMedia({
+				audio: false,
+				video: {
+					frameRate: { ideal: 30, max: 30 }
+				}
+			});
+			const track = stream.getVideoTracks().at(0);
+			if (!track) {
+				stopStream(stream);
+				throw new Error('Nenhuma tela selecionada.');
+			}
+			if (peer !== conn || currentChannelId !== channelId) {
+				stopStream(stream);
+				throw new Error('A chamada foi encerrada.');
+			}
+
+			if (!screenTransceiver) {
+				screenTransceiver = conn.addTransceiver(track, {
+					direction: 'sendonly',
+					streams: [stream]
+				});
+			} else {
+				await screenTransceiver.sender.replaceTrack(track);
+				screenTransceiver.direction = 'sendonly';
+			}
+			state.localScreenStream = stream;
+
+			track.onended = () => {
+				if (state.localScreenStream === stream) {
+					void screenShare(false);
+				}
+			};
+
+			if (!wsSend({ type: 'screen_share_start', channel_id: channelId } as WsInbound)) {
+				throw new Error('WebSocket desconectado.');
+			}
+
+			try {
+				await sendOffer();
+			} catch (error) {
+				await rollbackLocalOffer(conn);
+				await screenTransceiver.sender.replaceTrack(null);
+				screenTransceiver.direction = 'inactive';
+				stopStream(stream);
+				if (state.localScreenStream === stream) state.localScreenStream = null;
+				wsSend({ type: 'screen_share_stop', channel_id: channelId } as WsInbound);
+				throw error;
+			}
+		} else {
+			if (!wsSend({ type: 'screen_share_stop', channel_id: channelId } as WsInbound)) {
+				throw new Error('WebSocket desconectado.');
+			}
+
+			const previous = state.localScreenStream;
+			state.localScreenStream = null;
+			if (screenTransceiver) {
+				await screenTransceiver.sender.replaceTrack(null);
+				screenTransceiver.direction = 'inactive';
+			}
+			stopStream(previous);
+
+			try {
+				await sendOffer();
+			} catch (error) {
+				await rollbackLocalOffer(conn);
+				throw error;
+			}
+		}
+	} finally {
+		state.screenBusy = false;
+	}
+}
+
+export function screenShare(on?: boolean): Promise<void> {
+	const target = on ?? state.localScreenStream === null;
+	return serializeMediaAction(() => setScreenShare(target));
+}
+
+export function onVoiceError(ev: WsError): void {
+	if (!ev.code?.startsWith('voice-')) return;
+	state.lastError = ev.message;
+	clearPendingAnswer(new Error(ev.message));
+}
+
+function mediaKey(userId: string, kind: VoiceMediaKind): string {
+	return `${userId}:${kind}`;
+}
+
+function desiredRemoteMedia(): Array<{ key: string; userId: string; kind: VoiceMediaKind }> {
+	const desired: Array<{ key: string; userId: string; kind: VoiceMediaKind }> = [];
+
+	for (const member of state.members) {
+		if (member.user_id === currentUserId) continue;
+		if (member.camera_on) {
+			desired.push({
+				key: mediaKey(member.user_id, 'video'),
+				userId: member.user_id,
+				kind: 'video'
+			});
+		}
+		if (member.screen_sharing) {
+			desired.push({
+				key: mediaKey(member.user_id, 'screen'),
+				userId: member.user_id,
+				kind: 'screen'
+			});
+		}
+	}
+
+	return desired;
+}
+
+function clearSubscribeRetry(key: string): void {
+	const timer = subscribeRetryTimers.get(key);
+	if (timer) clearTimeout(timer);
+	subscribeRetryTimers.delete(key);
+}
+
+function sendSubscriptionWithRetry(
+	key: string,
+	userId: string,
+	kind: VoiceMediaKind,
+	attempt = 0
+): void {
+	if (!currentChannelId || !remoteSubscriptions.has(key)) return;
+
+	wsSend({
+		type: 'track_subscribe',
+		channel_id: currentChannelId,
+		publisher_id: userId,
+		kind
+	} as WsInbound);
+
+	if (attempt >= 3) return;
+
+	clearSubscribeRetry(key);
+	const timer = setTimeout(
+		() => {
+			const stillDesired = desiredRemoteMedia().some((item) => item.key === key);
+			if (!stillDesired || !remoteSubscriptions.has(key)) return;
+			sendSubscriptionWithRetry(key, userId, kind, attempt + 1);
+		},
+		700 * 2 ** attempt
+	);
+	subscribeRetryTimers.set(key, timer);
+}
+
+function releaseRemoteSubscription(key: string, notifyServer = true): void {
+	const slot = remoteSubscriptions.get(key);
+	if (!slot) return;
+
+	const media = state.remoteMedia.get(key);
+	if (notifyServer && media && currentChannelId) {
+		wsSend({
+			type: 'track_unsubscribe',
+			channel_id: currentChannelId,
+			publisher_id: media.userId,
+			kind: media.kind
+		} as WsInbound);
+	}
+
+	clearSubscribeRetry(key);
+	remoteSubscriptions.delete(key);
+	slot.assignmentKey = null;
+	state.remoteMedia.delete(key);
+}
+
+function reconcileRemoteVideoSubscriptions(): void {
+	if (!currentChannelId || !peer) return;
+
+	const desired = desiredRemoteMedia();
+	const wanted = new Set(desired.map((item) => item.key));
+
+	for (const key of [...remoteSubscriptions.keys()]) {
+		if (!wanted.has(key)) {
+			releaseRemoteSubscription(key);
+		}
+	}
+
+	for (const item of desired) {
+		if (remoteSubscriptions.has(item.key)) continue;
+
+		const slot = remoteVideoSlots.find((candidate) => candidate.assignmentKey === null);
+		if (!slot) break;
+
+		slot.assignmentKey = item.key;
+		remoteSubscriptions.set(item.key, slot);
+		state.remoteMedia.set(item.key, {
+			key: item.key,
+			userId: item.userId,
+			kind: item.kind,
+			stream: slot.stream
+		});
+		sendSubscriptionWithRetry(item.key, item.userId, item.kind);
+	}
+}
+
+function cleanupVideoMedia(): void {
+	stopStream(state.localCameraStream);
+	stopStream(state.localScreenStream);
+	state.localCameraStream = null;
+	state.localScreenStream = null;
+	state.cameraBusy = false;
+	state.screenBusy = false;
+
+	cameraTransceiver = null;
+	screenTransceiver = null;
+
+	for (const timer of subscribeRetryTimers.values()) clearTimeout(timer);
+	subscribeRetryTimers.clear();
+	remoteSubscriptions.clear();
+	remoteVideoSlots.length = 0;
+	state.remoteMedia.clear();
 }
 
 // ── ontrack: associate remote audio by transceiver.mid ────
@@ -681,9 +1152,58 @@ function cleanupRemoteAudio(): void {
 }
 
 function onRemoteTrack(_peerConn: RTCPeerConnection, event: RTCTrackEvent): void {
-	if (event.track.kind !== 'audio') return;
+	const track = event.track;
 
-	const mid = event.transceiver.mid ?? `track:${event.track.id}`;
+	if (track.kind === 'video') {
+		let slot = remoteVideoSlots.find((candidate) => candidate.transceiver === event.transceiver);
+
+		if (!slot) {
+			slot = {
+				transceiver: event.transceiver,
+				track,
+				stream: new MediaStream([track]),
+				assignmentKey: null
+			};
+			remoteVideoSlots.push(slot);
+			remoteVideoSlots.sort((a, b) => {
+				const am = Number(a.transceiver.mid);
+				const bm = Number(b.transceiver.mid);
+				return Number.isFinite(am) && Number.isFinite(bm) ? am - bm : 0;
+			});
+		} else {
+			slot.track = track;
+			slot.stream = new MediaStream([track]);
+			if (slot.assignmentKey) {
+				const media = state.remoteMedia.get(slot.assignmentKey);
+				if (media) {
+					state.remoteMedia.set(slot.assignmentKey, { ...media, stream: slot.stream });
+				}
+			}
+		}
+
+		track.addEventListener(
+			'ended',
+			() => {
+				const current = remoteVideoSlots.find(
+					(candidate) => candidate.transceiver === event.transceiver
+				);
+				if (!current || current.track !== track) return;
+				if (current.assignmentKey) {
+					releaseRemoteSubscription(current.assignmentKey, false);
+				}
+				const index = remoteVideoSlots.indexOf(current);
+				if (index >= 0) remoteVideoSlots.splice(index, 1);
+			},
+			{ once: true }
+		);
+
+		reconcileRemoteVideoSubscriptions();
+		return;
+	}
+
+	if (track.kind !== 'audio') return;
+
+	const mid = event.transceiver.mid ?? `track:${track.id}`;
 
 	let audio = remoteAudios.get(mid);
 
@@ -695,8 +1215,6 @@ function onRemoteTrack(_peerConn: RTCPeerConnection, event: RTCTrackEvent): void
 		document.body.appendChild(audio);
 		remoteAudios.set(mid, audio);
 	}
-
-	const track = event.track;
 
 	audio.srcObject = new MediaStream([track]);
 	void audio.play().catch(() => {
