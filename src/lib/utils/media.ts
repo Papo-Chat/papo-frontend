@@ -51,7 +51,7 @@ export function attachmentThumbnailUrl(id: string): string {
 // Fetch a binary resource and return the Blob. The caller is responsible for
 // auth (the native fetch here uses the same-origin HttpOnly Auth cookie).
 export async function fetchMediaBlob(url: string, signal?: AbortSignal): Promise<Blob> {
-	const res = await fetch(url, { signal });
+	const res = await fetch(url, { signal, credentials: 'include' });
 	if (!res.ok) {
 		throw new Error(`media fetch failed: ${res.status} ${res.statusText}`);
 	}
