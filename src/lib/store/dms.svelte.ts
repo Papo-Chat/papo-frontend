@@ -93,7 +93,14 @@ export async function openWithUser(userId: string): Promise<DirectConversation> 
 // the current user's rail entry.
 export async function openById(id: string): Promise<DirectConversation> {
 	const cached = state.byId.get(id);
-	const initial = cached ?? (await api.dms.get(id));
+	if (cached) {
+		state.openDmId = cached.id;
+		return cached;
+	}
+
+	const initial = await api.dms.get(id);
+	// GET also resolves hidden deep-links, while POST is the operation that
+	// explicitly re-shows the conversation only for the current user.
 	return openWithUser(initial.user.id);
 }
 
