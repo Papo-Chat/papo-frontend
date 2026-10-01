@@ -342,10 +342,14 @@
 		position: relative;
 		min-width: 0;
 		min-height: 0;
-		overflow: auto;
+		overflow-x: hidden;
+		overflow-y: auto;
 	}
 
 	.voice-content :global(.voice-room) {
+		width: 100%;
+		max-width: 100%;
+		min-width: 0;
 		min-height: 100%;
 	}
 
