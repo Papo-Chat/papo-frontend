@@ -91,6 +91,15 @@ let mediaStream: MediaStream | null = null;
 let cameraTransceiver: RTCRtpTransceiver | null = null;
 let screenTransceiver: RTCRtpTransceiver | null = null;
 
+let audioContext: AudioContext | null = null;
+let audioDestination: MediaStreamAudioDestinationNode | null = null;
+let micAudioSource: MediaStreamAudioSourceNode | null = null;
+let micGain: GainNode | null = null;
+let screenAudioSource: MediaStreamAudioSourceNode | null = null;
+let outboundAudioTrack: MediaStreamTrack | null = null;
+let audioSender: RTCRtpSender | null = null;
+let micMuted = true;
+
 const remoteVideoSlots: RemoteVideoSlot[] = [];
 const remoteSubscriptions = new Map<string, RemoteVideoSlot | null>();
 
@@ -299,9 +308,18 @@ export function join(channelId: string, userId?: string): void {
 			const audioTrack = stream.getAudioTracks().at(0);
 
 			if (audioTrack) {
-				// voice_joined começa muted=true no backend.
-				audioTrack.enabled = false;
-				conn.addTrack(audioTrack, stream);
+				// O backend suporta uma publicação de áudio por peer. Criamos
+				// uma única track mixada (mic + áudio da tela) e mantemos a
+				// identidade/MID dessa track durante toda a chamada.
+				const outbound = await setupAudioMixer(stream);
+
+				if (outbound) {
+					audioSender = conn.addTrack(outbound, new MediaStream([outbound]));
+				} else {
+					// Fallback para browsers sem Web Audio utilizável.
+					audioTrack.enabled = false;
+					audioSender = conn.addTrack(audioTrack, stream);
+				}
 			}
 
 			await sendOffer();
@@ -428,6 +446,8 @@ export function leave(channelId: string | null): void {
 
 	serverJoinSent = false;
 
+	cleanupAudioMixer();
+	cleanupAudioMixer();
 	peer?.close();
 
 	if (mediaStream) {
@@ -818,10 +838,18 @@ export function mute(muted: boolean): void {
 	if (cid && !wsSend({ type: 'voice_mute', channel_id: cid, muted } as WsInbound)) {
 		return;
 	}
-	const audioSender = state.peer?.getSenders().find((s) => s.track?.kind === 'audio');
-	const audioTrack = audioSender?.track;
-	if (audioTrack) {
-		audioTrack.enabled = !muted;
+
+	micMuted = muted;
+
+	if (micGain) {
+		micGain.gain.value = muted ? 0 : 1;
+		return;
+	}
+
+	// Fallback sem mixer: mantém o comportamento antigo.
+	const track = audioSender?.track;
+	if (track) {
+		track.enabled = !muted;
 	}
 }
 
@@ -855,6 +883,113 @@ function stopStream(stream: MediaStream | null): void {
 	for (const track of stream.getTracks()) {
 		track.onended = null;
 		track.stop();
+	}
+}
+
+async function setupAudioMixer(micStream: MediaStream): Promise<MediaStreamTrack | null> {
+	const micTrack = micStream.getAudioTracks().at(0);
+	if (!micTrack || typeof AudioContext === 'undefined') {
+		return null;
+	}
+
+	try {
+		audioContext = new AudioContext();
+		audioDestination = audioContext.createMediaStreamDestination();
+
+		micAudioSource = audioContext.createMediaStreamSource(new MediaStream([micTrack]));
+		micGain = audioContext.createGain();
+		micGain.gain.value = micMuted ? 0 : 1;
+
+		micAudioSource.connect(micGain);
+		micGain.connect(audioDestination);
+
+		outboundAudioTrack = audioDestination.stream.getAudioTracks().at(0) ?? null;
+
+		if (audioContext.state === 'suspended') {
+			await audioContext.resume().catch(() => {});
+		}
+
+		return outboundAudioTrack;
+	} catch {
+		cleanupAudioMixer();
+		return null;
+	}
+}
+
+function detachScreenAudio(): void {
+	if (screenAudioSource) {
+		try {
+			screenAudioSource.disconnect();
+		} catch {
+			// já desconectado
+		}
+		screenAudioSource = null;
+	}
+}
+
+async function attachScreenAudio(stream: MediaStream): Promise<boolean> {
+	detachScreenAudio();
+
+	const track = stream.getAudioTracks().at(0);
+	if (!track || !audioContext || !audioDestination) {
+		return false;
+	}
+
+	try {
+		screenAudioSource = audioContext.createMediaStreamSource(new MediaStream([track]));
+		screenAudioSource.connect(audioDestination);
+
+		if (audioContext.state === 'suspended') {
+			await audioContext.resume().catch(() => {});
+		}
+
+		track.addEventListener(
+			'ended',
+			() => {
+				if (state.localScreenStream === stream) {
+					detachScreenAudio();
+				}
+			},
+			{ once: true }
+		);
+
+		return true;
+	} catch {
+		detachScreenAudio();
+		return false;
+	}
+}
+
+function cleanupAudioMixer(): void {
+	detachScreenAudio();
+
+	if (micAudioSource) {
+		try {
+			micAudioSource.disconnect();
+		} catch {
+			// já desconectado
+		}
+		micAudioSource = null;
+	}
+
+	if (micGain) {
+		try {
+			micGain.disconnect();
+		} catch {
+			// já desconectado
+		}
+		micGain = null;
+	}
+
+	outboundAudioTrack?.stop();
+	outboundAudioTrack = null;
+	audioDestination = null;
+	audioSender = null;
+	micMuted = true;
+
+	if (audioContext) {
+		void audioContext.close().catch(() => {});
+		audioContext = null;
 	}
 }
 
@@ -988,7 +1123,9 @@ async function setScreenShare(targetOn: boolean): Promise<void> {
 			}
 
 			const stream = await navigator.mediaDevices.getDisplayMedia({
-				audio: false,
+				// O browser decide se áudio de aba/sistema está disponível e
+				// mostra a opção correspondente no seletor de compartilhamento.
+				audio: true,
 				video: {
 					// getDisplayMedia não aceita constraints min/exact.
 					// Deixamos o browser capturar na resolução nativa da fonte
@@ -1017,6 +1154,7 @@ async function setScreenShare(targetOn: boolean): Promise<void> {
 				screenTransceiver.direction = 'sendonly';
 			}
 			await tuneVideoSender(screenTransceiver.sender, 'screen');
+			await attachScreenAudio(stream);
 			state.localScreenStream = stream;
 
 			track.onended = () => {
@@ -1035,6 +1173,7 @@ async function setScreenShare(targetOn: boolean): Promise<void> {
 				await rollbackLocalOffer(conn);
 				await screenTransceiver.sender.replaceTrack(null);
 				screenTransceiver.direction = 'inactive';
+				detachScreenAudio();
 				stopStream(stream);
 				if (state.localScreenStream === stream) state.localScreenStream = null;
 				wsSend({ type: 'screen_share_stop', channel_id: channelId } as WsInbound);
@@ -1047,6 +1186,7 @@ async function setScreenShare(targetOn: boolean): Promise<void> {
 
 			const previous = state.localScreenStream;
 			state.localScreenStream = null;
+			detachScreenAudio();
 			if (screenTransceiver) {
 				await screenTransceiver.sender.replaceTrack(null);
 				screenTransceiver.direction = 'inactive';
