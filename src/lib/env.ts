@@ -5,6 +5,7 @@ import { env } from '$env/dynamic/public';
 
 export const PUBLIC_API_URL: string = (env.PUBLIC_API_URL ?? '') as string;
 export const PUBLIC_WS_URL: string = (env.PUBLIC_WS_URL ?? '') as string;
+export const PUBLIC_GIPHY_API_KEY: string = (env.PUBLIC_GIPHY_API_KEY ?? '') as string;
 
 
 function publicInt(value: string | undefined, fallback: number): number {
