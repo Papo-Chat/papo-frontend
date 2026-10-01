@@ -4,7 +4,7 @@
 	// mockup channel/mockup buttons were dropped).
 	import { goto } from '$app/navigation';
 	import { state as serverState } from '$lib/store/server.svelte';
-	import { state as sessionState, meId } from '$lib/store/session.svelte';
+	import { state as sessionState, meId, logout } from '$lib/store/session.svelte';
 	import * as rolesStore from '$lib/store/roles.svelte';
 	import { can } from '$lib/store/roles.svelte';
 	import Icon from './Icon.svelte';
@@ -20,6 +20,19 @@
 	const canManageChannels = $derived(can('manage_channels', adminCtx));
 	const canManageRoles = $derived(can('manage_roles', adminCtx));
 	const canOpenAdmin = $derived(canManageServer || canManageChannels || canManageRoles);
+	let loggingOut = $state(false);
+
+	async function doLogout(): Promise<void> {
+		if (loggingOut) return;
+		loggingOut = true;
+		try {
+			await logout();
+			await goto('/auth');
+		} finally {
+			loggingOut = false;
+		}
+	}
+
 	const adminRoute = $derived(
 		canManageServer
 			? '/admin/server'
@@ -59,5 +72,15 @@
 		onclick={() => goto('/user/settings')}
 	>
 		<Icon name="gear" variant="light" />
+	</button>
+
+	<button
+		class="rail-btn rail-logout"
+		title="Sair"
+		aria-label="Sair"
+		disabled={loggingOut}
+		onclick={doLogout}
+	>
+		<Icon name="sign-out" variant="light" />
 	</button>
 </aside>
