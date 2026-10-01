@@ -244,7 +244,12 @@ export async function ensureSummaries(ids: string[]): Promise<UserSummary[]> {
 
         // Avoid a burst of many 1000-id requests on very large presence_sync
         // snapshots. Each page is ingested before requesting the next.
-        await batch;
+        try {
+            await batch;
+        } catch (error) {
+            await Promise.allSettled([...waits]);
+            throw error;
+        }
     }
 
     if (waits.size) await Promise.all(waits);
