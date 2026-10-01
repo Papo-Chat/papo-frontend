@@ -28,6 +28,16 @@
 		onPickGif?: (gif: GiphyGif) => void;
 	}>();
 
+	type GiphyImage = { url?: string; width?: string; height?: string };
+	type GiphyApiItem = {
+		id?: string;
+		title?: string;
+		images?: {
+			original?: GiphyImage;
+			fixed_width_small?: GiphyImage;
+			fixed_width?: GiphyImage;
+		};
+	};
 	type GiphyGif = {
 		id: string;
 		title: string;
@@ -80,7 +90,7 @@
 		close();
 	}
 
-	function mapGif(item: any): GiphyGif | null {
+	function mapGif(item: GiphyApiItem): GiphyGif | null {
 		const original = item?.images?.original;
 		const preview = item?.images?.fixed_width_small ?? item?.images?.fixed_width ?? original;
 		if (!item?.id || !original?.url || !preview?.url) return null;
@@ -117,9 +127,9 @@
 			}
 			const response = await fetch(`${endpoint}?${params.toString()}`);
 			if (!response.ok) throw new Error(`GIPHY ${response.status}`);
-			const payload = await response.json();
+			const payload = (await response.json()) as { data?: GiphyApiItem[] };
 			if (request !== gifRequest) return;
-			gifs = Array.isArray(payload?.data)
+			gifs = Array.isArray(payload.data)
 				? payload.data.map(mapGif).filter((gif: GiphyGif | null): gif is GiphyGif => gif !== null)
 				: [];
 		} catch {
@@ -286,7 +296,7 @@
 	<div
 		class="emoji-picker {shown ? 'open' : ''} {flip}"
 		role="dialog"
-		aria-label="Emojis"
+		aria-label={enableGifs ? 'Emojis e GIFs' : 'Emojis'}
 		bind:this={cardEl}
 	>
 		{#if enableGifs}
