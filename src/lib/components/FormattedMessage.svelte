@@ -142,11 +142,16 @@
 
 <style>
 	.giphy-message {
+		display: inline-flex;
+		width: fit-content;
 		max-width: min(420px, 100%);
+		flex-direction: column;
+		align-items: stretch;
 	}
 
 	.giphy-message img {
 		display: block;
+		width: auto;
 		max-width: 100%;
 		height: auto;
 		border-radius: 10px;
