@@ -94,7 +94,7 @@ function resync(): void {
 	}
 	notificationsStore.load();
 	rolesStore.load();
-	void usersStore.loadAll().catch(() => {});
+	void usersStore.loadList().catch(() => {});
 	void emojisStore.loadAll().catch(() => {});
 }
 
@@ -230,6 +230,7 @@ export function dispatchEvent(event: WsOutbound): void {
 			break;
 		case 'presence_sync':
 			usersStore.handlePresenceSync(event.members);
+			voiceStore.onPresenceSync(event.members);
 			break;
 		case 'user_join':
 			usersStore.handleUserJoin(event.user_id);
