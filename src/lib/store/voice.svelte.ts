@@ -27,6 +27,7 @@ import type {
 	WsVoiceIceCandidate,
 	WsVoiceJoined,
 	WsVoiceLeave,
+	WsVoiceAudioRoutes,
 	WsVoiceOffer,
 	WsVoiceStateUpdate,
 	PresenceMember
@@ -79,6 +80,11 @@ export const state = $state({
 	localCameraStream: null as MediaStream | null,
 	localScreenStream: null as MediaStream | null,
 	remoteMedia: new SvelteMap<string, VoiceRemoteMedia>(),
+	// Track ID do slot SFU -> user_id do publisher (voice_audio_routes).
+	remoteAudioRoutes: new SvelteMap<string, string>(),
+	// Preferências locais por usuário; nunca são enviadas ao servidor.
+	remoteUserVolumes: new SvelteMap<string, number>(),
+	remoteUserMuted: new SvelteMap<string, boolean>(),
 	cameraBusy: false,
 	screenBusy: false,
 	lastError: null as string | null
@@ -793,6 +799,19 @@ export function onActiveSpeakerUpdate(ev: WsActiveSpeakerUpdate): void {
 	state.activeSpeaker = users.length === 1 ? users[0] : null;
 }
 
+export function onVoiceAudioRoutes(ev: WsVoiceAudioRoutes): void {
+	if (currentChannelId !== ev.channel_id) {
+		return;
+	}
+
+	state.remoteAudioRoutes.clear();
+	for (const route of ev.routes) {
+		state.remoteAudioRoutes.set(route.track_id, route.user_id);
+	}
+
+	applyAllRemoteAudioPreferences();
+}
+
 export function onVoiceLeave(ev: WsVoiceLeave): void {
 	// Roster: broadcast to the channel audience (connect_voice holders) —
 	// never gated on the current room.
@@ -1214,9 +1233,61 @@ function cleanupVideoMedia(): void {
 	state.remoteMedia.clear();
 }
 
-// ── ontrack: associate remote audio by transceiver.mid ────
+// ── ontrack: remote audio + local per-user controls ──────
 
 const remoteAudios = new SvelteMap<string, HTMLAudioElement>();
+// O elemento continua keyed por MID (estável por transceiver); este índice
+// traduz o track.id exposto pelo backend para o MID correspondente no browser.
+const remoteAudioTrackKeys = new Map<string, string>();
+
+function applyRemoteAudioPreferencesForTrack(trackId: string): void {
+	const key = remoteAudioTrackKeys.get(trackId);
+	if (!key) return;
+
+	const audio = remoteAudios.get(key);
+	const userId = state.remoteAudioRoutes.get(trackId);
+	if (!audio || !userId) return;
+
+	audio.volume = state.remoteUserVolumes.get(userId) ?? 1;
+	audio.muted = state.remoteUserMuted.get(userId) ?? false;
+}
+
+function applyRemoteAudioPreferencesForUser(userId: string): void {
+	for (const [trackId, publisherId] of state.remoteAudioRoutes) {
+		if (publisherId === userId) {
+			applyRemoteAudioPreferencesForTrack(trackId);
+		}
+	}
+}
+
+function applyAllRemoteAudioPreferences(): void {
+	for (const trackId of state.remoteAudioRoutes.keys()) {
+		applyRemoteAudioPreferencesForTrack(trackId);
+	}
+}
+
+export function remoteUserVolume(userId: string): number {
+	return state.remoteUserVolumes.get(userId) ?? 1;
+}
+
+export function remoteUserMuted(userId: string): boolean {
+	return state.remoteUserMuted.get(userId) ?? false;
+}
+
+export function setRemoteUserVolume(userId: string, volume: number): void {
+	const next = Math.max(0, Math.min(1, Number.isFinite(volume) ? volume : 1));
+	state.remoteUserVolumes.set(userId, next);
+	applyRemoteAudioPreferencesForUser(userId);
+}
+
+export function setRemoteUserMuted(userId: string, muted: boolean): void {
+	state.remoteUserMuted.set(userId, muted);
+	applyRemoteAudioPreferencesForUser(userId);
+}
+
+export function toggleRemoteUserMuted(userId: string): void {
+	setRemoteUserMuted(userId, !remoteUserMuted(userId));
+}
 
 function cleanupRemoteAudio(): void {
 	for (const audio of remoteAudios.values()) {
@@ -1226,6 +1297,10 @@ function cleanupRemoteAudio(): void {
 	}
 
 	remoteAudios.clear();
+	remoteAudioTrackKeys.clear();
+	state.remoteAudioRoutes.clear();
+	state.remoteUserVolumes.clear();
+	state.remoteUserMuted.clear();
 }
 
 function onRemoteTrack(_peerConn: RTCPeerConnection, event: RTCTrackEvent): void {
@@ -1313,7 +1388,15 @@ function onRemoteTrack(_peerConn: RTCPeerConnection, event: RTCTrackEvent): void
 		remoteAudios.set(mid, audio);
 	}
 
+	const previousTrack = (audio.srcObject as MediaStream | null)?.getAudioTracks().at(0);
+	if (previousTrack && previousTrack.id !== track.id && remoteAudioTrackKeys.get(previousTrack.id) === mid) {
+		remoteAudioTrackKeys.delete(previousTrack.id);
+	}
+
+	remoteAudioTrackKeys.set(track.id, mid);
 	audio.srcObject = new MediaStream([track]);
+	applyRemoteAudioPreferencesForTrack(track.id);
+
 	void audio.play().catch(() => {
 		// autoplay bloqueado; a UI pode chamar resumeRemoteAudio()
 	});
@@ -1335,6 +1418,9 @@ function onRemoteTrack(_peerConn: RTCPeerConnection, event: RTCTrackEvent): void
 			current.srcObject = null;
 			current.remove();
 			remoteAudios.delete(mid);
+			if (remoteAudioTrackKeys.get(track.id) === mid) {
+				remoteAudioTrackKeys.delete(track.id);
+			}
 		},
 		{ once: true }
 	);
