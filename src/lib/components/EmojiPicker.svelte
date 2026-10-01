@@ -11,20 +11,40 @@
 	import { tick } from 'svelte';
 	import { allEmojis, type EmojiOption } from '$lib/utils/emojis';
 	import { formatToMime } from '$lib/utils/media';
+	import { PUBLIC_GIPHY_API_KEY } from '$lib/env';
 	import Icon from './Icon.svelte';
 
 	let {
 		open = $bindable(false),
 		onOpenChange = () => {},
-		onPick
+		onPick,
+		enableGifs = false,
+		onPickGif
 	} = $props<{
 		open?: boolean;
 		onOpenChange?: (open: boolean) => void;
 		onPick?: (emoji: EmojiOption) => void;
+		enableGifs?: boolean;
+		onPickGif?: (gif: GiphyGif) => void;
 	}>();
+
+	type GiphyGif = {
+		id: string;
+		title: string;
+		url: string;
+		previewUrl: string;
+		width: number;
+		height: number;
+	};
 
 	let cardEl: HTMLElement | null = null;
 	let filter = $state('');
+	let tab = $state<'emoji' | 'gif'>('emoji');
+	let gifs = $state<GiphyGif[]>([]);
+	let gifsLoading = $state(false);
+	let gifsError = $state('');
+	let gifRequest = 0;
+	let gifDebounce: ReturnType<typeof setTimeout> | null = null;
 	let flip = $state<'above' | 'below'>('above');
 	// Revealed one tick after mount so the CSS fade-in plays without a flash.
 	// The element only exists while `open` ({#if open}).
@@ -55,6 +75,68 @@
 		close();
 	}
 
+	function pickGif(gif: GiphyGif): void {
+		onPickGif?.(gif);
+		close();
+	}
+
+	function mapGif(item: any): GiphyGif | null {
+		const original = item?.images?.original;
+		const preview = item?.images?.fixed_width_small ?? item?.images?.fixed_width ?? original;
+		if (!item?.id || !original?.url || !preview?.url) return null;
+		return {
+			id: String(item.id),
+			title: String(item.title || 'GIF'),
+			url: String(original.url),
+			previewUrl: String(preview.url),
+			width: Number(preview.width) || 160,
+			height: Number(preview.height) || 120
+		};
+	}
+
+	async function loadGifs(query = ''): Promise<void> {
+		if (!enableGifs || !PUBLIC_GIPHY_API_KEY) {
+			gifs = [];
+			gifsError = enableGifs ? 'Configure PUBLIC_GIPHY_API_KEY para usar GIFs.' : '';
+			return;
+		}
+		const request = ++gifRequest;
+		gifsLoading = true;
+		gifsError = '';
+		try {
+			const params = new URLSearchParams({
+				api_key: PUBLIC_GIPHY_API_KEY,
+				limit: '24',
+				rating: 'pg-13'
+			});
+			const q = query.trim();
+			let endpoint = 'https://api.giphy.com/v1/gifs/trending';
+			if (q) {
+				endpoint = 'https://api.giphy.com/v1/gifs/search';
+				params.set('q', q);
+			}
+			const response = await fetch(`${endpoint}?${params.toString()}`);
+			if (!response.ok) throw new Error(`GIPHY ${response.status}`);
+			const payload = await response.json();
+			if (request !== gifRequest) return;
+			gifs = Array.isArray(payload?.data)
+				? payload.data.map(mapGif).filter((gif: GiphyGif | null): gif is GiphyGif => gif !== null)
+				: [];
+		} catch {
+			if (request !== gifRequest) return;
+			gifs = [];
+			gifsError = 'Não foi possível carregar GIFs.';
+		} finally {
+			if (request === gifRequest) gifsLoading = false;
+		}
+	}
+
+	function selectTab(next: 'emoji' | 'gif'): void {
+		tab = next;
+		filter = '';
+		if (next === 'gif' && gifs.length === 0) void loadGifs();
+	}
+
 	function customEmojiSrc(opt: Extract<EmojiOption, { kind: 'custom' }>): string {
 		if (!opt.image_blob) return '';
 		return `data:${formatToMime(opt.format)};base64,${opt.image_blob}`;
@@ -63,11 +145,26 @@
 	function onFilterInput(e: Event): void {
 		const el = e.target as HTMLInputElement;
 		filter = el.value;
+		if (tab !== 'gif') return;
+		if (gifDebounce) clearTimeout(gifDebounce);
+		gifDebounce = setTimeout(() => {
+			void loadGifs(filter);
+		}, 280);
 	}
 
 	// Fresh start each time the picker opens.
 	$effect(() => {
-		if (open) filter = '';
+		if (open) {
+			filter = '';
+			tab = 'emoji';
+			gifsError = '';
+		}
+		return () => {
+			if (gifDebounce) {
+				clearTimeout(gifDebounce);
+				gifDebounce = null;
+			}
+		};
 	});
 
 	// Decide above/below and horizontal offset so the card stays inside the
@@ -192,12 +289,20 @@
 		aria-label="Emojis"
 		bind:this={cardEl}
 	>
+		{#if enableGifs}
+			<div class="emoji-picker-tabs" role="tablist" aria-label="Conteúdo">
+				<button class:active={tab === 'emoji'} role="tab" aria-selected={tab === 'emoji'} onclick={() => selectTab('emoji')}>Emoji</button>
+				<button class:active={tab === 'gif'} role="tab" aria-selected={tab === 'gif'} onclick={() => selectTab('gif')}>GIF</button>
+			</div>
+		{/if}
+
 		<div class="emoji-picker-head">
 			<input
 				type="text"
 				class="emoji-filter"
-				placeholder="Filtrar emojis…"
-				aria-label="Filtrar emojis"
+				placeholder={tab === 'gif' ? 'Buscar GIFs…' : 'Filtrar emojis…'}
+				aria-label={tab === 'gif' ? 'Buscar GIFs' : 'Filtrar emojis'}
+				value={filter}
 				oninput={onFilterInput}
 			/>
 			<button class="popover-close" onclick={close} aria-label="Fechar">
@@ -206,6 +311,24 @@
 		</div>
 
 		<div class="emoji-picker-body">
+			{#if tab === 'gif'}
+				{#if gifsLoading}
+					<div class="emoji-empty">Carregando GIFs…</div>
+				{:else if gifsError}
+					<div class="emoji-empty">{gifsError}</div>
+				{:else if gifs.length}
+					<div class="gif-grid">
+						{#each gifs as gif (gif.id)}
+							<button class="gif" title={gif.title} onclick={() => pickGif(gif)}>
+								<img src={gif.previewUrl} alt={gif.title} loading="lazy" />
+							</button>
+						{/each}
+					</div>
+				{:else}
+					<div class="emoji-empty">Nenhum GIF encontrado.</div>
+				{/if}
+				<div class="giphy-attribution">Powered by GIPHY</div>
+			{:else}
 			{#if custom.length}
 				<div class="emoji-section">
 					<span class="emoji-section-label">Personalizados</span>
@@ -238,6 +361,7 @@
 
 			{#if !unicode.length && !custom.length}
 				<div class="emoji-empty">Nada encontrado.</div>
+			{/if}
 			{/if}
 		</div>
 	</div>
@@ -283,6 +407,27 @@
 			opacity 0.18s var(--ease),
 			transform 0.18s var(--ease),
 			visibility 0s;
+	}
+	.emoji-picker-tabs {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 4px;
+		padding: 8px 12px 0;
+	}
+	.emoji-picker-tabs button {
+		height: 32px;
+		border: 0;
+		border-radius: 10px;
+		background: transparent;
+		color: var(--muted);
+		font: inherit;
+		font-size: 12px;
+		font-weight: 800;
+		cursor: pointer;
+	}
+	.emoji-picker-tabs button.active {
+		background: rgba(70, 160, 220, 0.14);
+		color: var(--text);
 	}
 	.emoji-picker-head {
 		display: flex;
@@ -399,6 +544,38 @@
 		color: var(--text);
 		line-height: 1.2;
 		padding: 0 2px;
+	}
+	.gif-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 6px;
+	}
+	.gif {
+		min-width: 0;
+		padding: 0;
+		border: 0;
+		border-radius: 10px;
+		overflow: hidden;
+		background: rgba(76, 132, 170, 0.1);
+		cursor: pointer;
+	}
+	.gif img {
+		display: block;
+		width: 100%;
+		height: 110px;
+		object-fit: cover;
+	}
+	.gif:hover {
+		transform: translateY(-1px);
+		box-shadow: 0 6px 14px rgba(20, 80, 120, 0.16);
+	}
+	.giphy-attribution {
+		padding: 9px 4px 1px;
+		text-align: right;
+		font-size: 10px;
+		font-weight: 800;
+		letter-spacing: 0.03em;
+		color: var(--muted-soft);
 	}
 	.emoji-empty {
 		grid-column: 1 / -1;
