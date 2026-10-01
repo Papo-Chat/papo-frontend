@@ -99,6 +99,24 @@
 
 	async function save(): Promise<void> {
 		if (!config || saving) return;
+
+		// Normalize values produced by the old UI before sending them to the
+		// current backend enum contract.
+		const rawFont = String(config.display.fontSize);
+		const rawDensity = String(config.display.messageDensity);
+		const fontSize =
+			rawFont === 'small' || rawFont === 'medium' || rawFont === 'huge'
+				? rawFont
+				: rawFont === 'large'
+					? 'huge'
+					: 'medium';
+		const messageDensity =
+			rawDensity === 'compact' || rawDensity === 'normal' || rawDensity === 'comfortable'
+				? rawDensity
+				: rawDensity === 'spacious'
+					? 'comfortable'
+					: 'normal';
+
 		saving = true;
 		saved = false;
 		error = null;
@@ -106,7 +124,7 @@
 			await settingsStore.update({
 				theme: config.theme,
 				notifications: { ...config.notifications },
-				display: { ...config.display }
+				display: { ...config.display, fontSize, messageDensity }
 			});
 			saved = true;
 			if (savedTimer) clearTimeout(savedTimer);
