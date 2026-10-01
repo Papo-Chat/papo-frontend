@@ -217,7 +217,14 @@ export function dispatchEvent(event: WsOutbound): void {
 				config.notifications.sound &&
 				sessionState.status !== 'busy'
 			) {
-				void playNotificationSound(userId);
+				void playNotificationSound(userId).then((played) => {
+					if (!played) {
+						console.warn('[notification-sound] new_notification arrived but audio did not play', {
+							visibilityState: document.visibilityState,
+							hasFocus: document.hasFocus()
+						});
+					}
+				});
 			}
 			break;
 		}
