@@ -7,10 +7,12 @@
 
 	let {
 		content = null,
-		message = null
+		message = null,
+		highlightText = ''
 	} = $props<{
 		content?: string | null;
 		message?: MessageWithAttachment | null;
+		highlightText?: string;
 	}>();
 
 	const text = $derived(message?.content ?? content ?? '');
@@ -19,7 +21,7 @@
 <div class="compact-message">
 	{#if text}
 		<div class="compact-text">
-			<FormattedMessage content={text} />
+			<FormattedMessage content={text} {highlightText} />
 		</div>
 	{/if}
 
