@@ -18,10 +18,13 @@ export type NotificationSoundInfo = {
 };
 
 let audioContext: AudioContext | null = null;
+let mediaPlayer: HTMLAudioElement | null = null;
+let mediaPlayerObjectUrl: string | null = null;
 let preparedUserId: string | null = null;
 let preparedBuffer: AudioBuffer | null = null;
 let prepareGeneration = 0;
 let unlockInstalled = false;
+let mediaUnlocked = false;
 let pendingUserId: string | null = null;
 
 function getAudioContext(): AudioContext | null {
@@ -32,6 +35,40 @@ function getAudioContext(): AudioContext | null {
 	}
 
 	return audioContext;
+}
+
+function getMediaPlayer(): HTMLAudioElement | null {
+	if (typeof window === 'undefined' || typeof Audio === 'undefined') return null;
+
+	if (!mediaPlayer) {
+		mediaPlayer = new Audio();
+		mediaPlayer.preload = 'auto';
+		mediaPlayer.playsInline = true;
+	}
+
+	return mediaPlayer;
+}
+
+function setMediaPlayerSource(record: SoundRecord | null): void {
+	const audio = getMediaPlayer();
+	if (!audio) return;
+
+	audio.pause();
+	audio.currentTime = 0;
+
+	if (mediaPlayerObjectUrl) {
+		URL.revokeObjectURL(mediaPlayerObjectUrl);
+		mediaPlayerObjectUrl = null;
+	}
+
+	if (record) {
+		mediaPlayerObjectUrl = URL.createObjectURL(record.blob);
+		audio.src = mediaPlayerObjectUrl;
+	} else {
+		audio.src = DEFAULT_SOUND_URL;
+	}
+
+	audio.load();
 }
 
 function openDb(): Promise<IDBDatabase | null> {
@@ -95,6 +132,7 @@ export async function prepareNotificationSound(userId: string): Promise<void> {
 
 	preparedUserId = userId;
 	preparedBuffer = buffer;
+	setMediaPlayerSource(record);
 }
 
 function playPreparedBuffer(ctx: AudioContext): boolean {
@@ -115,12 +153,27 @@ export function installNotificationSoundUnlock(): void {
 
 	const unlock = () => {
 		const ctx = getAudioContext();
-		if (!ctx) return;
+		const audio = getMediaPlayer();
 
-		void ctx
-			.resume()
+		if (ctx) {
+			void ctx.resume().catch((err) => {
+				console.warn('[notification-sound] AudioContext unlock failed', err);
+			});
+		}
+
+		if (!audio || mediaUnlocked) return;
+
+		const previousVolume = audio.volume;
+		audio.volume = 0.0001;
+		audio.currentTime = 0;
+
+		void audio
+			.play()
 			.then(() => {
-				if (ctx.state !== 'running') return;
+				audio.pause();
+				audio.currentTime = 0;
+				audio.volume = previousVolume;
+				mediaUnlocked = true;
 
 				window.removeEventListener('pointerdown', unlock, true);
 				window.removeEventListener('keydown', unlock, true);
@@ -128,12 +181,11 @@ export function installNotificationSoundUnlock(): void {
 
 				const userId = pendingUserId;
 				pendingUserId = null;
-				if (userId) {
-					void playNotificationSound(userId);
-				}
+				if (userId) void playNotificationSound(userId);
 			})
 			.catch((err) => {
-				console.warn('[notification-sound] Chrome audio unlock failed', err);
+				audio.volume = previousVolume;
+				console.warn('[notification-sound] HTMLAudio unlock failed', err);
 			});
 	};
 
@@ -205,36 +257,53 @@ export async function clearNotificationSound(userId: string): Promise<void> {
 	await prepareNotificationSound(userId);
 }
 
+async function playMediaFallback(): Promise<boolean> {
+	const audio = getMediaPlayer();
+	if (!audio) return false;
+
+	try {
+		audio.pause();
+		audio.currentTime = 0;
+		audio.volume = 1;
+		await audio.play();
+		return true;
+	} catch (err) {
+		console.warn('[notification-sound] HTMLAudio playback failed', err);
+		return false;
+	}
+}
+
 export async function playNotificationSound(userId: string): Promise<boolean> {
 	const ctx = getAudioContext();
-	if (!ctx) return false;
-
-	// Important for Chrome: resume is attempted before any other await. When
-	// this function is called by the "Testar" button, the call is still inside
-	// the user activation event.
-	if (ctx.state !== 'running') {
-		try {
-			await ctx.resume();
-		} catch (err) {
-			pendingUserId = userId;
-			console.warn('[notification-sound] playback blocked until user interaction', err);
-			return false;
-		}
-	}
 
 	try {
 		if (preparedUserId !== userId || !preparedBuffer) {
 			await prepareNotificationSound(userId);
 		}
 
-		if (ctx.state !== 'running') {
-			pendingUserId = userId;
-			return false;
+		// Chrome may suspend Web Audio for background tabs without rejecting
+		// resume(). Prefer it when running, then fall back to a persistent
+		// HTMLMediaElement which is handled differently by Chrome.
+		if (ctx) {
+			if (ctx.state !== 'running') {
+				try {
+					await ctx.resume();
+				} catch {
+					// fall through to HTMLAudio
+				}
+			}
+
+			if (ctx.state === 'running' && playPreparedBuffer(ctx)) {
+				return true;
+			}
 		}
 
-		return playPreparedBuffer(ctx);
+		const played = await playMediaFallback();
+		if (!played) pendingUserId = userId;
+		return played;
 	} catch (err) {
 		console.warn('[notification-sound] playback failed', err);
+		pendingUserId = userId;
 		return false;
 	}
 }
