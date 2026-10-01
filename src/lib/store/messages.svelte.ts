@@ -1214,11 +1214,13 @@ export async function gotoMessage(
 			(createdAt === newest.created_at && messageId > newest.id));
 
 	if (targetIsNewer) {
-		// Jump to the newest, then page towards older from the top.
-		await _freshLoadTracked(channelId);
-		const ch2 = state.channels.get(channelId);
-		if (ch2 && ch2.byId.has(messageId)) {
-			return true;
+		while (true) {
+			const current = state.channels.get(channelId);
+			if (!current || !current.hasMoreNewer || !current.cursorNewer) return false;
+			await loadMoreNewer(channelId);
+			const next = state.channels.get(channelId);
+			if (next?.byId.has(messageId)) return true;
+			if (!next?.hasMoreNewer) return false;
 		}
 	}
 
