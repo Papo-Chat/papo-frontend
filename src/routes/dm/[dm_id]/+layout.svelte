@@ -16,11 +16,11 @@
 		></button>
 	{/if}
 
-	{#if state.membersDrawerOpen}
+	{#if state.dmDirectoryOpen}
 		<button
 			class="directory-overlay"
 			aria-label="Fechar membros"
-			onclick={() => (state.membersDrawerOpen = false)}
+			onclick={() => (state.dmDirectoryOpen = false)}
 		></button>
 	{/if}
 
@@ -30,7 +30,7 @@
 		<slot />
 	</main>
 
-	{#if state.membersDrawerOpen}
+	{#if state.dmDirectoryOpen}
 		<MemberDirectory />
 	{/if}
 
