@@ -28,6 +28,36 @@
 	const myCameraOn = $derived(localCamera !== null);
 	const myScreenOn = $derived(localScreen !== null);
 
+	let expandedKey = $state<string | null>(null);
+	const expandedRemote = $derived(
+		expandedKey && !expandedKey.startsWith('local:')
+			? remoteMedia.find((media) => media.key === expandedKey) ?? null
+			: null
+	);
+	const expandedStream = $derived(
+		expandedKey === 'local:screen'
+			? localScreen
+			: expandedKey === 'local:camera'
+				? localCamera
+				: expandedRemote?.stream ?? null
+	);
+	const expandedKind = $derived(
+		expandedKey === 'local:screen'
+			? 'screen'
+			: expandedKey === 'local:camera'
+				? 'video'
+				: expandedRemote?.kind ?? null
+	);
+	const expandedTitle = $derived(
+		expandedKey === 'local:screen'
+			? 'Sua tela'
+			: expandedKey === 'local:camera'
+				? 'Sua câmera'
+				: expandedRemote
+					? `${mediaName(expandedRemote.userId)}${expandedRemote.kind === 'screen' ? ' — tela' : ''}`
+					: ''
+	);
+
 	let joining = $state(false);
 	const error = $derived(voiceStore.state.lastError);
 
@@ -134,6 +164,14 @@
 	function mediaName(userId: string): string {
 		const user = displayFor(userId);
 		return user?.nickname || user?.username || 'Usuário';
+	}
+
+	function expandMedia(key: string): void {
+		expandedKey = key;
+	}
+
+	function closeExpanded(): void {
+		expandedKey = null;
 	}
 </script>
 
@@ -308,6 +346,14 @@
 				{#if localScreen}
 					<div class="voice-media-tile screen">
 						<video use:streamVideo={localScreen} autoplay playsinline muted></video>
+						<button
+							class="voice-media-expand"
+							onclick={() => expandMedia('local:screen')}
+							aria-label="Expandir sua tela"
+							title="Expandir"
+						>
+							<Icon name="arrows-out-simple" variant="light" />
+						</button>
 						<div class="voice-media-label">
 							<Icon name="monitor" variant="light" />
 							<span>Sua tela</span>
@@ -324,6 +370,14 @@
 							muted
 							class="mirror"
 						></video>
+						<button
+							class="voice-media-expand"
+							onclick={() => expandMedia('local:camera')}
+							aria-label="Expandir sua câmera"
+							title="Expandir"
+						>
+							<Icon name="arrows-out-simple" variant="light" />
+						</button>
 						<div class="voice-media-label">
 							<Icon name="video-camera" variant="light" />
 							<span>Você</span>
@@ -334,6 +388,14 @@
 				{#each remoteMedia as media (media.key)}
 					<div class:screen={media.kind === 'screen'} class="voice-media-tile">
 						<video use:streamVideo={media.stream} autoplay playsinline></video>
+						<button
+							class="voice-media-expand"
+							onclick={() => expandMedia(media.key)}
+							aria-label="Expandir transmissão de {mediaName(media.userId)}"
+							title="Expandir"
+						>
+							<Icon name="arrows-out-simple" variant="light" />
+						</button>
 						<div class="voice-media-label">
 							<Icon
 								name={media.kind === 'screen' ? 'monitor' : 'video-camera'}
@@ -410,6 +472,42 @@
 		{/if}
 	</div>
 </div>
+
+{#if expandedKey && expandedStream}
+	<div class="voice-media-modal" role="dialog" aria-modal="true" aria-label={expandedTitle}>
+		<button
+			class="voice-media-modal-backdrop"
+			onclick={closeExpanded}
+			aria-label="Fechar transmissão expandida"
+		></button>
+		<div class="voice-media-modal-panel">
+			<div class="voice-media-modal-header">
+				<div class="voice-media-modal-title">
+					<Icon name={expandedKind === 'screen' ? 'monitor' : 'video-camera'} variant="light" />
+					<span>{expandedTitle}</span>
+				</div>
+				<button
+					class="voice-media-modal-close"
+					onclick={closeExpanded}
+					aria-label="Fechar"
+					title="Fechar"
+				>
+					<Icon name="x" variant="light" />
+				</button>
+			</div>
+			<div class="voice-media-modal-video">
+				<video
+					use:streamVideo={expandedStream}
+					autoplay
+					playsinline
+					muted={expandedKey.startsWith('local:')}
+					class:mirror={expandedKey === 'local:camera'}
+					class:contain={expandedKind === 'screen'}
+				></video>
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.voice-room {
@@ -918,8 +1016,8 @@
 		z-index: 1;
 
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-		gap: 8px;
+		grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+		gap: 10px;
 
 		width: 100%;
 		box-sizing: border-box;
@@ -942,6 +1040,7 @@
 
 	.voice-media-tile.screen {
 		grid-column: span 2;
+		min-height: 220px;
 	}
 
 	.voice-media-tile video {
@@ -958,6 +1057,39 @@
 
 	.voice-media-tile video.mirror {
 		transform: scaleX(-1);
+	}
+
+	.voice-media-expand {
+		position: absolute;
+		top: 8px;
+		right: 8px;
+		z-index: 2;
+
+		display: flex;
+		align-items: center;
+		justify-content: center;
+
+		width: 34px;
+		height: 34px;
+		padding: 0;
+
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		border-radius: 9px;
+		background: rgba(7, 18, 27, 0.68);
+		color: white;
+		backdrop-filter: blur(8px);
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 120ms ease, background 120ms ease;
+	}
+
+	.voice-media-tile:hover .voice-media-expand,
+	.voice-media-expand:focus-visible {
+		opacity: 1;
+	}
+
+	.voice-media-expand:hover {
+		background: rgba(12, 35, 50, 0.9);
 	}
 
 	.voice-media-label {
@@ -984,6 +1116,104 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.voice-media-modal {
+		position: fixed;
+		inset: 0;
+		z-index: 1000;
+
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 24px;
+	}
+
+	.voice-media-modal-backdrop {
+		position: absolute;
+		inset: 0;
+		border: 0;
+		background: rgba(4, 10, 15, 0.82);
+		backdrop-filter: blur(10px);
+		cursor: default;
+	}
+
+	.voice-media-modal-panel {
+		position: relative;
+		z-index: 1;
+
+		display: flex;
+		flex-direction: column;
+
+		width: min(94vw, 1500px);
+		height: min(90vh, 960px);
+		overflow: hidden;
+
+		border: 1px solid rgba(255, 255, 255, 0.18);
+		border-radius: 16px;
+		background: #0b1117;
+		box-shadow: 0 24px 70px rgba(0, 0, 0, 0.45);
+	}
+
+	.voice-media-modal-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		min-height: 48px;
+		padding: 8px 10px 8px 14px;
+		background: rgba(15, 28, 38, 0.96);
+		color: white;
+	}
+
+	.voice-media-modal-title {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		min-width: 0;
+		font-size: 13px;
+		font-weight: 700;
+	}
+
+	.voice-media-modal-title span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.voice-media-modal-close {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 34px;
+		height: 34px;
+		padding: 0;
+		border: 0;
+		border-radius: 9px;
+		background: rgba(255, 255, 255, 0.08);
+		color: white;
+		cursor: pointer;
+	}
+
+	.voice-media-modal-video {
+		flex: 1 1 auto;
+		min-height: 0;
+		background: #05090c;
+	}
+
+	.voice-media-modal-video video {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.voice-media-modal-video video.contain {
+		object-fit: contain;
+	}
+
+	.voice-media-modal-video video.mirror {
+		transform: scaleX(-1);
 	}
 
 	.voice-controls {
@@ -1140,6 +1370,20 @@
 	@media (max-width: 720px) {
 		.voice-media-grid {
 			grid-template-columns: 1fr;
+		}
+
+		.voice-media-expand {
+			opacity: 1;
+		}
+
+		.voice-media-modal {
+			padding: 0;
+		}
+
+		.voice-media-modal-panel {
+			width: 100vw;
+			height: 100dvh;
+			border-radius: 0;
 		}
 
 		.voice-media-tile.screen {
