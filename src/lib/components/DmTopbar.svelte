@@ -23,8 +23,9 @@
 		onSearchResult?: (result: SearchResult) => void;
 	}>();
 
-	const name = $derived(dm.user.nickname || dm.user.username);
-	const status = $derived(usersStore.effectiveStatus(dm.user.id));
+	const user = $derived(usersStore.state.byId.get(dm.user.id) ?? dm.user);
+	const name = $derived(user.nickname || user.username);
+	const status = $derived(usersStore.effectiveStatus(user.id));
 	const statusLabel = $derived(
 		status === 'online' ? 'Online' : status === 'away' ? 'Ausente' : status === 'busy' ? 'Ocupado' : 'Offline'
 	);
@@ -54,8 +55,8 @@
 	</button>
 
 	<div class="dm-title">
-		<Avatar user={dm.user} size={38} onClick={() => openProfile(dm.user)} ariaLabel={`Ver perfil de ${name}`} />
-		<button class="dm-title-copy" type="button" onclick={() => openProfile(dm.user)}>
+		<Avatar {user} size={38} onClick={() => openProfile(user)} ariaLabel={`Ver perfil de ${name}`} />
+		<button class="dm-title-copy" type="button" onclick={() => openProfile(user)}>
 			<strong>{name}</strong>
 			<span><i class="dm-presence {status}" aria-hidden="true"></i>{statusLabel}</span>
 		</button>
