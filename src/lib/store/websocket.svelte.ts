@@ -94,7 +94,9 @@ function resync(): void {
 	}
 	notificationsStore.load();
 	rolesStore.load();
-	void usersStore.loadList().catch(() => {});
+	if (usersStore.state.list.items.length === 0) {
+		void usersStore.loadList().catch(() => {});
+	}
 	void emojisStore.loadAll().catch(() => {});
 }
 
