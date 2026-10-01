@@ -90,6 +90,8 @@
 
 <style>
 	.msg-text {
+		width: 100%;
+		min-width: 0;
 		margin: 0;
 		overflow-wrap: anywhere;
 		-webkit-user-select: text;
@@ -153,18 +155,20 @@
 		color: var(--text-strong);
 	}
 
-	/* Triple backticks render as a distinct full-width block. */
+	/* Triple backticks render as one full-width rectangular panel. */
 	:global(.msg-text pre) {
 		display: block;
 		width: 100%;
+		min-width: 0;
 		max-width: 100%;
-		margin: 0.45em 0;
-		padding: 0.75em 0.85em;
+		margin: 0.5em 0;
+		padding: 0.8em 0.9em;
 		box-sizing: border-box;
-		border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
-		border-radius: 10px;
-		background: color-mix(in srgb, var(--text) 10%, var(--surface));
-		box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 20%, transparent);
+		border: 1px solid #b7cbd6;
+		border-radius: 4px;
+		background: #dce9ef;
+		box-shadow: none;
+		color: #142833;
 		overflow-x: hidden;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
@@ -172,16 +176,26 @@
 	}
 
 	:global(.msg-text pre code) {
-		display: block;
-		width: 100%;
-		max-width: 100%;
-		padding: 0;
-		border: 0;
-		background: transparent;
-		color: var(--text-strong);
+		display: block !important;
+		width: 100% !important;
+		min-width: 0;
+		max-width: 100% !important;
+		margin: 0 !important;
+		padding: 0 !important;
+		border: 0 !important;
+		border-radius: 0 !important;
+		background: transparent !important;
+		box-shadow: none !important;
+		color: inherit;
 		white-space: inherit;
 		overflow-wrap: inherit;
 		word-break: inherit;
+	}
+
+	:global([data-theme='dark'] .msg-text pre) {
+		border-color: #31505f;
+		background: #091b25;
+		color: #e9f5fa;
 	}
 
 	:global(.msg-text table) {
