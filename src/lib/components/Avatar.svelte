@@ -73,8 +73,12 @@
 		const setRetained = (next: boolean) => {
 			if (next === retained) return;
 			retained = next;
-			if (next) usersStore.retainProfile(id);
-			else usersStore.releaseProfile(id);
+			if (next) {
+				void usersStore.ensureSummary(id).catch(() => {});
+				usersStore.retainProfile(id);
+			} else {
+				usersStore.releaseProfile(id);
+			}
 		};
 
 		if (typeof IntersectionObserver === 'undefined') {
