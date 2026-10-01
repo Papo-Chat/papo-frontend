@@ -20,8 +20,16 @@
 		joined ? voiceStore.state.activeSpeaker : null
 	);
 
+	const remoteMedia = $derived(
+		joined ? [...voiceStore.state.remoteMedia.values()] : []
+	);
+	const localCamera = $derived(joined ? voiceStore.state.localCameraStream : null);
+	const localScreen = $derived(joined ? voiceStore.state.localScreenStream : null);
+	const myCameraOn = $derived(localCamera !== null);
+	const myScreenOn = $derived(localScreen !== null);
+
 	let joining = $state(false);
-	let error: string | null = $state(null);
+	const error = $derived(voiceStore.state.lastError);
 
 	const myMuted = $derived(
 		members.find((m) => m.user_id === me)?.muted ?? false
@@ -30,7 +38,6 @@
 	$effect(() => {
 		if (joined) {
 			joining = false;
-			error = null;
 		}
 	});
 
@@ -38,9 +45,8 @@
 		if (joined || joining) return;
 
 		joining = true;
-		error = null;
 
-		voiceStore.join(channel.id);
+		voiceStore.join(channel.id, me ?? undefined);
 	}
 
 	function leave(): void {
@@ -84,8 +90,50 @@
 		}
 	}
 
+	async function toggleCamera(): Promise<void> {
+		try {
+			await voiceStore.camera(!myCameraOn);
+		} catch (e) {
+			voiceStore.state.lastError =
+				e instanceof Error ? e.message : 'Falha ao alterar a câmera.';
+		}
+	}
+
+	async function toggleScreen(): Promise<void> {
+		try {
+			await voiceStore.screenShare(!myScreenOn);
+		} catch (e) {
+			voiceStore.state.lastError =
+				e instanceof Error ? e.message : 'Falha ao compartilhar a tela.';
+		}
+	}
+
 	function displayFor(id: string) {
 		return usersStore.state.byId.get(id);
+	}
+
+	function streamVideo(node: HTMLVideoElement, stream: MediaStream) {
+		const attach = (next: MediaStream) => {
+			node.srcObject = next;
+			void node.play().catch(() => {});
+		};
+
+		attach(stream);
+
+		return {
+			update(next: MediaStream) {
+				attach(next);
+			},
+			destroy() {
+				node.pause();
+				node.srcObject = null;
+			}
+		};
+	}
+
+	function mediaName(userId: string): string {
+		const user = displayFor(userId);
+		return user?.nickname || user?.username || 'Usuário';
 	}
 </script>
 
@@ -253,6 +301,54 @@
 			{/if}
 		</div>
 
+		{#if joined && (localCamera || localScreen || remoteMedia.length > 0)}
+			<div class="voice-divider"></div>
+
+			<div class="voice-media-grid">
+				{#if localScreen}
+					<div class="voice-media-tile screen">
+						<video use:streamVideo={localScreen} autoplay playsinline muted></video>
+						<div class="voice-media-label">
+							<Icon name="monitor" variant="light" />
+							<span>Sua tela</span>
+						</div>
+					</div>
+				{/if}
+
+				{#if localCamera}
+					<div class="voice-media-tile">
+						<video
+							use:streamVideo={localCamera}
+							autoplay
+							playsinline
+							muted
+							class="mirror"
+						></video>
+						<div class="voice-media-label">
+							<Icon name="video-camera" variant="light" />
+							<span>Você</span>
+						</div>
+					</div>
+				{/if}
+
+				{#each remoteMedia as media (media.key)}
+					<div class:screen={media.kind === 'screen'} class="voice-media-tile">
+						<video use:streamVideo={media.stream} autoplay playsinline></video>
+						<div class="voice-media-label">
+							<Icon
+								name={media.kind === 'screen' ? 'monitor' : 'video-camera'}
+								variant="light"
+							/>
+							<span>
+								{mediaName(media.userId)}
+								{media.kind === 'screen' ? ' — tela' : ''}
+							</span>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{/if}
+
 		{#if joined}
 			<div class="voice-divider"></div>
 
@@ -275,6 +371,31 @@
 					<span>
 						{myMuted ? 'Falar' : 'Mudo'}
 					</span>
+				</button>
+
+				<button
+					class="voice-btn"
+					class:active={myCameraOn}
+					onclick={toggleCamera}
+					disabled={voiceStore.state.cameraBusy}
+					aria-label={myCameraOn ? 'Desligar câmera' : 'Ligar câmera'}
+				>
+					<Icon
+						name={myCameraOn ? 'video-camera-slash' : 'video-camera'}
+						variant="light"
+					/>
+					<span>{myCameraOn ? 'Câmera off' : 'Câmera'}</span>
+				</button>
+
+				<button
+					class="voice-btn"
+					class:active={myScreenOn}
+					onclick={toggleScreen}
+					disabled={voiceStore.state.screenBusy}
+					aria-label={myScreenOn ? 'Parar compartilhamento' : 'Compartilhar tela'}
+				>
+					<Icon name="monitor" variant="light" />
+					<span>{myScreenOn ? 'Parar tela' : 'Tela'}</span>
 				</button>
 
 				<button
@@ -792,6 +913,79 @@
 		font-size: 11px;
 	}
 
+	.voice-media-grid {
+		position: relative;
+		z-index: 1;
+
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+		gap: 8px;
+
+		width: 100%;
+		box-sizing: border-box;
+		padding: 10px;
+	}
+
+	.voice-media-tile {
+		position: relative;
+		overflow: hidden;
+		min-height: 150px;
+		aspect-ratio: 16 / 9;
+
+		border: 1px solid rgba(255, 255, 255, 0.7);
+		border-radius: 12px;
+		background: rgba(15, 34, 48, 0.9);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.12),
+			0 4px 12px rgba(20, 70, 100, 0.16);
+	}
+
+	.voice-media-tile.screen {
+		grid-column: span 2;
+	}
+
+	.voice-media-tile video {
+		display: block;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		background: #0b1117;
+	}
+
+	.voice-media-tile.screen video {
+		object-fit: contain;
+	}
+
+	.voice-media-tile video.mirror {
+		transform: scaleX(-1);
+	}
+
+	.voice-media-label {
+		position: absolute;
+		left: 8px;
+		bottom: 8px;
+
+		display: flex;
+		align-items: center;
+		gap: 5px;
+
+		max-width: calc(100% - 16px);
+		padding: 4px 7px;
+
+		border-radius: 8px;
+		background: rgba(6, 17, 25, 0.7);
+		color: white;
+		font-size: 11px;
+		font-weight: 650;
+		backdrop-filter: blur(8px);
+	}
+
+	.voice-media-label span {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
 	.voice-controls {
 		position: relative;
 		z-index: 1;
@@ -840,7 +1034,12 @@
 		cursor: pointer;
 	}
 
-	.voice-btn:hover {
+	.voice-btn:disabled {
+		opacity: 0.55;
+		cursor: wait;
+	}
+
+	.voice-btn:hover:not(:disabled) {
 		background:
 			linear-gradient(
 				180deg,
@@ -904,6 +1103,10 @@
 			);
 	}
 
+	:global([data-theme='dark']) .voice-media-tile {
+		border-color: rgba(156, 213, 242, 0.14);
+	}
+
 	:global([data-theme='dark']) .voice-member-state,
 	:global([data-theme='dark']) .voice-empty-icon {
 		border-color: rgba(176, 225, 248, 0.1);
@@ -933,5 +1136,24 @@
 				rgba(104, 179, 218, 0.27),
 				rgba(42, 100, 132, 0.3)
 			);
+	}
+</style>
+<style>
+	@media (max-width: 720px) {
+		.voice-media-grid {
+			grid-template-columns: 1fr;
+		}
+
+		.voice-media-tile.screen {
+			grid-column: span 1;
+		}
+
+		.voice-controls {
+			flex-wrap: wrap;
+		}
+
+		.voice-btn.danger {
+			margin-left: 0;
+		}
 	}
 </style>
