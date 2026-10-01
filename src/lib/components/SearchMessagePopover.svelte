@@ -229,6 +229,12 @@
         return result.author_id ? usersStore.state.byId.get(result.author_id) : undefined;
     }
 
+    function interactiveTarget(target: EventTarget | null): boolean {
+        return !!(target as HTMLElement | null)?.closest(
+            'button, a, input, select, textarea, video, audio, [role="slider"]'
+        );
+    }
+
     function close(): void {
         if (open) {
             open = false;
@@ -429,10 +435,19 @@
                         <div class="search-results">
                             {#each results as m (m.id)}
                                 {@const a = authorFor(m)}
-                                <button
+                                <div
                                     class="popover-item search-result"
-                                    type="button"
-                                    onclick={() => onResultClick?.(m)}
+                                    role="button"
+                                    tabindex={0}
+                                    onclick={(e) => {
+                                        if (!interactiveTarget(e.target)) onResultClick?.(m);
+                                    }}
+                                    onkeydown={(e) => {
+                                        if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+                                            e.preventDefault();
+                                            onResultClick?.(m);
+                                        }
+                                    }}
                                 >
                                     <Avatar user={a} userId={m.author_id} size={34} />
                                     <div class="search-result-main">
@@ -453,7 +468,7 @@
                                             />
                                         </div>
                                     </div>
-                                </button>
+                                </div>
                             {/each}
                         </div>
 
