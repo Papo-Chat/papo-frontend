@@ -17,6 +17,7 @@
 		highlightMessageId = null,
 		joinNotice = null,
 		replyTo = null,
+		disabled = false,
 		onOpenChange,
 		onReply,
 		onReplyCancel,
@@ -36,6 +37,7 @@
 		highlightMessageId?: string | null;
 		joinNotice?: { id: number; name: string } | null;
 		replyTo?: MessageWithAttachment | null;
+		disabled?: boolean;
 		onOpenChange?: (open: boolean) => void;
 		onReply?: (message: MessageWithAttachment) => void;
 		onReplyCancel?: () => void;
@@ -90,59 +92,61 @@
 	aria-hidden={!open}
 	aria-label="Chat de texto do canal de voz"
 >
-	<header class="voice-text-head">
-		<div class="voice-text-title">
-			<Icon name="chat-circle-text" variant="light" />
-			<div>
-				<strong>Chat de texto</strong>
-				<span>#{channel.name}</span>
+	{#if open}
+		<header class="voice-text-head">
+			<div class="voice-text-title">
+				<Icon name="chat-circle-text" variant="light" />
+				<div>
+					<strong>Chat de texto</strong>
+					<span>#{channel.name}</span>
+				</div>
 			</div>
+			<button class="voice-text-close" type="button" onclick={close} aria-label="Fechar chat">
+				<Icon name="x" variant="light" />
+			</button>
+		</header>
+	
+		<div class="voice-text-chat">
+			{#key channel.id}
+				<Chat
+					{messages}
+					{loading}
+					{hasMoreNewer}
+					{hasMoreOlder}
+					{highlightMessageId}
+					{joinNotice}
+					{onReply}
+					{onJumpToLatest}
+					{onJumpToLastRead}
+					{onLoadMoreOlder}
+					{onLoadMoreNewer}
+					{onReachLatest}
+					lastReadMessageId={channel.last_read_message}
+				/>
+			{/key}
 		</div>
-		<button class="voice-text-close" type="button" onclick={close} aria-label="Fechar chat">
-			<Icon name="x" variant="light" />
-		</button>
-	</header>
-
-	<div class="voice-text-chat">
-		{#key channel.id}
-			<Chat
-				{messages}
-				{loading}
-				{hasMoreNewer}
-				{hasMoreOlder}
-				{highlightMessageId}
-				{joinNotice}
-				{onReply}
-				{onJumpToLatest}
-				{onJumpToLastRead}
-				{onLoadMoreOlder}
-				{onLoadMoreNewer}
-				{onReachLatest}
-				lastReadMessageId={channel.last_read_message}
+	
+		<div class="voice-text-composer">
+			{#if typingIds.length > 0}
+				<div class="voice-typing-strip" role="status" aria-label={typingText + '...'}>
+					<span class="typing-avatars">
+						{#each typingIds as uid (uid)}
+							<Avatar user={usersStore.state.byId.get(uid)} userId={uid} size={18} />
+						{/each}
+					</span>
+					<span class="typing-copy">{typingText}...</span>
+				</div>
+			{/if}
+	
+			<Composer
+				{onSend}
+				channelId={channel.id}
+				{replyTo}
+				{onReplyCancel}
+				{disabled}
 			/>
-		{/key}
-	</div>
-
-	<div class="voice-text-composer">
-		{#if typingIds.length > 0}
-			<div class="voice-typing-strip" role="status" aria-label={typingText + '...'}>
-				<span class="typing-avatars">
-					{#each typingIds as uid (uid)}
-						<Avatar user={usersStore.state.byId.get(uid)} userId={uid} size={18} />
-					{/each}
-				</span>
-				<span class="typing-copy">{typingText}...</span>
-			</div>
+		</div>
 		{/if}
-
-		<Composer
-			{onSend}
-			channelId={channel.id}
-			{replyTo}
-			{onReplyCancel}
-			disabled={loading && messages.length === 0}
-		/>
-	</div>
 </aside>
 
 <style>
