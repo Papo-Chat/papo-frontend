@@ -847,6 +847,36 @@ function stopStream(stream: MediaStream | null): void {
 	}
 }
 
+async function tuneVideoSender(
+	sender: RTCRtpSender,
+	kind: 'camera' | 'screen'
+): Promise<void> {
+	const params = sender.getParameters();
+	if (!params.encodings || params.encodings.length === 0) {
+		params.encodings = [{}];
+	}
+
+	const encoding = params.encodings[0];
+	encoding.maxBitrate = kind === 'screen' ? 8_000_000 : 3_000_000;
+	encoding.maxFramerate = 30;
+	encoding.scaleResolutionDownBy = 1;
+
+	try {
+		await sender.setParameters(params);
+	} catch {
+		// Alguns browsers só aceitam certos campos depois da negociação.
+	}
+
+	const track = sender.track;
+	if (!track) return;
+
+	try {
+		track.contentHint = kind === 'screen' ? 'detail' : 'motion';
+	} catch {
+		// contentHint é best-effort.
+	}
+}
+
 async function setCamera(targetOn: boolean): Promise<void> {
 	const { conn, channelId } = ensureActivePeer();
 	const currentlyOn = state.localCameraStream !== null;
@@ -860,9 +890,9 @@ async function setCamera(targetOn: boolean): Promise<void> {
 			const stream = await navigator.mediaDevices.getUserMedia({
 				audio: false,
 				video: {
-					width: { ideal: 1280 },
-					height: { ideal: 720 },
-					frameRate: { ideal: 30, max: 30 }
+					width: { ideal: 1280, max: 1920 },
+					height: { ideal: 720, max: 1080 },
+					frameRate: { ideal: 30, min: 24, max: 30 }
 				}
 			});
 			const track = stream.getVideoTracks().at(0);
@@ -884,6 +914,7 @@ async function setCamera(targetOn: boolean): Promise<void> {
 				await cameraTransceiver.sender.replaceTrack(track);
 				cameraTransceiver.direction = 'sendonly';
 			}
+			await tuneVideoSender(cameraTransceiver.sender, 'camera');
 			state.localCameraStream = stream;
 
 			if (!wsSend({ type: 'voice_camera', channel_id: channelId, on: true } as WsInbound)) {
@@ -948,7 +979,9 @@ async function setScreenShare(targetOn: boolean): Promise<void> {
 			const stream = await navigator.mediaDevices.getDisplayMedia({
 				audio: false,
 				video: {
-					frameRate: { ideal: 30, max: 30 }
+					width: { ideal: 1920, max: 2560 },
+					height: { ideal: 1080, max: 1440 },
+					frameRate: { ideal: 30, min: 24, max: 30 }
 				}
 			});
 			const track = stream.getVideoTracks().at(0);
@@ -970,6 +1003,7 @@ async function setScreenShare(targetOn: boolean): Promise<void> {
 				await screenTransceiver.sender.replaceTrack(track);
 				screenTransceiver.direction = 'sendonly';
 			}
+			await tuneVideoSender(screenTransceiver.sender, 'screen');
 			state.localScreenStream = stream;
 
 			track.onended = () => {
