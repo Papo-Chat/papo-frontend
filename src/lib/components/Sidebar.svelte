@@ -21,7 +21,11 @@
 	const groups = $derived(channelsStore.grouped());
 
 	const onlineCount = $derived(
-		[...usersStore.state.presence.values()].filter((presence) => presence.status !== 'offline').length
+		[...usersStore.state.presence.entries()].filter(([id, presence]) => {
+			if (presence.status === 'offline') return false;
+			const user = usersStore.state.byId.get(id);
+			return !(user?.banned ?? usersStore.state.bannedIds.has(id));
+		}).length
 	);
 	const drawerOpen = $derived(state.channelsDrawerOpen);
 	const me = $derived(meId());
