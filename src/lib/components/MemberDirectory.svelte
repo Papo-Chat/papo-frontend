@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { ApiError } from '$lib/api';
 	import { state as uiState, openProfile } from '$lib/store/ui.svelte';
 	import { meId } from '$lib/store/session.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
@@ -68,7 +69,16 @@
 			uiState.railDrawerOpen = false;
 			await goto(`/dm/${dm.id}`);
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Não foi possível abrir a conversa.';
+			if (err instanceof ApiError) {
+				const echoNotFound =
+					err.type === 'about:blank' &&
+					err.message.trim().toLowerCase() === 'not found';
+				error = echoNotFound
+					? 'O endpoint de mensagens diretas não está disponível neste backend.'
+					: err.detail || err.message || 'Não foi possível abrir a conversa.';
+			} else {
+				error = err instanceof Error ? err.message : 'Não foi possível abrir a conversa.';
+			}
 		} finally {
 			openingUserId = null;
 		}
