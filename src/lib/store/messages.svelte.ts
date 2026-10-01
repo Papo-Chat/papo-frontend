@@ -13,6 +13,7 @@
 
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
+import * as notificationsStore from '../store/notifications.svelte';
 import type { ChannelMessagesState, MessagesState } from './messages.types';
 import type {
 	LinkPreview,
@@ -1282,6 +1283,7 @@ export async function remove(messageId: string): Promise<void> {
 	if (channelId) {
 		removeMessage(state, channelId, messageId);
 	}
+	notificationsStore.removeByMessage(messageId);
 }
 
 export function pin(
