@@ -55,6 +55,7 @@ import type {
 	UserConfig,
 	UserList,
 	UserProfile,
+	UserSummary,
 	WhoamiResponse,
 	BanUserRequest,
 	ChangePasswordRequest,
@@ -362,8 +363,8 @@ export const users = {
 	list(q?: { since?: string; last_id?: string; order?: 'asc' | 'desc' }): Promise<UserList> {
 		return request<UserList>('/users', { query: q });
 	},
-	summaryBatch(ids: string[]): Promise<import('./types').UserSummary[]> {
-		return request<import('./types').UserSummary[]>('/users/user_summary_batch', {
+	summaryBatch(ids: string[]): Promise<UserSummary[]> {
+		return request<UserSummary[]>('/users/user_summary_batch', {
 			method: 'POST',
 			body: { ids }
 		});
