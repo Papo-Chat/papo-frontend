@@ -142,7 +142,7 @@
 				onclick={doLogout}
 			>
 				<span class="mobile-rail-icon">
-					<Icon name="sign-out" variant="light" />
+					<Icon name="door-open" variant="light" />
 				</span>
 				<span>Sair</span>
 			</button>
