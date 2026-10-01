@@ -1564,7 +1564,7 @@ export function getMessage(channelId: string, messageId: string): MessageWithAtt
 	if (!ch) {
 		return null;
 	}
-	return ch.byId.get(messageId) ?? null;
+	return ch.byId.get(messageId) ?? ch.pinned.find((message) => message.id === messageId) ?? null;
 }
 
 // Applied after a successful send/edit so the cache matches the server's
