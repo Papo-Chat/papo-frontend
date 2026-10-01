@@ -33,11 +33,6 @@
 				: '/admin/roles'
 	);
 
-	$effect(() => {
-		if (me && !dmsStore.state.loaded && !dmsStore.state.loading) {
-			void dmsStore.load().catch(() => {});
-		}
-	});
 
 	function closeMobileRail(): void {
 		uiState.railDrawerOpen = false;
