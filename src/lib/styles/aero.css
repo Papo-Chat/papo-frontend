@@ -1810,7 +1810,6 @@ button.name:focus-visible {
 /* tap highlight */
 :is(
 	.preview-card,
-	.bubble,
 	.pill,
 	.rail-btn,
 	.composer-tool,
@@ -1822,6 +1821,12 @@ button.name:focus-visible {
 ) {
 	-webkit-tap-highlight-color: transparent;
 	user-select: none;
+}
+
+.bubble {
+	-webkit-tap-highlight-color: transparent;
+	-webkit-user-select: text;
+	user-select: text;
 }
 
 /* =====================================================================

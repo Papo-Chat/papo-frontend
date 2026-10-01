@@ -10,6 +10,7 @@
 	import { state as serverState } from '$lib/store/server.svelte';
 	import { channelAccess, can } from '$lib/store/roles.svelte';
 	import { formatTime } from '$lib/utils/time';
+	import { isGiphyMarker } from '$lib/utils/giphy';
 	import Avatar from './Avatar.svelte';
 	import Reactions from './Reactions.svelte';
 	import PreviewCard from './PreviewCard.svelte';
@@ -26,6 +27,7 @@
 	// ── autor + permissões (fonte: stores, sem sample) ───────────────
 
 	const me = $derived(meId());
+	const isGiphyMessage = $derived(!!message.content && isGiphyMarker(message.content) !== null);
 	const author = $derived(usersStore.state.byId.get(message.author_id ?? ''));
 	const channel = $derived(channelsStore.state.byId.get(message.channel_id));
 	const isOwner = $derived(!!me && serverState.server?.owner_id === me);
@@ -321,7 +323,7 @@
 					<button class="confirm-btn" type="button" onclick={doEdit}> Enviar </button>
 				</div>
 			{:else if message.content}
-				<div class="bubble {goldHighlight ? 'pinned' : ''}">
+				<div class="bubble {goldHighlight ? 'pinned' : ''}" class:giphy-bubble={isGiphyMessage}>
 					<FormattedMessage content={message.content} allowEveryoneHighlight={authorCanEveryone} />
 				</div>
 				{#if message.previews.length}
@@ -424,6 +426,15 @@
 	.content {
 		flex: 1;
 		min-width: 0;
+	}
+
+	.bubble.giphy-bubble {
+		display: inline-flex;
+		align-self: flex-start;
+		width: fit-content;
+		max-width: calc(100vw - 96px);
+		box-sizing: border-box;
+		padding: 8px;
 	}
 
 	.meta {

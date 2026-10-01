@@ -4,6 +4,7 @@
 	import { openProfile } from '$lib/store/ui.svelte';
 	import { emojiUrl } from '$lib/store/emojis.svelte';
 	import { renderMessageMarkdown } from '$lib/utils/markdown';
+	import { isGiphyMarker, resolveGiphyGif, type GiphyResolvedGif } from '$lib/utils/giphy';
 	import type { Emoji } from '$lib/types';
 
 	let {
@@ -17,6 +18,10 @@
 	}>();
 
 	let el: HTMLDivElement | null = null;
+	const giphyId = $derived(isGiphyMarker(content));
+	let giphy = $state<GiphyResolvedGif | null>(null);
+	let giphyLoading = $state(false);
+	let giphyError = $state('');
 
 	// Mapa de nomes de emojis carregados -> emoji. Best-effort:
 	// apenas os emojis já carregados (paginação lazy) são resolvidos.
@@ -27,7 +32,7 @@
 	const mentionIds = $derived([...content.matchAll(/@mention\(<@([0-9a-fA-F-]{16,})>\)/g)].map((m) => m[1]));
 	const mentionMap = $derived(new Map(mentionIds.map((id) => { const u = usersStore.state.byId.get(id); return [id, u?.nickname || u?.username || 'usuário'] as const; })));
 	$effect(() => { if (mentionIds.length) void usersStore.ensureSummaries(mentionIds).catch(() => {}); });
-	const html = $derived(renderMessageMarkdown(content, nameMap, emojiUrl, { mentions: mentionMap, highlightEveryone: allowEveryoneHighlight }));
+	const html = $derived(giphyId ? '' : renderMessageMarkdown(content, nameMap, emojiUrl, { mentions: mentionMap, highlightEveryone: allowEveryoneHighlight }));
 
 	function handleMentionClick(event: MouseEvent): void {
 		const target = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-mention-user-id]');
@@ -80,24 +85,121 @@
 	}
 
 	$effect(() => {
-		if (!el) return;
+		if (!giphyId) {
+			giphy = null;
+			giphyError = '';
+			giphyLoading = false;
+			return;
+		}
+
+		let cancelled = false;
+		giphy = null;
+		giphyError = '';
+		giphyLoading = true;
+		void resolveGiphyGif(giphyId)
+			.then((resolved) => {
+				if (!cancelled) giphy = resolved;
+			})
+			.catch(() => {
+				if (!cancelled) giphyError = 'Não foi possível carregar este GIF.';
+			})
+			.finally(() => {
+				if (!cancelled) giphyLoading = false;
+			});
+
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	$effect(() => {
+		if (!el || giphyId) return;
 		el.innerHTML = html;
 		applyTextHighlight(el, highlightText);
 	});
 </script>
 
-<div class="msg-text" bind:this={el} onclick={handleMentionClick}></div>
+{#if giphyId}
+	<div
+		class="giphy-message"
+		style={giphy ? `--giphy-width: ${Math.min(giphy.width || 420, 420)}px` : undefined}
+	>
+		{#if giphy}
+			<img
+				src={giphy.url}
+				alt={giphy.title}
+				loading="lazy"
+			/>
+			<div class="giphy-attribution">Powered by GIPHY</div>
+		{:else if giphyLoading}
+			<div class="giphy-status">Carregando GIF…</div>
+		{:else}
+			<div class="giphy-status">{giphyError || 'GIF indisponível.'}</div>
+		{/if}
+	</div>
+{:else}
+	<div class="msg-text" bind:this={el} onclick={handleMentionClick}></div>
+{/if}
 
 <style>
+	.giphy-message {
+		display: inline-flex;
+		width: min(var(--giphy-width, 420px), calc(100vw - 112px));
+		max-width: 420px;
+		flex-direction: column;
+		align-items: stretch;
+	}
+
+	.giphy-message img {
+		display: block;
+		width: 100%;
+		height: auto;
+		border-radius: 10px;
+	}
+
+	.giphy-attribution {
+		margin-top: 4px;
+		text-align: right;
+		font-size: 10px;
+		font-weight: 700;
+		color: var(--muted-soft);
+	}
+
+	.giphy-status {
+		font-size: 12px;
+		color: var(--muted-soft);
+	}
+
 	.msg-text {
+		width: 100%;
+		min-width: 0;
 		margin: 0;
 		overflow-wrap: anywhere;
+		-webkit-user-select: text;
+		user-select: text;
+		cursor: text;
 	}
 
 	:global(.msg-text :is(h1, h2, h3, h4, h5, h6)) {
 		margin: 0.2em 0;
+		font-weight: 700;
+		line-height: 1.25;
+	}
+
+	:global(.msg-text h1) {
+		font-size: 1.6em;
+	}
+
+	:global(.msg-text h2) {
+		font-size: 1.4em;
+	}
+
+	:global(.msg-text h3) {
+		font-size: 1.2em;
+	}
+
+	:global(.msg-text :is(h4, h5, h6)) {
 		font-size: 1em;
-		font-weight: 600;
 	}
 
 	:global(.msg-text p) {
@@ -122,22 +224,59 @@
 	:global(.msg-text code) {
 		font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 		font-size: 0.9em;
-		background: var(--glass-soft);
-		padding: 0.05em 0.3em;
-		border-radius: 4px;
 	}
 
+	/* Single backticks stay inline. */
+	:global(.msg-text :not(pre) > code) {
+		display: inline;
+		padding: 0.08em 0.32em;
+		border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+		border-radius: 5px;
+		background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+		color: var(--text-strong);
+	}
+
+	/* Triple backticks render as one full-width rectangular panel. */
 	:global(.msg-text pre) {
-		margin: 0.15em 0;
-		padding: 0.5em 0.6em;
-		background: var(--glass);
-		border-radius: 8px;
-		overflow-x: auto;
+		display: block;
+		width: 100%;
+		min-width: 0;
+		max-width: 100%;
+		margin: 0.5em 0;
+		padding: 0.8em 0.9em;
+		box-sizing: border-box;
+		border: 1px solid #b7cbd6;
+		border-radius: 4px;
+		background: #dce9ef;
+		box-shadow: none;
+		color: #142833;
+		overflow-x: hidden;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		word-break: break-word;
 	}
 
 	:global(.msg-text pre code) {
-		padding: 0;
-		background: transparent;
+		display: block !important;
+		width: 100% !important;
+		min-width: 0;
+		max-width: 100% !important;
+		margin: 0 !important;
+		padding: 0 !important;
+		border: 0 !important;
+		border-radius: 0 !important;
+		background: transparent !important;
+		box-shadow: none !important;
+		color: inherit;
+		white-space: inherit;
+		overflow-wrap: inherit;
+		word-break: inherit;
+	}
+
+	:global([data-theme='dark'] .msg-text pre) {
+		border-color: #31505f;
+		background: #091b25;
+		color: #e9f5fa;
 	}
 
 	:global(.msg-text table) {

@@ -60,6 +60,22 @@ describe('renderMessageMarkdown', () => {
 		expect(out).toContain('foo &lt;bar&gt;');
 	});
 
+	it('treats triple backticks as a block even when attached to content', () => {
+		const oneLine = renderMessageMarkdown('```{"ok":true}```', nameMap, urlFn);
+		expect(oneLine).toContain('<pre><code>');
+		expect(oneLine).toContain('{&quot;ok&quot;:true}');
+		expect(oneLine).not.toContain('<p><code>');
+
+		const attachedClose = renderMessageMarkdown('```\nfirst\nsecond```', nameMap, urlFn);
+		expect(attachedClose).toContain('<pre><code>first\nsecond\n</code></pre>');
+	});
+
+	it('keeps single backticks as inline code', () => {
+		const out = renderMessageMarkdown('before `inline` after', nameMap, urlFn);
+		expect(out).toContain('<p>before <code>inline</code> after</p>');
+		expect(out).not.toContain('<pre>');
+	});
+
 	it('keeps emoji shortcodes literal inside code spans', () => {
 		const out = renderMessageMarkdown('`x :y:`', nameMap, urlFn);
 		expect(out).toContain('<code>');
