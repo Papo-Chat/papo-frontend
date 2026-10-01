@@ -69,20 +69,23 @@
 
 	async function loadSearchPages(reset = false): Promise<void> {
 		const query = searchQuery.trim();
-		if (!query || searchLoading) return;
+		if (!query) return;
 
-		const generation = reset ? ++searchGeneration : searchGeneration;
 		if (reset) {
+			searchGeneration += 1;
 			searchResults = [];
 			searchCursor = null;
 			searchHasMore = true;
+		} else if (searchLoading) {
+			return;
 		}
 
+		const generation = searchGeneration;
 		searchLoading = true;
 		try {
 			let pages = 0;
 			let added = 0;
-			while (generation === searchGeneration && pages < 8 && (reset || searchHasMore)) {
+			while (generation === searchGeneration && pages < 8 && searchHasMore) {
 				const res = await api.users.list({
 					...(searchCursor
 						? { since: searchCursor.since, last_id: searchCursor.last_id }
