@@ -809,6 +809,7 @@ export function onVoiceAudioRoutes(ev: WsVoiceAudioRoutes): void {
 		state.remoteAudioRoutes.set(route.track_id, route.user_id);
 	}
 
+	refreshRemoteAudioBindings();
 	applyAllRemoteAudioPreferences();
 }
 
@@ -1236,9 +1237,51 @@ function cleanupVideoMedia(): void {
 // ── ontrack: remote audio + local per-user controls ──────
 
 const remoteAudios = new SvelteMap<string, HTMLAudioElement>();
-// O elemento continua keyed por MID (estável por transceiver); este índice
-// traduz o track.id exposto pelo backend para o MID correspondente no browser.
+// O elemento continua keyed por MID (estável por transceiver).
+const remoteAudioTransceivers = new Map<string, RTCRtpTransceiver>();
+// Alias do identificador de slot enviado pelo backend -> MID local.
 const remoteAudioTrackKeys = new Map<string, string>();
+
+function isReceivingAudio(transceiver: RTCRtpTransceiver): boolean {
+	const direction = transceiver.currentDirection ?? transceiver.direction;
+	return transceiver.receiver.track.kind === 'audio' && direction.includes('recv');
+}
+
+function audioSlotIdForTransceiver(transceiver: RTCRtpTransceiver): string | null {
+	if (!peer) return null;
+
+	const receivers = peer
+		.getTransceivers()
+		.filter(isReceivingAudio)
+		.sort((a, b) => {
+			const am = Number(a.mid);
+			const bm = Number(b.mid);
+			if (Number.isFinite(am) && Number.isFinite(bm)) return am - bm;
+			return String(a.mid ?? '').localeCompare(String(b.mid ?? ''));
+		});
+
+	const index = receivers.indexOf(transceiver);
+	return index >= 0 ? `papo-audio-${index}` : null;
+}
+
+function refreshRemoteAudioBindings(): void {
+	remoteAudioTrackKeys.clear();
+
+	for (const [key, audio] of remoteAudios) {
+		const track = (audio.srcObject as MediaStream | null)?.getAudioTracks().at(0);
+		const transceiver = remoteAudioTransceivers.get(key);
+		if (!track || !transceiver) continue;
+
+		// Preferência direta quando o browser preserva o msid/track id do SFU.
+		remoteAudioTrackKeys.set(track.id, key);
+		if (track.label) remoteAudioTrackKeys.set(track.label, key);
+
+		// Fallback determinístico: os tracks do backend são criados em ordem
+		// papo-audio-N e ocupam, nessa mesma ordem, os transceivers recv de áudio.
+		const slotId = audioSlotIdForTransceiver(transceiver);
+		if (slotId) remoteAudioTrackKeys.set(slotId, key);
+	}
+}
 
 function applyRemoteAudioPreferencesForTrack(trackId: string): void {
 	const key = remoteAudioTrackKeys.get(trackId);
@@ -1297,6 +1340,7 @@ function cleanupRemoteAudio(): void {
 	}
 
 	remoteAudios.clear();
+	remoteAudioTransceivers.clear();
 	remoteAudioTrackKeys.clear();
 	state.remoteAudioRoutes.clear();
 	state.remoteUserVolumes.clear();
@@ -1388,14 +1432,10 @@ function onRemoteTrack(_peerConn: RTCPeerConnection, event: RTCTrackEvent): void
 		remoteAudios.set(mid, audio);
 	}
 
-	const previousTrack = (audio.srcObject as MediaStream | null)?.getAudioTracks().at(0);
-	if (previousTrack && previousTrack.id !== track.id && remoteAudioTrackKeys.get(previousTrack.id) === mid) {
-		remoteAudioTrackKeys.delete(previousTrack.id);
-	}
-
-	remoteAudioTrackKeys.set(track.id, mid);
 	audio.srcObject = new MediaStream([track]);
-	applyRemoteAudioPreferencesForTrack(track.id);
+	remoteAudioTransceivers.set(mid, event.transceiver);
+	refreshRemoteAudioBindings();
+	applyAllRemoteAudioPreferences();
 
 	void audio.play().catch(() => {
 		// autoplay bloqueado; a UI pode chamar resumeRemoteAudio()
@@ -1418,9 +1458,8 @@ function onRemoteTrack(_peerConn: RTCPeerConnection, event: RTCTrackEvent): void
 			current.srcObject = null;
 			current.remove();
 			remoteAudios.delete(mid);
-			if (remoteAudioTrackKeys.get(track.id) === mid) {
-				remoteAudioTrackKeys.delete(track.id);
-			}
+			remoteAudioTransceivers.delete(mid);
+			refreshRemoteAudioBindings();
 		},
 		{ once: true }
 	);
