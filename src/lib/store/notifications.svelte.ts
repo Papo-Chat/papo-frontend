@@ -99,6 +99,13 @@ export function markRead(ids: string[]): void {
 
 // new_notification (F3): the id may be ephemeral — never insert the event
 // payload as a row. Just bump the live counter and refetch.
+export function markAllRead(): void {
+	const ids = state.items.filter((notification) => !notification.read).map((notification) => notification.id);
+	for (let offset = 0; offset < ids.length; offset += 1000) {
+		markRead(ids.slice(offset, offset + 1000));
+	}
+}
+
 export function handleNewNotification(): void {
 	state.unreadCount += 1;
 	refetch.run();
