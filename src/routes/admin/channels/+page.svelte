@@ -198,6 +198,30 @@
 			error = err instanceof Error ? err.message : 'Erro ao atualizar permissão.';
 		}
 	}
+
+	async function removeRoleBinding(roleId: string): Promise<void> {
+		if (!selected || saving || !channelPerms[roleId]) return;
+
+		const before = channelPerms;
+		const next = { ...channelPerms };
+		delete next[roleId];
+		channelPerms = next;
+		saving = true;
+		error = null;
+		success = '';
+
+		try {
+			await channelsStore.removeRolePermissions(selected.id, roleId);
+			success = 'Vínculo da role removido.';
+			if (feedbackTimer) clearTimeout(feedbackTimer);
+			feedbackTimer = setTimeout(() => (success = ''), 1800);
+		} catch (err) {
+			channelPerms = before;
+			error = err instanceof Error ? err.message : 'Erro ao remover vínculo da role.';
+		} finally {
+			saving = false;
+		}
+	}
 </script>
 
 <div class="channels-page">
@@ -323,7 +347,12 @@
 							{#if loadingPerms}
 								<div class="empty">Carregando permissões…</div>
 							{:else}
-								<PermissionTable perms={channelPerms} {roles} onToggle={togglePermission} />
+								<PermissionTable
+									perms={channelPerms}
+									{roles}
+									onToggle={togglePermission}
+									onRemove={removeRoleBinding}
+								/>
 							{/if}
 						</div>
 					{/if}
