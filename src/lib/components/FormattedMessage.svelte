@@ -120,14 +120,15 @@
 </script>
 
 {#if giphyId}
-	<div class="giphy-message">
+	<div
+		class="giphy-message"
+		style={giphy ? `--giphy-width: ${Math.min(giphy.width || 420, 420)}px` : undefined}
+	>
 		{#if giphy}
 			<img
 				src={giphy.url}
 				alt={giphy.title}
 				loading="lazy"
-				width={giphy.width || undefined}
-				height={giphy.height || undefined}
 			/>
 			<div class="giphy-attribution">Powered by GIPHY</div>
 		{:else if giphyLoading}
@@ -142,17 +143,16 @@
 
 <style>
 	.giphy-message {
-		display: inline-flex;
-		width: fit-content;
-		max-width: min(420px, 100%);
+		display: flex;
+		width: min(var(--giphy-width, 420px), 100%);
+		max-width: 100%;
 		flex-direction: column;
 		align-items: stretch;
 	}
 
 	.giphy-message img {
 		display: block;
-		width: auto;
-		max-width: 100%;
+		width: 100%;
 		height: auto;
 		border-radius: 10px;
 	}
