@@ -75,6 +75,12 @@
 
 	const typingChars = $derived(Array.from(typingText));
 
+	$effect(() => {
+		if (channel?.type !== 'voice') {
+			uiState.voiceChatDrawerOpen = false;
+		}
+	});
+
 	// Carrega histórico e mensagens fixadas quando o canal muda.
 	$effect(() => {
 		const id = channel?.id;
@@ -201,6 +207,7 @@
 				{highlightMessageId}
 				{joinNotice}
 				{replyTo}
+				disabled={!messagesStore.getChannel(channel.id)}
 				{onReply}
 				{onReplyCancel}
 				onSend={SendMsg}
