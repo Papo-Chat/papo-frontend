@@ -62,6 +62,15 @@
 	const name = $derived(author?.nickname || author?.username || 'Usuário');
 	const msgReply = $derived(messagesStore.getMessage(message.channel_id, message.reply_to));
 	const replyAuthor = $derived(usersStore.state.byId.get(msgReply?.author_id ?? ''));
+	const mentionsMe = $derived(
+		!!me && (message.content ?? '').includes(`@mention(<@${me}>)`)
+	);
+	const repliesToMe = $derived(
+		!!me && !!message.reply_to && msgReply?.author_id === me
+	);
+	const goldHighlight = $derived(
+		isPinned || isEveryoneMessage || mentionsMe || repliesToMe
+	);
 
 	// ── ações: edit/delete/reply/pin ─────────────────────────────────
 
@@ -168,6 +177,7 @@
 
 <article
 	class="message"
+	class:gold-highlight={goldHighlight}
 	data-message-id={message.id}
 	bind:this={messageEl}
 	onpointerenter={onEnter}
@@ -313,7 +323,7 @@
 					<button class="confirm-btn" type="button" onclick={doEdit}> Enviar </button>
 				</div>
 			{:else if message.content}
-				<div class="bubble {(isPinned || isEveryoneMessage) ? 'pinned' : ''}">
+				<div class="bubble {goldHighlight ? 'pinned' : ''}">
 					<FormattedMessage content={message.content} allowEveryoneHighlight={authorCanEveryone} />
 				</div>
 				{#if message.previews.length}
@@ -330,7 +340,7 @@
 			<!-- anexos: thumbnail de imagem, player de vídeo/áudio ou chip. -->
 			{#if message.attachments.length}
 				{#each message.attachments as a (a.id)}
-					<Attachment attachment={a} pinned={isPinned} />
+					<Attachment attachment={a} pinned={goldHighlight} />
 				{/each}
 			{/if}
 
@@ -367,6 +377,20 @@
 		padding: 4px 8px;
 		border-radius: 10px;
 		position: relative;
+	}
+
+	.message.gold-highlight {
+		box-shadow: inset 0 0 0 1px rgba(224, 168, 20, 0.78);
+		background: linear-gradient(90deg, rgba(231, 168, 11, 0.055), transparent 72%);
+	}
+
+	:global([data-theme='dark']) .message.gold-highlight {
+		box-shadow: inset 0 0 0 1px rgba(255, 214, 109, 0.48);
+		background: linear-gradient(90deg, rgba(255, 205, 72, 0.065), transparent 72%);
+	}
+
+	:global(html[data-ui-flat]) .message.gold-highlight {
+		background: rgba(231, 168, 11, 0.06);
 	}
 	.edit-input {
 		font: inherit;
