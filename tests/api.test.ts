@@ -8,6 +8,7 @@ import {
 	health,
 	server,
 	users,
+	messages,
 	auth,
 	ApiError,
 	setOnUnauthorized,
@@ -239,5 +240,45 @@ describe('query serialization', () => {
 		await users.list({ since: undefined, last_id: undefined });
 		const url = new URL(calls[0].url);
 		expect(url.search).toBe('');
+	});
+});
+
+
+describe('multipart upload credentials', () => {
+	it('enables withCredentials for XHR uploads', async () => {
+		let instance: FakeXMLHttpRequest | null = null;
+
+		class FakeXMLHttpRequest {
+			withCredentials = false;
+			status = 200;
+			statusText = 'OK';
+			responseText = '{}';
+			upload: { onprogress: ((event: ProgressEvent) => void) | null } = { onprogress: null };
+			onload: (() => void) | null = null;
+			onerror: (() => void) | null = null;
+
+			constructor() {
+				instance = this;
+			}
+
+			open(): void {}
+			setRequestHeader(): void {}
+			getResponseHeader(name: string): string | null {
+				return name.toLowerCase() === 'content-type' ? 'application/json' : null;
+			}
+			send(): void {
+				this.onload?.();
+			}
+		}
+
+		vi.stubGlobal('XMLHttpRequest', FakeXMLHttpRequest);
+
+		await messages.send(
+			{ channel_id: 'channel-1', content: 'hello', files: [] },
+			() => {}
+		);
+
+		expect(instance).not.toBeNull();
+		expect(instance?.withCredentials).toBe(true);
 	});
 });
