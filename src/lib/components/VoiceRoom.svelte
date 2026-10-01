@@ -27,6 +27,12 @@
 	const localScreen = $derived(joined ? voiceStore.state.localScreenStream : null);
 	const myCameraOn = $derived(localCamera !== null);
 	const myScreenOn = $derived(localScreen !== null);
+	const mediaCount = $derived(
+		remoteMedia.length + (localCamera ? 1 : 0) + (localScreen ? 1 : 0)
+	);
+	const mediaGridColumns = $derived(
+		mediaCount <= 1 ? 1 : mediaCount <= 4 ? 2 : mediaCount <= 9 ? 3 : 4
+	);
 
 	let expandedKey = $state<string | null>(null);
 	let expandedDialog: HTMLDialogElement | null = null;
@@ -356,7 +362,10 @@
 		{#if joined && (localCamera || localScreen || remoteMedia.length > 0)}
 			<div class="voice-divider"></div>
 
-			<div class="voice-media-grid">
+			<div
+				class="voice-media-grid"
+				style:grid-template-columns={`repeat(${mediaGridColumns}, minmax(0, 1fr))`}
+			>
 				{#if localScreen}
 					<div class="voice-media-tile screen">
 						<video use:streamVideo={localScreen} autoplay playsinline muted></video>
@@ -1033,8 +1042,8 @@
 		z-index: 1;
 
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
 		gap: 10px;
+		align-items: stretch;
 
 		width: 100%;
 		box-sizing: border-box;
@@ -1044,7 +1053,8 @@
 	.voice-media-tile {
 		position: relative;
 		overflow: hidden;
-		min-height: 150px;
+		min-width: 0;
+		min-height: 0;
 		aspect-ratio: 16 / 9;
 
 		border: 1px solid rgba(255, 255, 255, 0.7);
@@ -1056,8 +1066,7 @@
 	}
 
 	.voice-media-tile.screen {
-		grid-column: span 2;
-		min-height: 220px;
+		grid-column: auto;
 	}
 
 	.voice-media-tile video {
@@ -1381,9 +1390,15 @@
 				rgba(42, 100, 132, 0.3)
 			);
 	}
-	@media (max-width: 720px) {
+	@media (max-width: 900px) {
 		.voice-media-grid {
-			grid-template-columns: 1fr;
+			grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+		}
+	}
+
+	@media (max-width: 560px) {
+		.voice-media-grid {
+			grid-template-columns: 1fr !important;
 		}
 
 		.voice-media-expand {
@@ -1391,10 +1406,6 @@
 		}
 
 
-
-		.voice-media-tile.screen {
-			grid-column: span 1;
-		}
 
 		.voice-controls {
 			flex-wrap: wrap;
