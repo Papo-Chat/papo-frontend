@@ -111,56 +111,53 @@ function releaseMessageResources(
 
 function checkpointWindow(
 	ch: ChannelMessagesState,
-	byId: SvelteMap<string, MessageWithAttachment>
+	byId: SvelteMap<string, MessageWithAttachment>,
+	trimSide: 'oldest' | 'newest' =
+		ch.windowMode === 'latest' ? 'oldest' : 'newest'
 ): {
 	byId: SvelteMap<string, MessageWithAttachment>;
 	hasMoreOlder: boolean;
 	hasMoreNewer: boolean;
 	cursorOlder: ChannelMessagesState['cursorOlder'];
+	cursorNewer: ChannelMessagesState['cursorNewer'];
 } {
-	if (byId.size <= MAX_WINDOW) {
-		return {
-			byId,
-			hasMoreOlder: ch.hasMoreOlder,
-			hasMoreNewer: ch.hasMoreNewer,
-			cursorOlder: ch.cursorOlder
-		};
+	let hasMoreOlder = ch.hasMoreOlder;
+	let hasMoreNewer = ch.hasMoreNewer;
+
+	if (byId.size > MAX_WINDOW) {
+		const ids = sortedIds(byId);
+		const excess = ids.length - MAX_WINDOW;
+		const dropIds =
+			trimSide === 'oldest'
+				? ids.slice(0, excess)
+				: ids.slice(ids.length - excess);
+
+		const dropped: MessageWithAttachment[] = [];
+		for (const id of dropIds) {
+			const message = byId.get(id);
+			if (message) dropped.push(message);
+			byId.delete(id);
+		}
+		releaseMessageResources(byId, dropped);
+
+		if (trimSide === 'oldest') hasMoreOlder = true;
+		else hasMoreNewer = true;
 	}
-
-	const ids = sortedIds(byId);
-	const excess = ids.length - MAX_WINDOW;
-
-	// Latest window stays anchored at the bottom, so discard oldest messages.
-	// Historical window stays anchored around the user's reading position, so
-	// discard newest messages instead and remember that newer data exists.
-	const dropIds =
-		ch.windowMode === 'latest'
-			? ids.slice(0, excess)
-			: ids.slice(ids.length - excess);
-
-	const dropped: MessageWithAttachment[] = [];
-	for (const id of dropIds) {
-		const message = byId.get(id);
-		if (message) dropped.push(message);
-		byId.delete(id);
-	}
-	releaseMessageResources(byId, dropped);
 
 	const keptIds = sortedIds(byId);
-	const oldestId = keptIds[0];
-	const oldest = oldestId ? byId.get(oldestId) : undefined;
+	const oldest = keptIds.length ? byId.get(keptIds[0]) : undefined;
+	const newest = keptIds.length ? byId.get(keptIds[keptIds.length - 1]) : undefined;
 
 	return {
 		byId,
-		hasMoreOlder: ch.windowMode === 'latest' ? true : ch.hasMoreOlder,
-		hasMoreNewer: ch.windowMode === 'historical' ? true : ch.hasMoreNewer,
-		cursorOlder:
-			ch.windowMode === 'latest' && oldest
-				? {
-						since: oldest.created_at,
-						last_id: oldest.id
-					}
-				: ch.cursorOlder
+		hasMoreOlder,
+		hasMoreNewer,
+		cursorOlder: oldest
+			? { since: oldest.created_at, last_id: oldest.id }
+			: null,
+		cursorNewer: newest
+			? { since: newest.created_at, last_id: newest.id }
+			: null
 	};
 }
 
@@ -178,6 +175,7 @@ function newChannelState(): ChannelMessagesState {
 		hasMoreOlder: false,
 		hasMoreNewer: false,
 		cursorOlder: null,
+		cursorNewer: null,
 		requestGeneration: 0,
 		deletedMessageIds: new Set<string>(),
 		previewTombstones: new Set<string>(),
@@ -349,7 +347,8 @@ export function upsertMessage(
 				ids: sortedIds(checkpointed.byId),
 				hasMoreOlder: checkpointed.hasMoreOlder,
 				hasMoreNewer: checkpointed.hasMoreNewer,
-				cursorOlder: checkpointed.cursorOlder
+				cursorOlder: checkpointed.cursorOlder,
+				cursorNewer: checkpointed.cursorNewer
 			});
 			inserted = true;
 		}
@@ -917,7 +916,7 @@ function touchDuringFresh(channelId: string, messageId: string): void {
 
 async function _fetchPage(
 	channelId: string,
-	q?: { since?: string; last_id?: string }
+	q?: { since?: string; last_id?: string; order?: 'asc' | 'desc' }
 ): Promise<void> {
 	if (!state.channels.has(channelId)) {
 		state.channels.set(channelId, newChannelState());
@@ -1030,13 +1029,25 @@ async function _fetchPage(
 				}
 			}
 		}
+		const direction = q?.order ?? 'desc';
 		const pageState: ChannelMessagesState = {
 			...ch2,
-			hasMoreNewer: q == null ? false : ch2.hasMoreNewer,
-			hasMoreOlder: res.has_more,
-			cursorOlder: nextCursor(res.messages) ?? null
+			hasMoreOlder:
+				q == null || direction === 'desc'
+					? res.has_more
+					: ch2.hasMoreOlder,
+			hasMoreNewer:
+				q == null
+					? false
+					: direction === 'asc'
+						? res.has_more
+						: ch2.hasMoreNewer
 		};
-		const checkpointed = checkpointWindow(pageState, newByd);
+		const checkpointed = checkpointWindow(
+			pageState,
+			newByd,
+			q == null || direction === 'asc' ? 'oldest' : 'newest'
+		);
 
 		state.channels.set(channelId, {
 			...pageState,
@@ -1045,7 +1056,12 @@ async function _fetchPage(
 			ids: sortedIds(checkpointed.byId),
 			loaded: true,
 			hasMoreOlder: checkpointed.hasMoreOlder,
-			cursorOlder: checkpointed.cursorOlder
+			cursorOlder: checkpointed.cursorOlder,
+			cursorNewer: checkpointed.cursorNewer,
+			windowMode:
+				q != null && direction === 'asc' && !checkpointed.hasMoreNewer
+					? 'latest'
+					: pageState.windowMode
 			// A fresh load (q == null) is anchored at the newest message.
 		});
 		for (const message of messages) {
@@ -1141,7 +1157,22 @@ export function loadMoreOlder(channelId: string): Promise<void> {
 	state.channels.set(channelId, { ...ch, windowMode: 'historical' });
 	return _fetchPage(channelId, {
 		since: ch.cursorOlder.since,
-		last_id: ch.cursorOlder.last_id
+		last_id: ch.cursorOlder.last_id,
+		order: 'desc'
+	}).catch(() => {});
+}
+
+export function loadMoreNewer(channelId: string): Promise<void> {
+	const ch = state.channels.get(channelId);
+	if (!ch || ch.loading || !ch.hasMoreNewer || !ch.cursorNewer) {
+		return Promise.resolve();
+	}
+
+	state.channels.set(channelId, { ...ch, windowMode: 'historical' });
+	return _fetchPage(channelId, {
+		since: ch.cursorNewer.since,
+		last_id: ch.cursorNewer.last_id,
+		order: 'asc'
 	}).catch(() => {});
 }
 
@@ -1203,7 +1234,8 @@ export async function gotoMessage(
 		try {
 			await _fetchPage(channelId, {
 				since: cursor.since,
-				last_id: cursor.last_id
+				last_id: cursor.last_id,
+				order: 'desc'
 			});
 		} catch {
 			return false;
