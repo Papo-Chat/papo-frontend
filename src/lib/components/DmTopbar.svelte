@@ -41,7 +41,8 @@
 		uiState.railDrawerOpen = false;
 		uiState.channelsDrawerOpen = false;
 		uiState.voiceChatDrawerOpen = false;
-		uiState.membersDrawerOpen = true;
+		uiState.membersDrawerOpen = false;
+		uiState.dmDirectoryOpen = true;
 	}
 
 	function toggleSearch(): void {
