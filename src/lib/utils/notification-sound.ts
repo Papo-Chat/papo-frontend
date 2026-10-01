@@ -17,6 +17,42 @@ export type NotificationSoundInfo = {
 	custom: boolean;
 };
 
+let audioContext: AudioContext | null = null;
+let unlockInstalled = false;
+
+function getAudioContext(): AudioContext | null {
+	if (typeof window === 'undefined' || typeof AudioContext === 'undefined') return null;
+	if (!audioContext || audioContext.state === 'closed') {
+		audioContext = new AudioContext();
+	}
+	return audioContext;
+}
+
+// Chrome suspends Web Audio until the page receives a user gesture. Resume the
+// shared context on the first interaction so later WebSocket notifications can
+// play without requiring a click at notification time.
+export function installNotificationSoundUnlock(): void {
+	if (typeof window === 'undefined' || unlockInstalled) return;
+	unlockInstalled = true;
+
+	const unlock = () => {
+		const ctx = getAudioContext();
+		if (!ctx) return;
+		void ctx.resume().finally(() => {
+			if (ctx.state !== 'running') return;
+			window.removeEventListener('pointerdown', unlock, true);
+			window.removeEventListener('keydown', unlock, true);
+			window.removeEventListener('touchstart', unlock, true);
+		});
+	};
+
+	window.addEventListener('pointerdown', unlock, { capture: true, passive: true });
+	window.addEventListener('keydown', unlock, { capture: true });
+	window.addEventListener('touchstart', unlock, { capture: true, passive: true });
+}
+
+installNotificationSoundUnlock();
+
 function openDb(): Promise<IDBDatabase | null> {
 	if (typeof indexedDB === 'undefined') return Promise.resolve(null);
 
@@ -108,26 +144,34 @@ export async function clearNotificationSound(userId: string): Promise<void> {
 }
 
 export async function playNotificationSound(userId: string): Promise<boolean> {
-	if (typeof Audio === 'undefined') return false;
-
-	let objectUrl: string | null = null;
 	try {
-		const record = await getRecord(userId);
-		const src = record
-			? (objectUrl = URL.createObjectURL(record.blob))
-			: DEFAULT_SOUND_URL;
-		const audio = new Audio(src);
-		audio.preload = 'auto';
-		await audio.play();
-		if (objectUrl) {
-			const url = objectUrl;
-			const cleanup = () => URL.revokeObjectURL(url);
-			audio.addEventListener('ended', cleanup, { once: true });
-			audio.addEventListener('error', cleanup, { once: true });
+		const ctx = getAudioContext();
+		if (!ctx) return false;
+
+		if (ctx.state === 'suspended') {
+			try {
+				await ctx.resume();
+			} catch {
+				return false;
+			}
 		}
+		if (ctx.state !== 'running') return false;
+
+		const record = await getRecord(userId);
+		const bytes = record
+			? await record.blob.arrayBuffer()
+			: await fetch(DEFAULT_SOUND_URL, { cache: 'force-cache' }).then((res) => {
+					if (!res.ok) throw new Error(`Falha ao carregar som padrão: ${res.status}`);
+					return res.arrayBuffer();
+				});
+
+		const buffer = await ctx.decodeAudioData(bytes.slice(0));
+		const source = ctx.createBufferSource();
+		source.buffer = buffer;
+		source.connect(ctx.destination);
+		source.start();
 		return true;
 	} catch {
-		if (objectUrl) URL.revokeObjectURL(objectUrl);
 		return false;
 	}
 }
