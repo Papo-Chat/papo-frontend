@@ -27,6 +27,14 @@ let unlockInstalled = false;
 let mediaUnlocked = false;
 let pendingUserId: string | null = null;
 
+function resumeWithTimeout(ctx: AudioContext, ms = 300): Promise<boolean> {
+	if (ctx.state === 'running') return Promise.resolve(true);
+	return Promise.race([
+		ctx.resume().then(() => ctx.state === 'running').catch(() => false),
+		new Promise<boolean>((r) => setTimeout(() => r(false), ms))
+	]);
+}
+
 function getAudioContext(): AudioContext | null {
 	if (typeof window === 'undefined' || typeof AudioContext === 'undefined') return null;
 
@@ -281,21 +289,8 @@ export async function playNotificationSound(userId: string): Promise<boolean> {
 			await prepareNotificationSound(userId);
 		}
 
-		// Chrome may suspend Web Audio for background tabs without rejecting
-		// resume(). Prefer it when running, then fall back to a persistent
-		// HTMLMediaElement which is handled differently by Chrome.
-		if (ctx) {
-			if (ctx.state !== 'running') {
-				try {
-					await ctx.resume();
-				} catch {
-					// fall through to HTMLAudio
-				}
-			}
-
-			if (ctx.state === 'running' && playPreparedBuffer(ctx)) {
-				return true;
-			}
+		if (ctx && (await resumeWithTimeout(ctx)) && playPreparedBuffer(ctx)) {
+			return true;
 		}
 
 		const played = await playMediaFallback();
