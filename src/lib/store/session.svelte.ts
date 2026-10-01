@@ -133,6 +133,7 @@ function startAutoAway(): void {
 		'pointermove',
 		'keydown',
 		'touchstart',
+		'wheel',
 		'scroll'
 	];
 	for (const event of events) {
