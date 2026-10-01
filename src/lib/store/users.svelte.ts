@@ -2,7 +2,6 @@
 // typing (TTL), and a keyset list.
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
-import { nextCursor } from '../utils/keyset';
 import { blobToUrl } from '../utils/media';
 import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
 import type { UserSummary, UserProfile, KeysetCursor, PresenceStatus } from '../types';
