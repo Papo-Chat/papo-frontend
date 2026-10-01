@@ -96,6 +96,10 @@ function resync(): void {
 	if (open) {
 		messagesStore.load(open);
 	}
+	const openDm = dmsStore.state.openDmId;
+	if (openDm) {
+		messagesStore.load(openDm);
+	}
 	notificationsStore.load();
 	rolesStore.load();
 	if (usersStore.state.list.items.length === 0) {
