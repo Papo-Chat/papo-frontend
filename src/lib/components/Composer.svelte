@@ -18,7 +18,8 @@
 		onReplyCancel,
 		channelId,
 		replyTo,
-		disabled = false
+		disabled = false,
+		allowAttachments = null
 	} = $props<{
 		onSend?: (
 			text: string | null,
@@ -29,6 +30,7 @@
 		channelId?: string | null;
 		replyTo?: MessageWithAttachment | null;
 		disabled?: boolean;
+		allowAttachments?: boolean | null;
 	}>();
 
 	const MAX_ATTACHMENTS = 10;
@@ -65,7 +67,9 @@
 		isOwner: !!sessionState.userId && serverState.server?.owner_id === sessionState.userId
 	});
 	const canMentionEveryone = $derived(rolesStore.can('everyone_message', permissionContext));
-	const canSendAttachment = $derived(rolesStore.can('send_attachment', permissionContext));
+	const canSendAttachment = $derived(
+		allowAttachments ?? rolesStore.can('send_attachment', permissionContext)
+	);
 
 	function mentionOptions(): MentionOption[] {
 		if (!mentionOpen) return [];
