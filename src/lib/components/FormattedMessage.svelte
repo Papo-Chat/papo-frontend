@@ -92,6 +92,9 @@
 	.msg-text {
 		margin: 0;
 		overflow-wrap: anywhere;
+		-webkit-user-select: text;
+		user-select: text;
+		cursor: text;
 	}
 
 	:global(.msg-text :is(h1, h2, h3, h4, h5, h6)) {
@@ -144,16 +147,27 @@
 	}
 
 	:global(.msg-text pre) {
+		width: 100%;
+		max-width: 100%;
 		margin: 0.15em 0;
 		padding: 0.5em 0.6em;
+		box-sizing: border-box;
 		background: var(--glass);
 		border-radius: 8px;
-		overflow-x: auto;
+		overflow-x: hidden;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+		word-break: break-word;
 	}
 
 	:global(.msg-text pre code) {
+		display: block;
+		max-width: 100%;
 		padding: 0;
 		background: transparent;
+		white-space: inherit;
+		overflow-wrap: inherit;
+		word-break: inherit;
 	}
 
 	:global(.msg-text table) {
