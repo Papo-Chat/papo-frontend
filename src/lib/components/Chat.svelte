@@ -57,7 +57,6 @@
 	let touchY: number | null = null;
 	let lastScrollTop = 0;
 	let scrollDirection: 'up' | 'down' | null = null;
-	let returningToLatest = false;
 
 	let animatedMessageId = $state<string | null>(null);
 	let lastMessageId = $state<string | null>(null);
