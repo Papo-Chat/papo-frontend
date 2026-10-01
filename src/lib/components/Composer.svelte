@@ -147,6 +147,7 @@
 
 	// ── gravação de áudio (microfone) ──
 	let recording = $state(false);
+	let draggingFiles = $state(false);
 	let stopping = $state(false);
 	let recorder: MediaRecorder | null = null;
 	let stream: MediaStream | null = null;
@@ -163,26 +164,64 @@
 		replyAuthor?.nickname || replyAuthor?.username || ''
 	);
 
-	function onFilesSelected(e: Event): void {
-		const el = e.target as HTMLInputElement;
-		const selected = Array.from(el.files ?? []);
-		const available = MAX_ATTACHMENTS - files.length;
+	function addFiles(selected: File[]): void {
+		if (!canSendAttachment || selected.length === 0) return;
 
+		const available = MAX_ATTACHMENTS - files.length;
 		if (available <= 0) {
 			error = `Máximo de ${MAX_ATTACHMENTS} anexos por mensagem.`;
-			el.value = '';
 			return;
 		}
 
 		files = [...files, ...selected.slice(0, available)];
+		error =
+			selected.length > available
+				? `Máximo de ${MAX_ATTACHMENTS} anexos por mensagem.`
+				: null;
+	}
 
-		if (selected.length > available) {
-			error = `Máximo de ${MAX_ATTACHMENTS} anexos por mensagem.`;
-		} else {
-			error = null;
-		}
-
+	function onFilesSelected(e: Event): void {
+		const el = e.currentTarget as HTMLInputElement;
+		addFiles(Array.from(el.files ?? []));
 		el.value = '';
+	}
+
+	function hasDraggedFiles(data: DataTransfer | null): boolean {
+		return !!data && Array.from(data.types).includes('Files');
+	}
+
+	function onDragEnter(e: DragEvent): void {
+		if (!canSendAttachment || !hasDraggedFiles(e.dataTransfer)) return;
+		e.preventDefault();
+		draggingFiles = true;
+	}
+
+	function onDragOver(e: DragEvent): void {
+		if (!canSendAttachment || !hasDraggedFiles(e.dataTransfer)) return;
+		e.preventDefault();
+		if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+		draggingFiles = true;
+	}
+
+	function onDragLeave(e: DragEvent): void {
+		const next = e.relatedTarget as Node | null;
+		if (next && (e.currentTarget as HTMLElement).contains(next)) return;
+		draggingFiles = false;
+	}
+
+	function onDrop(e: DragEvent): void {
+		draggingFiles = false;
+		if (!canSendAttachment || !hasDraggedFiles(e.dataTransfer)) return;
+		e.preventDefault();
+		addFiles(Array.from(e.dataTransfer?.files ?? []));
+	}
+
+	function onPaste(e: ClipboardEvent): void {
+		if (!canSendAttachment) return;
+		const pasted = Array.from(e.clipboardData?.files ?? []);
+		if (pasted.length === 0) return;
+		e.preventDefault();
+		addFiles(pasted);
 	}
 
 	function removeFile(index: number): void {
@@ -595,7 +634,21 @@
 	});
 </script>
 
-<div class="composer-area">
+<div
+	class="composer-area"
+	class:dragging-files={draggingFiles}
+	ondragenter={onDragEnter}
+	ondragover={onDragOver}
+	ondragleave={onDragLeave}
+	ondrop={onDrop}
+>
+	{#if draggingFiles && canSendAttachment}
+		<div class="attachment-drop-overlay" aria-hidden="true">
+			<Icon name="paperclip" variant="duotone" size={22} />
+			<span>Solte para anexar</span>
+		</div>
+	{/if}
+
 	{#if replyTo}
 		<div class="composer-reply">
 			<Icon
@@ -878,6 +931,7 @@
                 {disabled}
                 oninput={onInput}
                 onkeydown={onKeydown}
+				onpaste={onPaste}
             ></textarea>
         </div>
 
@@ -908,6 +962,37 @@
 </div>
 
 <style>
+	.composer-area {
+		position: relative;
+	}
+
+	.attachment-drop-overlay {
+		position: absolute;
+		inset: 0 8px;
+		z-index: 40;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 8px;
+		border: 2px dashed color-mix(in srgb, var(--accent) 60%, var(--border));
+		border-radius: 16px;
+		background: color-mix(in srgb, var(--surface) 92%, transparent);
+		color: var(--text-primary);
+		font-size: 13px;
+		font-weight: 750;
+		pointer-events: none;
+	}
+
+	:global([data-theme='dark']) .attachment-drop-overlay {
+		background: rgba(13, 34, 48, 0.94);
+		border-color: rgba(108, 204, 250, 0.5);
+	}
+
+	:global(html[data-ui-flat]) .attachment-drop-overlay {
+		background: var(--surface);
+		box-shadow: none;
+	}
+
 	.audio-recorder {
 		flex: 1;
 		min-width: 0;
@@ -1074,6 +1159,21 @@
 
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
+	}
+
+	:global([data-theme='dark']) .composer-reply {
+		border-color: rgba(184, 225, 249, 0.14);
+		background: linear-gradient(145deg, rgba(42, 65, 80, 0.94), rgba(14, 38, 53, 0.94));
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+		color: var(--text-primary);
+	}
+
+	:global(html[data-ui-flat]) .composer-reply {
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+		background: var(--surface);
+		box-shadow: none;
+		border-color: var(--border);
 	}
 
 	.reply-cancel {
