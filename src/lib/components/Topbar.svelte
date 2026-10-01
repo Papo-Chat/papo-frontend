@@ -39,15 +39,22 @@
 	const canManageChannel = $derived(can('manage_channels', ctx));
 
 	function openSidebar(): void {
+		state.voiceChatDrawerOpen = false;
 		state.channelsDrawerOpen = true;
 	}
 
 	function openMembers(): void {
+		state.voiceChatDrawerOpen = false;
 		state.membersDrawerOpen = true;
 	}
 
 	function toggleVoiceChat(): void {
-		state.voiceChatDrawerOpen = !state.voiceChatDrawerOpen;
+		const next = !state.voiceChatDrawerOpen;
+		if (next) {
+			state.channelsDrawerOpen = false;
+			state.membersDrawerOpen = false;
+		}
+		state.voiceChatDrawerOpen = next;
 	}
 
 	function openNotifications(): void {
