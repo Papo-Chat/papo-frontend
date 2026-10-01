@@ -47,7 +47,7 @@
 	});
 
 	function close(): void {
-		uiState.membersDrawerOpen = false;
+		uiState.dmDirectoryOpen = false;
 	}
 
 	function onScroll(event: Event): void {
