@@ -259,6 +259,18 @@ export interface WsActiveSpeakerUpdate {
 	user_ids: string[] | null;
 }
 
+export interface WsVoiceAudioRoute {
+	track_id: string;
+	user_id: string;
+}
+
+// Snapshot unicast, específico do subscriber, de track SFU -> publisher.
+export interface WsVoiceAudioRoutes {
+	type: 'voice_audio_routes';
+	channel_id: string;
+	routes: WsVoiceAudioRoute[];
+}
+
 export type WsOutbound =
 	| WsMessage
 	| WsMessageEdit
@@ -288,7 +300,8 @@ export type WsOutbound =
 	| WsVoiceIceCandidate
 	| WsVoiceStateUpdate
 	| WsVoiceLeave
-	| WsActiveSpeakerUpdate;
+	| WsActiveSpeakerUpdate
+	| WsVoiceAudioRoutes;
 
 // ── inbound (client → server, 13 types, F24) ──────────
 
