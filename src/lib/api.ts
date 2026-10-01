@@ -102,7 +102,7 @@ export class ApiError extends Error {
 	instance: string | null;
 	requestId: string | null;
 
-	constructor(data: unknown, requestId: string | null) {
+	constructor(data: unknown, requestId: string | null, httpStatus = 0) {
 		const d =
 			typeof data === 'string' ? { detail: data } : ((data ?? {}) as Record<string, unknown>);
 		const msg = apiErrorText(d) ?? 'Erro na requisição';
@@ -110,7 +110,7 @@ export class ApiError extends Error {
 		this.name = 'ApiError';
 		this.type = typeof d.type === 'string' ? d.type : 'about:blank';
 		this.title = typeof d.title === 'string' ? d.title : 'Error';
-		this.status = typeof d.status === 'number' ? d.status : 0;
+		this.status = typeof d.status === 'number' ? d.status : httpStatus;
 		this.detail = apiErrorText(d.detail) ?? apiErrorText(d.message) ?? msg;
 		this.instance = d.instance == null ? null : String(d.instance);
 		this.requestId = requestId;
@@ -238,7 +238,7 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 					if (xhr.status === 401 && authFailure !== 'ignore' && unauthorizedHook) {
 						unauthorizedHook();
 					}
-					reject(new ApiError(data, requestId));
+					reject(new ApiError(data, requestId, xhr.status));
 					return;
 				}
 				resolve(JSON.parse(xhr.responseText) as T);
@@ -284,7 +284,7 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 		if (res.status === 401 && authFailure !== 'ignore' && unauthorizedHook) {
 			unauthorizedHook();
 		}
-		throw new ApiError(data, requestId);
+		throw new ApiError(data, requestId, res.status);
 	}
 
 	if (raw) {
