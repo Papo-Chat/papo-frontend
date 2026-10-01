@@ -205,12 +205,7 @@ function publishUserWindow(items: UserSummary[], hasPrev: boolean, hasNext: bool
 }
 
 function ingestSummaries(summaries: UserSummary[]): void {
-    for (const summary of summaries) {
-        state.byId.set(summary.id, summary);
-        touchSummary(summary.id);
-        if (summary.banned) state.bannedIds.add(summary.id);
-        else state.bannedIds.delete(summary.id);
-    }
+    syncSummaries(summaries);
 }
 
 export async function ensureSummaries(ids: string[]): Promise<UserSummary[]> {
@@ -261,6 +256,23 @@ export async function ensureSummaries(ids: string[]): Promise<UserSummary[]> {
 
 export async function ensureSummary(id: string): Promise<UserSummary | null> {
     return (await ensureSummaries([id]))[0] ?? null;
+}
+
+export async function refreshSummaries(ids: string[]): Promise<UserSummary[]> {
+    const unique = [...new Set(ids)].filter(Boolean);
+    const refreshed: UserSummary[] = [];
+
+    for (let i = 0; i < unique.length; i += 1000) {
+        const chunk = unique.slice(i, i + 1000);
+        const epoch = currentSessionEpoch();
+        const summaries = await api.users.summaryBatch(chunk);
+        if (!isCurrentSessionEpoch(epoch)) throw new Error('stale session');
+        syncSummaries(summaries);
+        refreshed.push(...summaries);
+    }
+
+    evictSummaries();
+    return refreshed;
 }
 
 export async function loadList(): Promise<void> {
@@ -733,15 +745,15 @@ export function handleAvatarUpdate(userId: string): void {
 }
 
 export function handleRoleAdd(userId: string): void {
-    // Payload is only {user_id, role_id} (no name/color) → invalidate the
-    // cached profile (if any) so it refetches with the new roles.
     invalidateProfile(userId);
-    void ensureProfile(userId);
+    void refreshSummaries([userId]).catch(() => {});
+    if (profileIsRetained(userId)) scheduleProfileLoad(userId);
 }
 
 export function handleRoleRemove(userId: string): void {
     invalidateProfile(userId);
-    void ensureProfile(userId);
+    void refreshSummaries([userId]).catch(() => {});
+    if (profileIsRetained(userId)) scheduleProfileLoad(userId);
 }
 // Avatar objectURL helper (base64 → objectURL, cached).
 
