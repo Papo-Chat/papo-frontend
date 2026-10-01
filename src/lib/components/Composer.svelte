@@ -191,16 +191,16 @@
 	}
 
 	function onDragEnter(e: DragEvent): void {
-		if (!canSendAttachment || !hasDraggedFiles(e.dataTransfer)) return;
+		if (!hasDraggedFiles(e.dataTransfer)) return;
 		e.preventDefault();
-		draggingFiles = true;
+		if (canSendAttachment) draggingFiles = true;
 	}
 
 	function onDragOver(e: DragEvent): void {
-		if (!canSendAttachment || !hasDraggedFiles(e.dataTransfer)) return;
+		if (!hasDraggedFiles(e.dataTransfer)) return;
 		e.preventDefault();
-		if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
-		draggingFiles = true;
+		if (e.dataTransfer) e.dataTransfer.dropEffect = canSendAttachment ? 'copy' : 'none';
+		if (canSendAttachment) draggingFiles = true;
 	}
 
 	function onDragLeave(e: DragEvent): void {
@@ -211,8 +211,9 @@
 
 	function onDrop(e: DragEvent): void {
 		draggingFiles = false;
-		if (!canSendAttachment || !hasDraggedFiles(e.dataTransfer)) return;
+		if (!hasDraggedFiles(e.dataTransfer)) return;
 		e.preventDefault();
+		if (!canSendAttachment) return;
 		addFiles(Array.from(e.dataTransfer?.files ?? []));
 	}
 
