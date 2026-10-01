@@ -75,6 +75,7 @@ export interface UserSummary {
 	id: string;
 	username: string;
 	nickname: string | null;
+	banned: boolean;
 	status: PersistedStatus | null;
 	status_message: string | null;
 	typing: string | null;
