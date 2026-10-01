@@ -13,6 +13,7 @@
 		onJumpToLatest,
 		onJumpToLastRead,
 		onLoadMoreOlder,
+		onLoadMoreNewer,
 		highlightMessageId = null,
 		lastReadMessageId = null,
 		joinNotice = null,
@@ -29,6 +30,7 @@
 		onJumpToLatest?: () => void | Promise<void>;
 		onJumpToLastRead?: () => void | Promise<boolean>;
 		onLoadMoreOlder?: () => void | Promise<void>;
+		onLoadMoreNewer?: () => void | Promise<void>;
 		highlightMessageId?: string | null;
 		lastReadMessageId?: string | null;
 		joinNotice?: { id: number; name: string } | null;
@@ -49,6 +51,7 @@
 	let stickToBottom = $state(true);
 	let unreadCount = $state(0);
 	let loadingOlder = $state(false);
+	let loadingNewer = $state(false);
 	let suppressScrollHandler = $state(true);
 	let pendingBottomFrame = 0;
 	let touchY: number | null = null;
@@ -243,7 +246,7 @@
 		if (e.deltaY > 0) {
 			scrollDirection = 'down';
 			if (hasMoreNewer && distanceFromBottom() <= 180) {
-				void returnToLatestFromScroll();
+				void loadNewer();
 			}
 		}
 	}
@@ -263,33 +266,51 @@
 				// Finger moving up means the scroll content is moving down.
 				scrollDirection = 'down';
 				if (hasMoreNewer && distanceFromBottom() <= 180) {
-					void returnToLatestFromScroll();
+					void loadNewer();
 				}
 			}
 		}
 		touchY = nextY;
 	}
 
-	async function returnToLatestFromScroll(): Promise<void> {
-		if (returningToLatest || !hasMoreNewer) return;
+	async function loadNewer(): Promise<void> {
+		if (loadingNewer || !hasMoreNewer || !listEl) return;
 
-		returningToLatest = true;
+		loadingNewer = true;
+		const anchorId = messages.at(-1)?.id ?? null;
+		const anchorBefore = anchorId
+			? messageElement(anchorId)?.getBoundingClientRect().top ?? null
+			: null;
+
 		try {
-			await onJumpToLatest?.();
+			await onLoadMoreNewer?.();
 			await tick();
-
-			stickToBottom = true;
-			visibleLastReadMessageId = null;
-			setUnreadCount(0);
-
-			requestAnimationFrame(() => {
-				scrollToBottom();
-				lastScrollTop = listEl?.scrollTop ?? 0;
-				onReachLatest?.(messages.at(-1) ?? null);
-			});
-		} finally {
-			returningToLatest = false;
+		} catch {
+			loadingNewer = false;
+			return;
 		}
+
+		requestAnimationFrame(() => {
+			const list = listEl;
+			if (!list) {
+				loadingNewer = false;
+				return;
+			}
+
+			if (anchorId && anchorBefore != null) {
+				const anchorAfter = messageElement(anchorId)?.getBoundingClientRect().top;
+				if (anchorAfter != null) {
+					list.scrollTop += anchorAfter - anchorBefore;
+				}
+			}
+
+			lastScrollTop = list.scrollTop;
+			loadingNewer = false;
+
+			if (!hasMoreNewer && distanceFromBottom() <= BOTTOM_THRESHOLD) {
+				clearUnreadAtBottom();
+			}
+		});
 	}
 
 	function handleScroll(): void {
@@ -306,7 +327,7 @@
 		} else if (movedDown) {
 			scrollDirection = 'down';
 			if (hasMoreNewer && distanceFromBottom() <= 180) {
-				void returnToLatestFromScroll();
+				void loadNewer();
 				return;
 			}
 		}
@@ -491,6 +512,34 @@
 		return () => observer.disconnect();
 	});
 
+	// Symmetric forward pagination: when the bottom sentinel approaches the
+	// viewport in a historical window, request the next newer page.
+	$effect(() => {
+		const list = listEl;
+		const bottom = bottomEl;
+		if (!list || !bottom || !initialScrollDone || !hasMoreNewer) return;
+		if (typeof IntersectionObserver === 'undefined') return;
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (
+					scrollDirection === 'down' &&
+					entries.some((entry) => entry.isIntersecting)
+				) {
+					void loadNewer();
+				}
+			},
+			{
+				root: list,
+				rootMargin: '0px 0px 320px 0px',
+				threshold: 0
+			}
+		);
+
+		observer.observe(bottom);
+		return () => observer.disconnect();
+	});
+
 	// Keep the real bottom pinned when media loads or layout changes. This
 	// avoids the common "almost at bottom" state after lazy images/videos.
 	$effect(() => {
@@ -555,7 +604,10 @@
 
 <div class="chat-wrapper">
 	{#if loadingOlder}
-		<div class="older-loading" aria-hidden="true">Carregando…</div>
+		<div class="older-loading" aria-hidden="true">Carregando anteriores…</div>
+	{/if}
+	{#if loadingNewer}
+		<div class="newer-loading" aria-hidden="true">Carregando recentes…</div>
 	{/if}
 
 	<div
@@ -658,21 +710,27 @@
 		pointer-events: none;
 	}
 
-	.older-loading {
+	.older-loading,
+	.newer-loading {
 		position: absolute;
-		top: 8px;
 		left: 0;
 		right: 0;
 		z-index: 5;
-
 		display: flex;
 		align-items: center;
 		justify-content: center;
-
 		font-size: 13px;
 		font-weight: 600;
 		color: var(--muted-soft);
 		pointer-events: none;
+	}
+
+	.older-loading {
+		top: 8px;
+	}
+
+	.newer-loading {
+		bottom: 8px;
 	}
 
 	.new-messages-bubble {
