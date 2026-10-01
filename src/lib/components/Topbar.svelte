@@ -195,8 +195,16 @@
 	@media (max-width: 700px) {
 		.pill.circle.voice-chat-btn {
 			width: 38px;
+			height: 38px;
 			padding: 0;
+			gap: 0;
+			display: grid;
+			place-items: center;
 			border-radius: 50%;
+		}
+
+		.voice-chat-btn :global(.icon) {
+			margin: 0;
 		}
 
 		.voice-chat-label {
