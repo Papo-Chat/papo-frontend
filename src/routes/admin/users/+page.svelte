@@ -141,7 +141,7 @@
 				searchLoading = false;
 				if (
 					searchHasMore &&
-					searchResults.length === 0 &&
+					searchResults.length < 30 &&
 					searchQuery.trim() === query
 				) {
 					setTimeout(() => {
@@ -322,8 +322,10 @@
 		<div class="user-feedback success" aria-live="polite">{actionSuccess}</div>
 	{/if}
 
-	{#if loading || (isSearching && searchLoading && searchResults.length === 0)}
+	{#if loading || (isSearching && (searchLoading || searchHasMore) && searchResults.length === 0)}
 		<div class="loading-hint">{isSearching ? 'Buscando usuários…' : 'Carregando usuários…'}</div>
+	{:else if isSearching && !searchLoading && !searchHasMore && searchResults.length === 0}
+		<div class="loading-hint">Nenhum usuário encontrado.</div>
 	{/if}
 
 
