@@ -478,7 +478,7 @@
                                     <div class="search-result-main">
                                         <div class="meta search-result-meta">
                                             <span class="name">{a?.nickname || a?.username || m.author_username}</span>
-                                            {#if m.channel_name}
+                                            {#if m.channel_name && !scopeChannelId}
                                                 <span class="channel-name">{m.channel_name}</span>
                                             {/if}
                                             <span class="time">{formatTime(m.created_at)}</span>
