@@ -98,6 +98,10 @@ let pendingAnswer: PendingAnswer | null = null;
 let offerChain: Promise<void> = Promise.resolve();
 let mediaActionChain: Promise<void> = Promise.resolve();
 
+// voice_joined confirma membership, mas os slots do SFU só existem depois
+// que o primeiro voice_offer/voice_answer termina.
+let mediaSubscriptionsReady = false;
+
 let voiceGeneration = 0;
 let joinResolve: (() => void) | null = null;
 let joinTimer: ReturnType<typeof setTimeout> | null = null;
@@ -194,6 +198,7 @@ export function join(channelId: string, userId?: string): void {
 
 	currentChannelId = channelId;
 	currentUserId = userId ?? null;
+	mediaSubscriptionsReady = false;
 	state.lastError = null;
 
 	void (async () => {
@@ -434,6 +439,7 @@ export function leave(channelId: string | null): void {
 	signalQueue = Promise.resolve();
 	offerChain = Promise.resolve();
 	mediaActionChain = Promise.resolve();
+	mediaSubscriptionsReady = false;
 	clearPendingAnswer(new Error('voice left'));
 	cleanupVideoMedia();
 
@@ -544,6 +550,7 @@ export function onSocketClose(): void {
 	signalQueue = Promise.resolve();
 	offerChain = Promise.resolve();
 	mediaActionChain = Promise.resolve();
+	mediaSubscriptionsReady = false;
 	clearPendingAnswer(new Error('socket closed'));
 	cleanupVideoMedia();
 
@@ -610,6 +617,10 @@ export function onVoiceAnswer(ev: WsVoiceAnswer): void {
 		}
 
 		await flushQueuedCandidates(conn);
+
+		// O backend já executou allocateSlots() antes de emitir este answer.
+		// Só a partir daqui track_subscribe pode ser enviado com segurança.
+		mediaSubscriptionsReady = true;
 		clearPendingAnswer();
 		reconcileRemoteVideoSubscriptions();
 	}).catch((error) => {
@@ -1154,7 +1165,7 @@ function releaseRemoteSubscription(key: string, notifyServer = true): void {
 }
 
 function reconcileRemoteVideoSubscriptions(): void {
-	if (!currentChannelId || !peer) return;
+	if (!currentChannelId || !peer || !mediaSubscriptionsReady) return;
 
 	const desired = desiredRemoteMedia();
 	const wanted = new Set(desired.map((item) => item.key));
