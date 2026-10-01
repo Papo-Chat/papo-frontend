@@ -97,11 +97,6 @@
         ].join('|')
     );
 
-    function dateBoundary(value: string, end = false): string {
-        const date = new Date(`${value}T${end ? '23:59:59.999' : '00:00:00.000'}`);
-        return date.toISOString();
-    }
-
     // Request com os filtros atuais. O backend aceita qualquer combinação
     // com pelo menos um filtro real; texto é opcional.
     function buildRequest(): SearchRequest {
@@ -114,10 +109,10 @@
             req.author = filters.author;
         }
         if (filters.dateStart) {
-            req.date_start = dateBoundary(filters.dateStart);
+            req.date_start = filters.dateStart;
         }
         if (filters.dateEnd) {
-            req.date_end = dateBoundary(filters.dateEnd, true);
+            req.date_end = filters.dateEnd;
         }
         if (filters.channelId) req.channel_id = filters.channelId;
         if (filters.mention) req.mention = filters.mention;
