@@ -10,6 +10,8 @@
 	import * as notificationsStore from '$lib/store/notifications.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
 	import * as messagesStore from '$lib/store/messages.svelte';
+	import * as dmsStore from '$lib/store/dms.svelte';
+	import * as channelsStore from '$lib/store/channels.svelte';
 	import { formatTime } from '$lib/utils/time';
 	import type { NotificationSummary } from '$lib/types';
 	import Icon from './Icon.svelte';
@@ -53,11 +55,26 @@
 		);
 	}
 
-	function openNotification(n: NotificationSummary): void {
+	async function openNotification(n: NotificationSummary): Promise<void> {
 		notificationsStore.markRead([n.id]);
 		setScrollTarget(n.message_id, n.created_at);
-		goto(`/channels/${n.channel_id}`);
 		close();
+
+		if (dmsStore.get(n.channel_id)) {
+			await goto(`/dm/${n.channel_id}`);
+			return;
+		}
+		if (channelsStore.resolve(n.channel_id)) {
+			await goto(`/channels/${n.channel_id}`);
+			return;
+		}
+
+		try {
+			const dm = await dmsStore.openById(n.channel_id);
+			await goto(`/dm/${dm.id}`);
+		} catch {
+			await goto(`/channels/${n.channel_id}`);
+		}
 	}
 
 	$effect(() => {
@@ -110,7 +127,7 @@
 							role="button"
 							tabindex={0}
 							onclick={(e) => {
-								if (!interactiveTarget(e.target)) openNotification(n);
+								if (!interactiveTarget(e.target)) void openNotification(n);
 							}}
 							onkeydown={(e: KeyboardEvent) => {
 								if (
@@ -118,7 +135,7 @@
 									e.target === e.currentTarget
 								) {
 									e.preventDefault();
-									openNotification(n);
+									void openNotification(n);
 								}
 							}}
 						>
