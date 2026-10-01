@@ -199,7 +199,11 @@
 			{joinNotice}
 			{onReply}
 			onJumpToLatest={() => messagesStore.setLatest(channel.id)}
-			onJumpToLastRead={() => channel.last_read_message ? messagesStore.gotoMessage(channel.id, channel.last_read_message, channel.last_read_at) : Promise.resolve(false)}
+			onJumpToLastRead={() =>
+				channel.last_read_message
+					? messagesStore.gotoMessage(channel.id, channel.last_read_message, null)
+					: Promise.resolve(false)
+			}
 			onLoadMoreOlder={() => messagesStore.loadMoreOlder(channel.id)}
 			onLoadMoreNewer={() => messagesStore.loadMoreNewer(channel.id)}
 			onReachLatest={(message) => {
