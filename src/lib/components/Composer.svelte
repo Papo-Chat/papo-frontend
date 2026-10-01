@@ -10,6 +10,7 @@
 	import Icon from './Icon.svelte';
 	import EmojiPicker from './EmojiPicker.svelte';
 	import Avatar from './Avatar.svelte';
+	import FormattedMessage from './FormattedMessage.svelte';
 	import { onDestroy } from 'svelte';
 
 	let {
@@ -671,15 +672,13 @@
 				{replyToAuthorName}
 			</span>
 
-			<span class="reply-text">
+			<div class="reply-text">
 				{#if replyTo.content}
-					{replyTo.content.length > 120
-						? replyTo.content.slice(0, 120) + '...'
-						: replyTo.content}
+					<FormattedMessage content={replyTo.content} />
 				{:else}
 					<i>Anexo</i>
 				{/if}
-			</span>
+			</div>
 
 			<button
 				class="reply-cancel"
@@ -1161,10 +1160,19 @@
 	}
 
 	.reply-text {
+		flex: 1 1 auto;
+		min-width: 0;
+		max-height: 3.1em;
+		overflow: hidden;
 		color: var(--muted-soft);
-
-		white-space: pre-wrap;
 		overflow-wrap: anywhere;
+	}
+
+	:global(.reply-text .msg-text) {
+		display: -webkit-box;
+		overflow: hidden;
+		-webkit-box-orient: vertical;
+		-webkit-line-clamp: 2;
 	}
 
 	:global([data-theme='dark']) .composer-reply {
