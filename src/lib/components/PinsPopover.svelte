@@ -138,16 +138,6 @@
 		min-width: 0;
 	}
 
-	.pin-content {
-		display: -webkit-box;
-		overflow: hidden;
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
-		line-height: 1.42;
-		-webkit-box-orient: vertical;
-		-webkit-line-clamp: 3;
-	}
-
 	.pin-badge {
 		position: absolute;
 		top: 10px;
