@@ -13,6 +13,7 @@
 		onJumpToLatest,
 		onJumpToLastRead,
 		onLoadMoreOlder,
+		onLoadMoreNewer,
 		highlightMessageId = null,
 		lastReadMessageId = null,
 		joinNotice = null,
@@ -29,6 +30,7 @@
 		onJumpToLatest?: () => void | Promise<void>;
 		onJumpToLastRead?: () => void | Promise<boolean>;
 		onLoadMoreOlder?: () => void | Promise<void>;
+		onLoadMoreNewer?: () => void | Promise<void>;
 		highlightMessageId?: string | null;
 		lastReadMessageId?: string | null;
 		joinNotice?: { id: number; name: string } | null;
@@ -48,13 +50,14 @@
 	let initializingPosition = false;
 	let stickToBottom = $state(true);
 	let unreadCount = $state(0);
+	let showReturnRecent = $state(false);
 	let loadingOlder = $state(false);
+	let loadingNewer = $state(false);
 	let suppressScrollHandler = $state(true);
 	let pendingBottomFrame = 0;
 	let touchY: number | null = null;
 	let lastScrollTop = 0;
 	let scrollDirection: 'up' | 'down' | null = null;
-	let returningToLatest = false;
 
 	let animatedMessageId = $state<string | null>(null);
 	let lastMessageId = $state<string | null>(null);
@@ -198,6 +201,7 @@
 			suppressScrollHandler = false;
 			lastScrollTop = listEl?.scrollTop ?? 0;
 			lastMessageId = messages.at(-1)?.id ?? null;
+			updateReturnRecent();
 		} finally {
 			initializingPosition = false;
 		}
@@ -210,6 +214,7 @@
 		requestAnimationFrame(() => {
 			scrollToBottom();
 			clearUnreadAtBottom();
+			showReturnRecent = false;
 		});
 	}
 
@@ -243,7 +248,7 @@
 		if (e.deltaY > 0) {
 			scrollDirection = 'down';
 			if (hasMoreNewer && distanceFromBottom() <= 180) {
-				void returnToLatestFromScroll();
+				void loadNewer();
 			}
 		}
 	}
@@ -263,33 +268,79 @@
 				// Finger moving up means the scroll content is moving down.
 				scrollDirection = 'down';
 				if (hasMoreNewer && distanceFromBottom() <= 180) {
-					void returnToLatestFromScroll();
+					void loadNewer();
 				}
 			}
 		}
 		touchY = nextY;
 	}
 
-	async function returnToLatestFromScroll(): Promise<void> {
-		if (returningToLatest || !hasMoreNewer) return;
+	async function loadNewer(): Promise<void> {
+		if (loadingNewer || !hasMoreNewer || !listEl) return;
 
-		returningToLatest = true;
+		loadingNewer = true;
+		const anchorId = messages.at(-1)?.id ?? null;
+		const anchorBefore = anchorId
+			? messageElement(anchorId)?.getBoundingClientRect().top ?? null
+			: null;
+
 		try {
-			await onJumpToLatest?.();
+			await onLoadMoreNewer?.();
 			await tick();
-
-			stickToBottom = true;
-			visibleLastReadMessageId = null;
-			setUnreadCount(0);
-
-			requestAnimationFrame(() => {
-				scrollToBottom();
-				lastScrollTop = listEl?.scrollTop ?? 0;
-				onReachLatest?.(messages.at(-1) ?? null);
-			});
-		} finally {
-			returningToLatest = false;
+		} catch {
+			loadingNewer = false;
+			return;
 		}
+
+		requestAnimationFrame(() => {
+			const list = listEl;
+			if (!list) {
+				loadingNewer = false;
+				return;
+			}
+
+			if (anchorId && anchorBefore != null) {
+				const anchorAfter = messageElement(anchorId)?.getBoundingClientRect().top;
+				if (anchorAfter != null) {
+					list.scrollTop += anchorAfter - anchorBefore;
+				}
+			}
+
+			lastScrollTop = list.scrollTop;
+			loadingNewer = false;
+			updateReturnRecent();
+
+			if (!hasMoreNewer && distanceFromBottom() <= BOTTOM_THRESHOLD) {
+				clearUnreadAtBottom();
+			}
+		});
+	}
+
+	function updateReturnRecent(): void {
+		if (!listEl || !initialScrollDone) {
+			showReturnRecent = hasMoreNewer;
+			return;
+		}
+		if (hasMoreNewer) {
+			showReturnRecent = true;
+			return;
+		}
+
+		const listTop = listEl.getBoundingClientRect().top;
+		const nodes = listEl.querySelectorAll<HTMLElement>('[data-message-id]');
+		let firstVisibleId: string | null = null;
+		for (const node of nodes) {
+			if (node.getBoundingClientRect().bottom >= listTop) {
+				firstVisibleId = node.dataset.messageId ?? null;
+				break;
+			}
+		}
+		if (!firstVisibleId) {
+			showReturnRecent = false;
+			return;
+		}
+		const index = messages.findIndex((message) => message.id === firstVisibleId);
+		showReturnRecent = index >= 0 && messages.length - index - 1 > 100;
 	}
 
 	function handleScroll(): void {
@@ -299,6 +350,7 @@
 		const movedUp = currentScrollTop < lastScrollTop - 0.5;
 		const movedDown = currentScrollTop > lastScrollTop + 0.5;
 		lastScrollTop = currentScrollTop;
+		updateReturnRecent();
 
 		if (movedUp) {
 			scrollDirection = 'up';
@@ -306,7 +358,7 @@
 		} else if (movedDown) {
 			scrollDirection = 'down';
 			if (hasMoreNewer && distanceFromBottom() <= 180) {
-				void returnToLatestFromScroll();
+				void loadNewer();
 				return;
 			}
 		}
@@ -417,6 +469,14 @@
 		}
 		if (currentLastId === lastMessageId) return;
 
+		// Forward pagination is navigation through already-existing history,
+		// not arrival of a new unread message.
+		if (loadingNewer) {
+			lastMessageId = currentLastId;
+			animatedMessageId = null;
+			return;
+		}
+
 		const previousLastId = lastMessageId;
 		const previousIndex = messages.findIndex((m) => m.id === previousLastId);
 
@@ -491,6 +551,34 @@
 		return () => observer.disconnect();
 	});
 
+	// Symmetric forward pagination: when the bottom sentinel approaches the
+	// viewport in a historical window, request the next newer page.
+	$effect(() => {
+		const list = listEl;
+		const bottom = bottomEl;
+		if (!list || !bottom || !initialScrollDone || !hasMoreNewer) return;
+		if (typeof IntersectionObserver === 'undefined') return;
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (
+					scrollDirection === 'down' &&
+					entries.some((entry) => entry.isIntersecting)
+				) {
+					void loadNewer();
+				}
+			},
+			{
+				root: list,
+				rootMargin: '0px 0px 320px 0px',
+				threshold: 0
+			}
+		);
+
+		observer.observe(bottom);
+		return () => observer.disconnect();
+	});
+
 	// Keep the real bottom pinned when media loads or layout changes. This
 	// avoids the common "almost at bottom" state after lazy images/videos.
 	$effect(() => {
@@ -530,6 +618,15 @@
 	});
 
 	$effect(() => {
+		const count = messages.length;
+		const newer = hasMoreNewer;
+		void count;
+		void newer;
+		if (!initialScrollDone) return;
+		queueMicrotask(updateReturnRecent);
+	});
+
+	$effect(() => {
 		const token = scrollToLatestToken;
 		if (!initialScrollDone || token <= handledScrollToLatestToken) return;
 		handledScrollToLatestToken = token;
@@ -555,7 +652,10 @@
 
 <div class="chat-wrapper">
 	{#if loadingOlder}
-		<div class="older-loading" aria-hidden="true">Carregando…</div>
+		<div class="older-loading" aria-hidden="true">Carregando anteriores…</div>
+	{/if}
+	{#if loadingNewer}
+		<div class="newer-loading" aria-hidden="true">Carregando recentes…</div>
 	{/if}
 
 	<div
@@ -615,6 +715,16 @@
 
 	{#if joinNotice}{#key joinNotice.id}<div class="join-notice" role="status">{joinNotice.name} entrou no servidor</div>{/key}{/if}
 
+	{#if showReturnRecent}
+		<button
+			class="new-messages-bubble return-recent"
+			class:with-unread={unreadCount > 0}
+			onclick={jumpToLatest}
+		>
+			↓ Voltar para mensagens recentes
+		</button>
+	{/if}
+
 	{#if unreadCount > 0}
 		<button
 			class="new-messages-bubble"
@@ -658,21 +768,27 @@
 		pointer-events: none;
 	}
 
-	.older-loading {
+	.older-loading,
+	.newer-loading {
 		position: absolute;
-		top: 8px;
 		left: 0;
 		right: 0;
 		z-index: 5;
-
 		display: flex;
 		align-items: center;
 		justify-content: center;
-
 		font-size: 13px;
 		font-weight: 600;
 		color: var(--muted-soft);
 		pointer-events: none;
+	}
+
+	.older-loading {
+		top: 8px;
+	}
+
+	.newer-loading {
+		bottom: 8px;
 	}
 
 	.new-messages-bubble {
@@ -704,6 +820,19 @@
 	}
 
 	.new-messages-bubble:hover { background: var(--hover); }
+	.return-recent {
+		bottom: 12px;
+		background: color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);
+	}
+	.return-recent.with-unread {
+		bottom: 52px;
+	}
+	:global([data-theme='dark']) .return-recent {
+		background: color-mix(in srgb, var(--surface) 92%, #1d79a8 8%);
+	}
+	:global(html[data-ui-flat]) .return-recent {
+		box-shadow: none;
+	}
 	.join-notice{position:absolute;left:50%;bottom:52px;z-index:21;transform:translateX(-50%);padding:7px 12px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text-primary);font-size:12px;font-weight:650;box-shadow:0 4px 14px rgb(0 0 0/.16);white-space:nowrap;pointer-events:none;animation:join-life 4.5s ease forwards}@keyframes join-life{0%{opacity:0}10%,80%{opacity:1}100%{opacity:0}}
 
 	.message-target-highlight {

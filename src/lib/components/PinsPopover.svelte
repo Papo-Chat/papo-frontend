@@ -14,6 +14,7 @@
 	import { formatTime } from '$lib/utils/time';
 	import Icon from './Icon.svelte';
 	import Avatar from './Avatar.svelte';
+	import CompactMessageContent from './CompactMessageContent.svelte';
 
 	let el: HTMLElement | null = null;
 	let open = $derived(state.pinsPopoverOpen);
@@ -25,6 +26,17 @@
 
 	function close(): void {
 		state.pinsPopoverOpen = false;
+	}
+
+	$effect(() => {
+		const ids = pinned.map((message) => message.author_id).filter((id): id is string => !!id);
+		if (ids.length) void usersStore.ensureSummaries(ids).catch(() => {});
+	});
+
+	function interactiveTarget(target: EventTarget | null): boolean {
+		return !!(target as HTMLElement | null)?.closest(
+			'button, a, input, select, textarea, video, audio, [role="slider"]'
+		);
 	}
 
 	function openPin(m: MessageWithAttachment): void {
@@ -69,9 +81,14 @@
 							class="popover-item pin-item"
 							role="button"
 							tabindex={0}
-							onclick={() => openPin(m)}
+							onclick={(e) => {
+								if (!interactiveTarget(e.target)) openPin(m);
+							}}
 							onkeydown={(e: KeyboardEvent) => {
-								if (e.key === 'Enter' || e.key === ' ') {
+								if (
+									(e.key === 'Enter' || e.key === ' ') &&
+									e.target === e.currentTarget
+								) {
 									e.preventDefault();
 									openPin(m);
 								}
@@ -83,13 +100,7 @@
 									<span class="name">{author?.nickname || author?.username || 'Usuário'}</span>
 									<span class="time">{formatTime(m.created_at)}</span>
 								</div>
-								{#if m.content}
-									<div class="content pin-content">{m.content}</div>
-								{:else}
-									{#if m.previews.length}
-										<div class="content pin-content">{m.previews[0].title}</div>
-									{/if}
-								{/if}
+								<CompactMessageContent message={m} pinned />
 							</div>
 							<span class="pin-badge" aria-hidden="true"><Icon name="push-pin" variant="duotone" size={13} /></span>
 						</div>
@@ -128,16 +139,6 @@
 	.pin-main {
 		flex: 1;
 		min-width: 0;
-	}
-
-	.pin-content {
-		display: -webkit-box;
-		overflow: hidden;
-		white-space: pre-wrap;
-		overflow-wrap: anywhere;
-		line-height: 1.42;
-		-webkit-box-orient: vertical;
-		-webkit-line-clamp: 3;
 	}
 
 	.pin-badge {

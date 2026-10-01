@@ -2,7 +2,6 @@
 // typing (TTL), and a keyset list.
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
-import { nextCursor } from '../utils/keyset';
 import { blobToUrl } from '../utils/media';
 import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
 import type { UserSummary, UserProfile, KeysetCursor, PresenceStatus } from '../types';
@@ -16,6 +15,13 @@ let joinNoticeSerial = 0;
 
 const PROFILE_CACHE_TARGET = 75;
 const PROFILE_CACHE_MAX = 120;
+const USER_LIST_MAX = 300;
+const SUMMARY_CACHE_TARGET = 1000;
+const SUMMARY_CACHE_MAX = 1500;
+
+const summaryInFlight = new Map<string, Promise<UserSummary | null>>();
+const summaryLastUsed = new Map<string, number>();
+let summaryTouchSeq = 0;
 
 // Profile cache metadata stays outside Svelte state: it is eviction/request
 // bookkeeping, not UI state.
@@ -47,21 +53,51 @@ export const state = $state({
     // channelId → userId → expiresAt (ms epoch).
     typing: new SvelteMap<string, SvelteMap<string, number>>(),
     joinNotice: null as { id: number; userId: string } | null,
-    // Ban state. The REST list (GET /users) does NOT expose the `banned`
-    // column (it is excluded from UserSummary), so this is a client-side
-    // session cache: seeded empty and updated on successful ban/unban.
+    // Ban state mirrored from UserSummary.banned and patched after ban/unban.
+    // Kept as a set for quick membership checks across sparse summary eviction.
     // Only reset on logout/full reset — not per list load.
     bannedIds: new SvelteSet<string>(),
     list: {
         items: [] as UserSummary[],
         hasMore: false,
         cursor: null as KeysetCursor | null,
+        hasMorePrevious: false,
+        hasMoreNext: false,
+        cursorStart: null as KeysetCursor | null,
+        cursorEnd: null as KeysetCursor | null,
         loading: false,
-        fullyLoaded: false,
-        // Guards against concurrent load/loadMore (P1.11).
+        // Guards against concurrent list navigation.
         loadGeneration: 0
     }
 });
+
+function touchSummary(id: string): void {
+    summaryLastUsed.set(id, (summaryTouchSeq += 1));
+}
+
+function summaryIsProtected(id: string): boolean {
+    return (
+        state.list.items.some((user) => user.id === id) ||
+        state.presence.has(id) ||
+        state.profiles.has(id) ||
+        retainedProfileCounts.has(id) ||
+        state.joinNotice?.userId === id
+    );
+}
+
+function evictSummaries(): void {
+    if (state.byId.size <= SUMMARY_CACHE_MAX) return;
+
+    const candidates = [...state.byId.keys()]
+        .filter((id) => !summaryIsProtected(id))
+        .sort((a, b) => (summaryLastUsed.get(a) ?? 0) - (summaryLastUsed.get(b) ?? 0));
+
+    for (const id of candidates) {
+        if (state.byId.size <= SUMMARY_CACHE_TARGET) break;
+        state.byId.delete(id);
+        summaryLastUsed.delete(id);
+    }
+}
 
 function touchProfile(id: string): void {
     profileLastUsed.set(id, (profileTouchSeq += 1));
@@ -147,112 +183,183 @@ export function releaseProfile(id: string): void {
     evictProfiles();
 }
 
-// ── list (keyset, 100/page) ─────────────────────────────
+// ── sparse summaries + paged member directory ────────────
 
-async function listLoad(q?: { since?: string; last_id?: string }): Promise<void> {
-    const gen = (state.list.loadGeneration += 1);
+function cursorFor(user: UserSummary | undefined): KeysetCursor | null {
+    return user ? { since: user.created_at, last_id: user.id } : null;
+}
+
+function publishUserWindow(items: UserSummary[], hasPrev: boolean, hasNext: boolean): void {
+    const deduped = [...new Map(items.map((user) => [user.id, state.byId.get(user.id) ?? user])).values()];
+    state.list.items = deduped.slice(0, USER_LIST_MAX);
+    state.list.hasMorePrevious = hasPrev;
+    state.list.hasMoreNext = hasNext;
+    state.list.hasMore = hasNext;
+    state.list.cursorStart = cursorFor(state.list.items[0]);
+    state.list.cursorEnd = cursorFor(state.list.items.at(-1));
+    state.list.cursor = state.list.cursorEnd;
+    for (const user of state.list.items) touchSummary(user.id);
+    evictSummaries();
+}
+
+function ingestSummaries(summaries: UserSummary[]): void {
+    syncSummaries(summaries);
+}
+
+export async function ensureSummaries(ids: string[]): Promise<UserSummary[]> {
+    const unique = [...new Set(ids)].filter(Boolean);
+    const waits = new Set<Promise<UserSummary | null>>();
+    const missing: string[] = [];
+
+    for (const id of unique) {
+        if (state.byId.has(id)) {
+            touchSummary(id);
+            continue;
+        }
+        const pending = summaryInFlight.get(id);
+        if (pending) waits.add(pending);
+        else missing.push(id);
+    }
+
+    for (let i = 0; i < missing.length; i += 1000) {
+        const chunk = missing.slice(i, i + 1000);
+        const epoch = currentSessionEpoch();
+        const batch = api.users.summaryBatch(chunk).then((summaries) => {
+            if (!isCurrentSessionEpoch(epoch)) throw new Error('stale session');
+            ingestSummaries(summaries);
+            return summaries;
+        });
+
+        for (const id of chunk) {
+            const request = batch
+                .then((summaries) => summaries.find((summary) => summary.id === id) ?? null)
+                .finally(() => {
+                    if (summaryInFlight.get(id) === request) summaryInFlight.delete(id);
+                });
+            summaryInFlight.set(id, request);
+            waits.add(request);
+        }
+
+        // Avoid a burst of many 1000-id requests on very large presence_sync
+        // snapshots. Each page is ingested before requesting the next.
+        try {
+            await batch;
+        } catch (error) {
+            await Promise.allSettled([...waits]);
+            throw error;
+        }
+    }
+
+    if (waits.size) await Promise.all(waits);
+    evictSummaries();
+    return unique
+        .map((id) => state.byId.get(id) ?? null)
+        .filter((user): user is UserSummary => user !== null);
+}
+
+export async function ensureSummary(id: string): Promise<UserSummary | null> {
+    return (await ensureSummaries([id]))[0] ?? null;
+}
+
+export async function refreshSummaries(ids: string[]): Promise<UserSummary[]> {
+    const unique = [...new Set(ids)].filter(Boolean);
+    const refreshed: UserSummary[] = [];
+
+    for (let i = 0; i < unique.length; i += 1000) {
+        const chunk = unique.slice(i, i + 1000);
+        const epoch = currentSessionEpoch();
+        const summaries = await api.users.summaryBatch(chunk);
+        if (!isCurrentSessionEpoch(epoch)) throw new Error('stale session');
+        syncSummaries(summaries);
+        refreshed.push(...summaries);
+    }
+
+    evictSummaries();
+    return refreshed;
+}
+
+export async function loadList(): Promise<void> {
+    const gen = ++state.list.loadGeneration;
     state.list.loading = true;
     try {
-        const res = await api.users.list(q);
-        // Discard if a newer load/loadMore started in the meantime (P1.11).
-        if (state.list.loadGeneration !== gen) {
-            return;
-        }
-        if (q) {
-            // loadMore: append, deduping by user id.
-            const seen = new Set(state.list.items.map((u) => u.id));
-            const fresh = res.users.filter((u) => !seen.has(u.id));
-            state.list.items = [...state.list.items, ...fresh];
-        } else {
-            // load: replace.
-            state.list.items = res.users;
-        }
-        state.list.hasMore = res.has_more;
-        state.list.cursor = nextCursor(res.users) ?? null;
-        state.list.fullyLoaded = !res.has_more;
-        for (const u of res.users) {
-            state.byId.set(u.id, u);
-        }
+        const res = await api.users.list({ order: 'asc' });
+        if (state.list.loadGeneration !== gen) return;
+        ingestSummaries(res.users);
+        publishUserWindow(res.users, false, res.has_more);
     } finally {
-        if (state.list.loadGeneration === gen) {
-            state.list.loading = false;
-        }
+        if (state.list.loadGeneration === gen) state.list.loading = false;
     }
 }
 
-export function loadList(): Promise<void> {
-    return listLoad();
-}
-
-export async function loadAll(): Promise<void> {
-    const gen = (state.list.loadGeneration += 1);
-    state.list.loading = true;
-    state.list.fullyLoaded = false;
-
-    const all: UserSummary[] = [];
-    const seen = new Set<string>();
-    let cursor: KeysetCursor | null = null;
-    let hasMore = true;
-
-    try {
-        while (hasMore) {
-            const res = await api.users.list(
-                cursor ? { since: cursor.since, last_id: cursor.last_id } : undefined
-            );
-            if (state.list.loadGeneration !== gen) return;
-
-            for (const user of res.users) {
-                state.byId.set(user.id, user);
-                if (!seen.has(user.id)) {
-                    seen.add(user.id);
-                    all.push(user);
-                }
-            }
-
-            // Publish each page so Members/search/admin progressively fill
-            // without waiting for very large servers to finish completely.
-            // Prefer the newest summary already in byId (presence/profile
-            // refresh) and keep live users that arrived after pagination began.
-            const published = all.map((user) => state.byId.get(user.id) ?? user);
-            const publishedIds = new Set(published.map((user) => user.id));
-            for (const user of state.byId.values()) {
-                if (!publishedIds.has(user.id)) {
-                    published.push(user);
-                    publishedIds.add(user.id);
-                }
-            }
-            state.list.items = published;
-            state.list.hasMore = res.has_more;
-            cursor = nextCursor(res.users) ?? null;
-            state.list.cursor = cursor;
-
-            if (!res.has_more || !cursor || res.users.length === 0) {
-                hasMore = false;
-            }
-        }
-
-        if (state.list.loadGeneration === gen) {
-            state.list.hasMore = false;
-            state.list.cursor = null;
-            state.list.fullyLoaded = true;
-        }
-    } finally {
-        if (state.list.loadGeneration === gen) {
-            state.list.loading = false;
-        }
-    }
-}
-
-export function loadMore(): void {
-    // Guard: no in-flight page + a cursor to continue from (P1.11).
-    if (state.list.loading || !state.list.cursor) {
+export async function loadMore(): Promise<void> {
+    if (state.list.loading) return;
+    const cursor = state.list.cursorEnd;
+    if (!cursor) {
+        if (state.list.items.length === 0) await loadList();
         return;
     }
-    listLoad({
-        since: state.list.cursor.since,
-        last_id: state.list.cursor.last_id
-    });
+    if (!state.list.hasMoreNext) return;
+
+    const gen = ++state.list.loadGeneration;
+    state.list.loading = true;
+    try {
+        const res = await api.users.list({
+            since: cursor.since,
+            last_id: cursor.last_id,
+            order: 'asc'
+        });
+        if (state.list.loadGeneration !== gen) return;
+        ingestSummaries(res.users);
+
+        let merged = [...state.list.items, ...res.users];
+        let trimmed = false;
+        if (merged.length > USER_LIST_MAX) {
+            merged = merged.slice(merged.length - USER_LIST_MAX);
+            trimmed = true;
+        }
+        publishUserWindow(
+            merged,
+            state.list.hasMorePrevious || trimmed,
+            res.has_more
+        );
+    } finally {
+        if (state.list.loadGeneration === gen) state.list.loading = false;
+    }
 }
+
+export async function loadPrevious(): Promise<void> {
+    if (state.list.loading || !state.list.hasMorePrevious) return;
+    const cursor = state.list.cursorStart;
+    if (!cursor) return;
+
+    const gen = ++state.list.loadGeneration;
+    state.list.loading = true;
+    try {
+        const res = await api.users.list({
+            since: cursor.since,
+            last_id: cursor.last_id,
+            order: 'desc'
+        });
+        if (state.list.loadGeneration !== gen) return;
+        const page = [...res.users].reverse();
+        ingestSummaries(page);
+
+        let merged = [...page, ...state.list.items];
+        let trimmed = false;
+        if (merged.length > USER_LIST_MAX) {
+            merged = merged.slice(0, USER_LIST_MAX);
+            trimmed = true;
+        }
+        publishUserWindow(
+            merged,
+            res.has_more,
+            state.list.hasMoreNext || trimmed
+        );
+    } finally {
+        if (state.list.loadGeneration === gen) state.list.loading = false;
+    }
+}
+
 // Seed the current user from the whoami response (richer than the /users
 // list: includes avatar_blob, banner_media, status, settings). Called by the
 // session store on load.
@@ -274,6 +381,7 @@ export function seedMe(me: {
         id: me.id,
         username: me.username,
         nickname: me.nickname,
+        banned: false,
         status: me.status,
         status_message: me.status_message,
         typing: me.typing,
@@ -297,6 +405,7 @@ function summaryFromProfile(p: UserProfile): UserSummary {
         id: p.id,
         username: p.username,
         nickname: p.nickname,
+        banned: state.byId.get(p.id)?.banned ?? false,
         status: p.status,
         status_message: p.status_message,
         typing: p.typing,
@@ -312,6 +421,9 @@ function syncSummaries(summaries: UserSummary[]): void {
     const updates = new Map<string, UserSummary>();
     for (const summary of summaries) {
         state.byId.set(summary.id, summary);
+        if (summary.banned) state.bannedIds.add(summary.id);
+        else state.bannedIds.delete(summary.id);
+        touchSummary(summary.id);
         updates.set(summary.id, summary);
     }
 
@@ -322,6 +434,11 @@ function syncSummaries(summaries: UserSummary[]): void {
 
 function syncSummary(summary: UserSummary): void {
     syncSummaries([summary]);
+}
+
+export function cacheSummaries(summaries: UserSummary[]): void {
+    syncSummaries(summaries);
+    evictSummaries();
 }
 
 export function setPersistedStatus(userId: string, status: 'away' | 'busy' | null): void {
@@ -470,6 +587,7 @@ export function setPresence(
         });
     }
     state.presence = next;
+    evictSummaries();
 }
 
 // ── typing (TTL) ────────────────────────────────────────
@@ -568,12 +686,7 @@ export function setTyping(channelId: string, userId: string, typing: boolean): v
 
 export function handleUserJoin(userId: string): void {
     state.joinNotice = { id: (joinNoticeSerial += 1), userId };
-    void ensureProfile(userId).then(() => {
-        const summary = state.byId.get(userId);
-        if (summary && !state.list.items.some((u) => u.id === userId)) {
-            state.list.items = [...state.list.items, summary];
-        }
-    }).catch(() => {});
+    void ensureSummary(userId).catch(() => {});
 }
 // presence_sync is the authoritative snapshot on (re)connect: replace the
 // whole presence map (users absent from the snapshot are no longer online).
@@ -583,9 +696,11 @@ export function handlePresenceSync(
         user_id: string;
         status: PresenceStatus;
         status_message: string | null;
+        user_voice?: string[];
     }[]
 ): void {
     setPresence(members);
+    void ensureSummaries(members.map((member) => member.user_id)).catch(() => {});
 }
 // presence_update: patch one user's live presence and summary (nickname /
 // status_message are surfaced in the summary).
@@ -638,15 +753,15 @@ export function handleAvatarUpdate(userId: string): void {
 }
 
 export function handleRoleAdd(userId: string): void {
-    // Payload is only {user_id, role_id} (no name/color) → invalidate the
-    // cached profile (if any) so it refetches with the new roles.
     invalidateProfile(userId);
-    void ensureProfile(userId);
+    void refreshSummaries([userId]).catch(() => {});
+    if (profileIsRetained(userId)) scheduleProfileLoad(userId);
 }
 
 export function handleRoleRemove(userId: string): void {
     invalidateProfile(userId);
-    void ensureProfile(userId);
+    void refreshSummaries([userId]).catch(() => {});
+    if (profileIsRetained(userId)) scheduleProfileLoad(userId);
 }
 // Avatar objectURL helper (base64 → objectURL, cached).
 
@@ -669,6 +784,9 @@ export function reset(): void {
     profileLastUsed.clear();
     retainedProfileCounts.clear();
     profileInFlight.clear();
+    summaryInFlight.clear();
+    summaryLastUsed.clear();
+    summaryTouchSeq = 0;
     profileLoadQueue.clear();
     profileLoadFlushQueued = false;
     profileTouchSeq = 0;
@@ -682,16 +800,21 @@ export function reset(): void {
         items: [],
         hasMore: false,
         cursor: null,
+        hasMorePrevious: false,
+        hasMoreNext: false,
+        cursorStart: null,
+        cursorEnd: null,
         loading: false,
-        fullyLoaded: false,
         loadGeneration: nextGeneration
     };
 }
-// Ban / unban. The API does not return the resulting ban state; it is
-// applied locally only after the server confirms success.
+// Ban / unban. The mutation does not return a fresh UserSummary, so patch
+// both the summary and quick lookup set after the server confirms success.
 
 export async function setBanState(userId: string, ban: boolean): Promise<void> {
     await api.users.ban({ user_id: userId, ban_state: ban });
     if (ban) state.bannedIds.add(userId);
     else state.bannedIds.delete(userId);
+    const summary = state.byId.get(userId);
+    if (summary) syncSummary({ ...summary, banned: ban });
 }

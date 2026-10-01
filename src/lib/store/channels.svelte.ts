@@ -225,6 +225,18 @@ export async function setRolePermissions(
 	await api.channels.setRolePermissions(id, roleId, { permissions: perms });
 }
 
+export async function removeRolePermissions(id: string, roleId: string): Promise<void> {
+	await api.channels.removeRolePermissions(id, roleId);
+
+	const channel = state.byId.get(id);
+	if (!channel) return;
+
+	state.byId.set(id, {
+		...channel,
+		permissions: channel.permissions.filter((entry) => entry.role_id !== roleId)
+	});
+}
+
 // F12 — self only: the store always passes the current user id.
 export async function setChannelNotification(
 	channelId: string,

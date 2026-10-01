@@ -19,9 +19,42 @@
 		finally { statusSaving = false; }
 	}
 
-	// Usuários reais: summaries do servidor + presença viva (WS) sobrepondo
-	// o status persistido.
-	const users = $derived([...usersStore.state.byId.values()]);
+	// Directory window (max 300) + online users hydrated by presence_sync.
+	const users = $derived.by(() => {
+		const map = new Map<string, UserSummary>();
+		for (const user of usersStore.state.list.items) {
+			if (!user.banned && !usersStore.state.bannedIds.has(user.id)) map.set(user.id, user);
+		}
+		for (const id of usersStore.state.presence.keys()) {
+			const user = usersStore.state.byId.get(id);
+			if (user && !user.banned && !usersStore.state.bannedIds.has(user.id)) {
+				map.set(user.id, user);
+			}
+		}
+		return [...map.values()];
+	});
+
+	let membersEl: HTMLElement | null = null;
+
+	$effect(() => {
+		if (usersStore.state.list.items.length === 0 && !usersStore.state.list.loading) {
+			void usersStore.loadList();
+		}
+	});
+
+	function onMembersScroll(e: Event): void {
+		const sc = e.currentTarget as HTMLElement;
+		const bottom = sc.scrollHeight - sc.scrollTop - sc.clientHeight;
+		if (bottom < 220 && usersStore.state.list.hasMoreNext && !usersStore.state.list.loading) {
+			void usersStore.loadMore();
+		} else if (
+			sc.scrollTop < 120 &&
+			usersStore.state.list.hasMorePrevious &&
+			!usersStore.state.list.loading
+		) {
+			void usersStore.loadPrevious();
+		}
+	}
 
 
 	function computeSections(): Array<{ title: string; members: UserSummary[] }> {
@@ -51,7 +84,11 @@
 	}
 </script>
 
-<aside class="members {drawerOpen ? 'open' : ''}">
+<aside
+	class="members {drawerOpen ? 'open' : ''}"
+	bind:this={membersEl}
+	onscroll={onMembersScroll}
+>
 	<MobilePanelHead icon="users-three" title="Membros" onClose={closeDrawer} />
 	<div class="status-picker" aria-label="Status">
 		<div class="status-picker-head">

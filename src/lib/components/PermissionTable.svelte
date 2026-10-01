@@ -7,11 +7,13 @@
 	let {
 		perms,
 		roles = [],
-		onToggle
+		onToggle,
+		onRemove
 	} = $props<{
 		perms: Record<string, ChannelPermission>;
 		roles?: Role[];
 		onToggle?: (roleId: string, key: keyof ChannelPermission, value: boolean) => void;
+		onRemove?: (roleId: string) => void;
 	}>();
 
 	const PERMS = [
@@ -43,6 +45,7 @@
 			{#each PERMS as p (p.key)}
 				<th>{p.label}</th>
 			{/each}
+			<th aria-label="Remover vínculo"></th>
 		</tr>
 	</thead>
 	<tbody>
@@ -61,11 +64,43 @@
 						/>
 					</td>
 				{/each}
+				<td>
+					{#if perms[r.id]}
+						<button
+							class="remove-link"
+							type="button"
+							title="Remover vínculo da role com o canal"
+							aria-label={"Remover " + r.name + " do canal"}
+							onclick={() => onRemove?.(r.id)}
+						>
+							×
+						</button>
+					{/if}
+				</td>
 			</tr>
 		{:else}
 			<tr>
-				<td colspan={5}>Sem roles.</td>
+				<td colspan={6}>Sem roles.</td>
 			</tr>
 		{/each}
 	</tbody>
 </table>
+
+<style>
+	.remove-link {
+		width: 26px;
+		height: 26px;
+		border: 0;
+		border-radius: 8px;
+		background: transparent;
+		color: var(--muted);
+		cursor: pointer;
+		font: inherit;
+		font-size: 18px;
+		line-height: 1;
+	}
+	.remove-link:hover {
+		background: rgba(240, 61, 94, 0.12);
+		color: #f03d5e;
+	}
+</style>

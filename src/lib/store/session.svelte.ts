@@ -8,7 +8,7 @@
 //   call. It also disconnects the WS (no reconnect) and drops voice.
 
 import { api, setOnUnauthorized } from '../api';
-import { seedMe, loadAll as loadAllUsers, reset as usersReset, setPersistedStatus } from '../store/users.svelte';
+import { seedMe, loadList as loadUsersList, reset as usersReset, setPersistedStatus } from '../store/users.svelte';
 import { load as loadRoles, reset as rolesReset } from '../store/roles.svelte';
 import { seed as seedSettings, reset as settingsReset } from '../store/settings.svelte';
 import * as channelsStore from '../store/channels.svelte';
@@ -27,6 +27,7 @@ import {
 
 // 11h — refreshes before the 12h cookie expiry.
 const REFRESH_INTERVAL = 11 * 3600 * 1000;
+const AUTO_AWAY_MS = 5 * 60 * 1000;
 
 export const state = $state({
 	userId: null as string | null,
@@ -41,12 +42,115 @@ export const state = $state({
 });
 
 let timer: ReturnType<typeof setInterval> | null = null;
+let awayTimer: ReturnType<typeof setTimeout> | null = null;
+let lastActivityAt = Date.now();
+let autoAwayApplied = false;
+let awayRequestInFlight = false;
+let activityCleanup: (() => void) | null = null;
 
 function stopTimer(): void {
 	if (timer) {
 		clearInterval(timer);
 		timer = null;
 	}
+}
+
+function stopAutoAway(): void {
+	if (awayTimer) {
+		clearTimeout(awayTimer);
+		awayTimer = null;
+	}
+	activityCleanup?.();
+	activityCleanup = null;
+	autoAwayApplied = false;
+	awayRequestInFlight = false;
+}
+
+function scheduleAutoAway(): void {
+	if (awayTimer) clearTimeout(awayTimer);
+	if (!state.userId || state.status !== null || autoAwayApplied) return;
+
+	const remaining = Math.max(0, AUTO_AWAY_MS - (Date.now() - lastActivityAt));
+	awayTimer = setTimeout(() => {
+		awayTimer = null;
+		if (!state.userId || state.status !== null || autoAwayApplied || awayRequestInFlight) return;
+		if (Date.now() - lastActivityAt < AUTO_AWAY_MS) {
+			scheduleAutoAway();
+			return;
+		}
+
+		const userId = state.userId;
+		awayRequestInFlight = true;
+		void api.users.updateStatus(userId, { status: 'away' })
+			.then(() => {
+				if (state.userId !== userId || state.status !== null) return;
+				autoAwayApplied = true;
+				state.status = 'away';
+				setPersistedStatus(userId, 'away');
+			})
+			.catch(() => {
+				if (!autoAwayApplied && state.status === null) scheduleAutoAway();
+			})
+			.finally(() => {
+				awayRequestInFlight = false;
+			});
+	}, remaining);
+}
+
+function startAutoAway(): void {
+	stopAutoAway();
+	if (typeof window === 'undefined') return;
+
+	lastActivityAt = Date.now();
+
+	const onActivity = () => {
+		const now = Date.now();
+		lastActivityAt = now;
+
+		if (autoAwayApplied && state.userId && !awayRequestInFlight) {
+			const userId = state.userId;
+			awayRequestInFlight = true;
+			void api.users.updateStatus(userId, { status: null })
+				.then(() => {
+					if (state.userId !== userId || !autoAwayApplied) return;
+					autoAwayApplied = false;
+					state.status = null;
+					setPersistedStatus(userId, null);
+					scheduleAutoAway();
+				})
+				.catch(() => {})
+				.finally(() => {
+					awayRequestInFlight = false;
+				});
+			return;
+		}
+
+		if (state.status === null && !awayTimer) scheduleAutoAway();
+	};
+
+	const events: Array<keyof WindowEventMap> = [
+		'pointerdown',
+		'pointermove',
+		'keydown',
+		'touchstart',
+		'wheel',
+		'scroll'
+	];
+	for (const event of events) {
+		window.addEventListener(event, onActivity, { passive: true });
+	}
+	const onVisibility = () => {
+		if (!document.hidden) onActivity();
+	};
+	document.addEventListener('visibilitychange', onVisibility);
+
+	activityCleanup = () => {
+		for (const event of events) {
+			window.removeEventListener(event, onActivity);
+		}
+		document.removeEventListener('visibilitychange', onVisibility);
+	};
+	scheduleAutoAway();
 }
 
 function startTimer(): void {
@@ -96,13 +200,12 @@ export async function load(): Promise<void> {
 		// pagination once during bootstrap; picker/admin never paginate.
 		await emojisStore.loadAll();
 
-		// UserSummary hydration can remain progressive because it is lightweight
-		// and Avatar/Profile loading is viewport-driven.
+		// Only the first member-directory page is loaded. Online/message/pin/
+		// notification users are hydrated independently through summary_batch.
 		state.loaded = true;
-		void loadAllUsers().catch((err) => {
-			console.error('falha ao carregar todos os usuários:', err);
-		});
+		void loadUsersList().catch(() => {});
 		startTimer();
+		startAutoAway();
 		// Conexão WS (handshake com o mesmo cookie Auth). Só conecta quando a
 		// sessão é válida; `clearLocalSession()`/logout chamam disconnect().
 		websocketStore.connect();
@@ -115,9 +218,10 @@ export async function load(): Promise<void> {
 export function clearLocalSession(): void {
 	bumpSessionEpoch();
 	stopTimer();
+	stopAutoAway();
 	// Stop the refresh timer, disconnect the WS (no reconnect), drop voice.
 	websocketStore.disconnect();
-	voiceStore.onSocketClose();
+	// disconnect() already tears down voice state.
 	// Clear the session itself.
 	state.userId = null;
 	state.username = null;
@@ -141,8 +245,15 @@ export async function setStatus(status: 'away' | 'busy' | null): Promise<void> {
 	const userId = state.userId;
 	if (!userId) throw new Error('usuário não autenticado');
 	await api.users.updateStatus(userId, { status });
+	autoAwayApplied = false;
 	state.status = status;
 	setPersistedStatus(userId, status);
+	lastActivityAt = Date.now();
+	if (status === null) scheduleAutoAway();
+	else if (awayTimer) {
+		clearTimeout(awayTimer);
+		awayTimer = null;
+	}
 }
 
 // Explicit "leave": revoke the server session, then tear down locally.

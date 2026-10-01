@@ -23,8 +23,9 @@ export interface ChannelMessagesState {
 	// Whether there are newer messages outside the window (set while in
 	// 'historical' mode; cleared on load/setLatest).
 	hasMoreNewer: boolean;
-	// Keyset cursor for loading older messages.
+	// Keyset cursors for navigating both directions.
 	cursorOlder: KeysetCursor | null;
+	cursorNewer: KeysetCursor | null;
 	// ── REST vs WS: a delayed REST snapshot must not clobber newer WS deltas
 	// (deleted/tombstoned messages, removed previews). ───────────────────────
 	// Incremented on every load/loadMore; captured before the await so a

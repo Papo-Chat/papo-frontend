@@ -4,11 +4,14 @@
     // localmente ou navegar (com scroll target).
     import { api } from '$lib/api';
     import * as usersStore from '$lib/store/users.svelte';
+    import * as channelsStore from '$lib/store/channels.svelte';
+    import * as messagesStore from '$lib/store/messages.svelte';
     import type { SearchRequest, SearchResult, UserSummary } from '$lib/types';
     import { formatTime } from '$lib/utils/time';
     import { nextCursor, type KeysetCursor } from '$lib/utils/keyset';
     import Icon from './Icon.svelte';
     import Avatar from './Avatar.svelte';
+    import CompactMessageContent from './CompactMessageContent.svelte';
 
     let {
         open = $bindable(false),
@@ -45,22 +48,36 @@
         dateEnd: string;
         order: 'asc' | 'desc';
         containsAttachment: AttachmentFilter;
+        channelId: string;
+        mention: string;
+        hasLink: boolean;
     }>({
         author: '',
         dateStart: '',
         dateEnd: '',
         order: 'desc',
-        containsAttachment: ''
+        containsAttachment: '',
+        channelId: '',
+        mention: '',
+        hasLink: false
     });
 
-    const authorOptions = $derived(usersStore.state.list.items);
+    const authorOptions = $derived([...usersStore.state.byId.values()]);
+    const channelOptions = $derived(
+        channelsStore.state.ordered
+            .map((id) => channelsStore.state.byId.get(id))
+            .filter((channel) => channel && channel.type === 'text')
+    );
 
     const hasActiveFilters = $derived(
         searchQuery.trim() !== '' ||
         filters.author !== '' ||
         filters.dateStart !== '' ||
         filters.dateEnd !== '' ||
-        filters.containsAttachment !== ''
+        filters.containsAttachment !== '' ||
+        filters.channelId !== '' ||
+        filters.mention !== '' ||
+        filters.hasLink
     );
 
     // Used by the debounce effect so every searchable filter participates in
@@ -73,7 +90,10 @@
             filters.dateStart,
             filters.dateEnd,
             filters.order,
-            filters.containsAttachment
+            filters.containsAttachment,
+            filters.channelId,
+            filters.mention,
+            filters.hasLink ? 'link' : ''
         ].join('|')
     );
 
@@ -94,6 +114,9 @@
         if (filters.dateEnd) {
             req.date_end = filters.dateEnd;
         }
+        if (filters.channelId) req.channel_id = filters.channelId;
+        if (filters.mention) req.mention = filters.mention;
+        if (filters.hasLink) req.has = 'link';
         if (filters.order !== 'desc') {
             req.order = filters.order;
         }
@@ -206,55 +229,10 @@
         return result.author_id ? usersStore.state.byId.get(result.author_id) : undefined;
     }
 
-    type HighlightPart = { text: string; match: boolean };
-
-    function searchExcerpt(content: string, query: string): string {
-        const q = query.trim();
-        if (!q) return content;
-
-        const lower = content.toLocaleLowerCase();
-        const needle = q.toLocaleLowerCase();
-        const matchAt = lower.indexOf(needle);
-        const maxChars = 260;
-
-        if (content.length <= maxChars) return content;
-        if (matchAt < 0) return content.slice(0, maxChars).trimEnd() + '…';
-
-        const room = Math.max(0, maxChars - q.length);
-        let start = Math.max(0, matchAt - Math.floor(room / 2));
-        let end = Math.min(content.length, start + maxChars);
-
-        if (end === content.length) {
-            start = Math.max(0, end - maxChars);
-        }
-
-        return `${start > 0 ? '…' : ''}${content.slice(start, end)}${end < content.length ? '…' : ''}`;
-    }
-
-    function highlightParts(content: string, query: string): HighlightPart[] {
-        const excerpt = searchExcerpt(content, query);
-        const q = query.trim();
-        if (!q) return [{ text: excerpt, match: false }];
-
-        const lower = excerpt.toLocaleLowerCase();
-        const needle = q.toLocaleLowerCase();
-        const parts: HighlightPart[] = [];
-        let cursor = 0;
-
-        while (cursor < excerpt.length) {
-            const at = lower.indexOf(needle, cursor);
-            if (at < 0) {
-                parts.push({ text: excerpt.slice(cursor), match: false });
-                break;
-            }
-            if (at > cursor) {
-                parts.push({ text: excerpt.slice(cursor, at), match: false });
-            }
-            parts.push({ text: excerpt.slice(at, at + q.length), match: true });
-            cursor = at + q.length;
-        }
-
-        return parts.length ? parts : [{ text: excerpt, match: false }];
+    function interactiveTarget(target: EventTarget | null): boolean {
+        return !!(target as HTMLElement | null)?.closest(
+            'button, a, input, select, textarea, video, audio, [role="slider"]'
+        );
     }
 
     function close(): void {
@@ -267,8 +245,17 @@
             filters.dateEnd = '';
             filters.order = 'desc';
             filters.containsAttachment = '';
+            filters.channelId = '';
+            filters.mention = '';
+            filters.hasLink = false;
         }
     }
+
+    $effect(() => {
+        if (!open || results.length === 0) return;
+        const ids = results.map((result) => result.author_id).filter((id): id is string => !!id);
+        if (ids.length) void usersStore.ensureSummaries(ids).catch(() => {});
+    });
 
     // Autofocus the input when the popover opens.
     $effect(() => {
@@ -360,17 +347,44 @@
                         </select>
                     </label>
 
-                    {#if authorOptions.length}
-                        <label class="search-control search-control-wide">
-                            <span>Autor</span>
-                            <select class="admin-select" bind:value={filters.author} aria-label="Autor">
-                                <option class="admin-option" value="">Todos os autores</option>
-                                {#each authorOptions as u (u.id)}
-                                    <option class="admin-option" value={u.id}>{u.nickname || u.username}</option>
-                                {/each}
-                            </select>
-                        </label>
-                    {/if}
+                    <label class="search-control search-control-wide">
+                        <span>Autor</span>
+                        <input
+                            class="admin-select"
+                            list="search-author-options"
+                            bind:value={filters.author}
+                            placeholder="UUID ou usuário conhecido"
+                            aria-label="Autor"
+                        />
+                    </label>
+
+                    <label class="search-control search-control-wide">
+                        <span>Canal</span>
+                        <select class="admin-select" bind:value={filters.channelId} aria-label="Canal">
+                            <option class="admin-option" value="">Todos os canais</option>
+                            {#each channelOptions as channel (channel?.id)}
+                                {#if channel}
+                                    <option class="admin-option" value={channel.id}>#{channel.name}</option>
+                                {/if}
+                            {/each}
+                        </select>
+                    </label>
+
+                    <label class="search-control search-control-wide">
+                        <span>Menciona</span>
+                        <input
+                            class="admin-select"
+                            list="search-author-options"
+                            bind:value={filters.mention}
+                            placeholder="UUID ou usuário conhecido"
+                            aria-label="Usuário mencionado"
+                        />
+                    </label>
+
+                    <label class="search-link-check">
+                        <span>Contém Link</span>
+                        <input type="checkbox" bind:checked={filters.hasLink} />
+                    </label>
 
                     <label class="search-control">
                         <span>De</span>
@@ -382,6 +396,12 @@
                         <input class="admin-select" type="date" bind:value={filters.dateEnd} aria-label="Data final" />
                     </label>
                 </div>
+
+                <datalist id="search-author-options">
+                    {#each authorOptions as u (u.id)}
+                        <option value={u.id}>{u.nickname || u.username}</option>
+                    {/each}
+                </datalist>
             </div>
 
             <div class="search-feedback" aria-live="polite">
@@ -419,10 +439,19 @@
                         <div class="search-results">
                             {#each results as m (m.id)}
                                 {@const a = authorFor(m)}
-                                <button
+                                <div
                                     class="popover-item search-result"
-                                    type="button"
-                                    onclick={() => onResultClick?.(m)}
+                                    role="button"
+                                    tabindex={0}
+                                    onclick={(e) => {
+                                        if (!interactiveTarget(e.target)) onResultClick?.(m);
+                                    }}
+                                    onkeydown={(e) => {
+                                        if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+                                            e.preventDefault();
+                                            onResultClick?.(m);
+                                        }
+                                    }}
                                 >
                                     <Avatar user={a} userId={m.author_id} size={34} />
                                     <div class="search-result-main">
@@ -433,22 +462,18 @@
                                             {/if}
                                             <span class="time">{formatTime(m.created_at)}</span>
                                         </div>
-
-                                        {#if m.content}
+                                        {#if m.channel_id}
+                                            {@const cachedMessage = messagesStore.getMessage(m.channel_id, m.id)}
                                             <div class="content search-message-content">
-                                                {#each highlightParts(m.content, searchQuery) as part}
-                                                    {#if part.match}
-                                                        <mark>{part.text}</mark>
-                                                    {:else}
-                                                        {part.text}
-                                                    {/if}
-                                                {/each}
+                                                <CompactMessageContent
+                                                    content={m.content}
+                                                    message={cachedMessage}
+                                                    highlightText={searchQuery}
+                                                />
                                             </div>
-                                        {:else}
-                                            <div class="content search-message-content"><span class="content-attachment">Anexo</span></div>
                                         {/if}
                                     </div>
-                                </button>
+                                </div>
                             {/each}
                         </div>
 
@@ -556,6 +581,39 @@
     .search-input::-webkit-search-cancel-button {
         opacity: 0.62;
         cursor: pointer;
+    }
+
+    .search-link-check {
+        min-width: 0;
+        min-height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 9px;
+        padding: 0 2px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 750;
+        letter-spacing: 0.045em;
+        line-height: 1;
+        text-transform: uppercase;
+        cursor: pointer;
+    }
+
+    .search-link-check input {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        accent-color: var(--accent);
+        flex: none;
+    }
+
+    :global([data-theme='dark']) .search-link-check {
+        color: var(--muted);
+    }
+
+    :global(html[data-ui-flat]) .search-link-check {
+        background: transparent;
     }
 
     .search-filter-panel {
@@ -766,16 +824,12 @@
     }
 
     .search-result .content {
-        display: -webkit-box;
         max-width: none;
-        overflow: hidden;
+        min-width: 0;
         color: var(--text);
         font-size: 12px;
         line-height: 1.42;
-        white-space: pre-wrap;
         overflow-wrap: anywhere;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 3;
     }
 
     .search-message-content mark {
@@ -821,6 +875,16 @@
         border-color: rgba(182, 224, 250, 0.1);
         background: rgba(119, 194, 235, 0.045);
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+
+    :global(html[data-ui-flat]) .search-filter-panel {
+        border-color: var(--border);
+        background: var(--surface);
+        box-shadow: none;
+    }
+
+    :global(html[data-ui-flat][data-theme='dark']) .search-filter-panel {
+        background: #15384d;
     }
 
     :global([data-theme='dark']) .search-result:hover,

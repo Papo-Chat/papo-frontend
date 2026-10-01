@@ -24,7 +24,8 @@ import type {
 	WsVoiceJoined,
 	WsVoiceLeave,
 	WsVoiceOffer,
-	WsVoiceStateUpdate
+	WsVoiceStateUpdate,
+	PresenceMember
 } from '../types';
 import type { WsInbound } from '../types';
 
@@ -369,6 +370,30 @@ function removeUserFromRoster(channelId: string, userId: string): void {
 	state.channelMembers.set(channelId, next);
 }
 
+export function onPresenceSync(members: PresenceMember[]): void {
+	const next = new SvelteMap<string, VoiceState[]>();
+
+	for (const member of members) {
+		for (const channelId of member.user_voice ?? []) {
+			const current =
+				state.channelMembers.get(channelId)?.find((voice) => voice.user_id === member.user_id) ??
+				null;
+			const list = next.get(channelId) ?? [];
+			list.push(
+				current ?? {
+					user_id: member.user_id,
+					muted: false,
+					camera_on: false,
+					screen_sharing: false
+				}
+			);
+			next.set(channelId, list);
+		}
+	}
+
+	state.channelMembers = next;
+}
+
 // Called by the websocket store when the WS closes (P0.1). The call belongs
 // to the old connection; tear down the peer and local state. No auto-rejoin.
 export function onSocketClose(): void {
@@ -394,6 +419,7 @@ export function onSocketClose(): void {
 	state.activeSpeaker = null;
 	state.connected = false;
 	state.channelId = null;
+	state.channelMembers.clear();
 
 	currentChannelId = null;
 

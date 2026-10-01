@@ -20,7 +20,9 @@ import * as messagesStore from '../store/messages.svelte';
 import * as notificationsStore from '../store/notifications.svelte';
 import * as emojisStore from '../store/emojis.svelte';
 import * as voiceStore from '../store/voice.svelte';
-import { meId as sessionMeId } from '../store/session.svelte';
+import * as settingsStore from '../store/settings.svelte';
+import { meId as sessionMeId, state as sessionState } from '../store/session.svelte';
+import { playNotificationSound } from '../utils/notification-sound';
 import { PUBLIC_WS_URL } from '../env';
 import type { WsOutbound, WsInbound, WsTyping } from '../types';
 
@@ -94,7 +96,9 @@ function resync(): void {
 	}
 	notificationsStore.load();
 	rolesStore.load();
-	void usersStore.loadAll().catch(() => {});
+	if (usersStore.state.list.items.length === 0) {
+		void usersStore.loadList().catch(() => {});
+	}
 	void emojisStore.loadAll().catch(() => {});
 }
 
@@ -203,9 +207,20 @@ export function dispatchEvent(event: WsOutbound): void {
 		case 'new_preview':
 			messagesStore.handleNewPreview(event);
 			break;
-		case 'new_notification':
+		case 'new_notification': {
 			notificationsStore.handleNewNotification();
+			const userId = sessionMeId();
+			const config = settingsStore.state.config;
+			if (
+				userId &&
+				config?.notifications.enabled &&
+				config.notifications.sound &&
+				sessionState.status !== 'busy'
+			) {
+				void playNotificationSound(userId);
+			}
 			break;
+		}
 		case 'channel_create':
 			channelsStore.handleChannelCreate();
 			break;
@@ -230,6 +245,7 @@ export function dispatchEvent(event: WsOutbound): void {
 			break;
 		case 'presence_sync':
 			usersStore.handlePresenceSync(event.members);
+			voiceStore.onPresenceSync(event.members);
 			break;
 		case 'user_join':
 			usersStore.handleUserJoin(event.user_id);

@@ -167,6 +167,7 @@
                 id: fresh.id,
                 username: fresh.username,
                 nickname: fresh.nickname,
+                banned: usersStore.state.byId.get(id)?.banned ?? false,
                 status: fresh.status,
                 status_message: fresh.status_message,
                 typing: fresh.typing,

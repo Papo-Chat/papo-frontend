@@ -157,21 +157,17 @@
 		const msgId = result.id;
 
 		if (channel && result.channel_id === channel.id) {
-			const chState = messagesStore.getChannel(channel.id);
-
-			const exists =
-				chState?.ids.some((id) => id === msgId) ?? false;
-
-			if (!exists) return;
-
-			highlightMessageId = msgId;
-
-			queueMicrotask(() => {
-				setTimeout(() => {
-					highlightMessageId = null;
-				}, 2500);
-			});
-
+			void messagesStore
+				.gotoMessage(channel.id, msgId, result.created_at)
+				.then((found) => {
+					if (!found) return;
+					highlightMessageId = msgId;
+					queueMicrotask(() => {
+						setTimeout(() => {
+							highlightMessageId = null;
+						}, 2500);
+					});
+				});
 			return;
 		}
 
@@ -203,8 +199,13 @@
 			{joinNotice}
 			{onReply}
 			onJumpToLatest={() => messagesStore.setLatest(channel.id)}
-			onJumpToLastRead={() => channel.last_read_message ? messagesStore.gotoMessage(channel.id, channel.last_read_message, channel.last_read_at) : Promise.resolve(false)}
+			onJumpToLastRead={() =>
+				channel.last_read_message
+					? messagesStore.gotoMessage(channel.id, channel.last_read_message, null)
+					: Promise.resolve(false)
+			}
 			onLoadMoreOlder={() => messagesStore.loadMoreOlder(channel.id)}
+			onLoadMoreNewer={() => messagesStore.loadMoreNewer(channel.id)}
 			onReachLatest={(message) => {
 				if (message) {
 					channelsStore.markReadLocal(channel.id, message.id, message.created_at);

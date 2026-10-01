@@ -4,7 +4,7 @@
 	import * as channelsStore from '$lib/store/channels.svelte';
 	import { state as serverState } from '$lib/store/server.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
-	import { state as sessionState, meId } from '$lib/store/session.svelte';
+	import { state as sessionState, meId, logout } from '$lib/store/session.svelte';
 	import * as rolesStore from '$lib/store/roles.svelte';
 	import { can } from '$lib/store/roles.svelte';
 	import Icon from './Icon.svelte';
@@ -21,8 +21,11 @@
 	const groups = $derived(channelsStore.grouped());
 
 	const onlineCount = $derived(
-		[...usersStore.state.byId.values()].filter((u) => usersStore.effectiveStatus(u.id) === 'online')
-			.length
+		[...usersStore.state.presence.entries()].filter(([id, presence]) => {
+			if (presence.status === 'offline') return false;
+			const user = usersStore.state.byId.get(id);
+			return !user?.banned && !usersStore.state.bannedIds.has(id);
+		}).length
 	);
 	const drawerOpen = $derived(state.channelsDrawerOpen);
 	const me = $derived(meId());
@@ -72,6 +75,12 @@
 	function navigateShortcut(to: string): void {
 		state.channelsDrawerOpen = false;
 		goto(to);
+	}
+
+	async function doLogout(): Promise<void> {
+		state.channelsDrawerOpen = false;
+		await logout();
+		await goto('/auth');
 	}
 </script>
 
@@ -131,6 +140,16 @@
 					<span>{s.label}</span>
 				</button>
 			{/each}
+			<button
+				class="mobile-rail-action mobile-rail-logout"
+				aria-label="Sair"
+				onclick={doLogout}
+			>
+				<span class="mobile-rail-icon">
+					<Icon name="door-open" variant="light" />
+				</span>
+				<span>Sair</span>
+			</button>
 		</div>
 	</div>
 </aside>

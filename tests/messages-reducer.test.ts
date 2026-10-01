@@ -11,6 +11,7 @@ import {
 	evict,
 	load,
 	loadMoreOlder,
+	loadMoreNewer,
 	react,
 	unreact,
 	state as globalState,
@@ -78,6 +79,7 @@ function newState(
 		hasMoreOlder: false,
 		hasMoreNewer: false,
 		cursorOlder: null,
+		cursorNewer: null,
 		requestGeneration: 0,
 		deletedMessageIds: new Set<string>(),
 		previewTombstones: new Set<string>(),
@@ -529,6 +531,7 @@ describe('keyset merge of REST pages (load / loadMoreOlder)', () => {
 		expect(ch.hasMoreOlder).toBe(true);
 		// cursor = oldest of the page = (m1.created_at, m1).
 		expect(ch.cursorOlder).toEqual({ since: '2024-01-01T00:00:00Z', last_id: 'm1' });
+		expect(ch.cursorNewer).toEqual({ since: '2024-01-01T00:00:02Z', last_id: 'm2' });
 	});
 
 	it('loadMoreOlder merges an older page (dedupe + sort + new cursor)', async () => {
@@ -566,7 +569,37 @@ describe('keyset merge of REST pages (load / loadMoreOlder)', () => {
 		expect(ch.byId.size).toBe(3);
 		expect(ch.hasMoreOlder).toBe(false);
 		// cursor = oldest of the new page = m0.
-		expect(ch.cursorOlder).toEqual({ since: '2024-01-01T00:00:01Z', last_id: 'm0' });
+		// Cursor now reflects the actual oldest message kept in the window.
+		expect(ch.cursorOlder).toEqual({ since: '2024-01-01T00:00:00Z', last_id: 'm1' });
+	});
+
+	it('loadMoreNewer pages forward with order=asc', async () => {
+		const old = msg('m1', { created_at: '2024-01-01T00:00:00Z' });
+		const newer = msg('m2', { created_at: '2024-01-01T00:00:02Z' });
+		const ch = newState([old]).channels.get('ch1')!;
+		ch.loaded = true;
+		ch.windowMode = 'historical';
+		ch.hasMoreNewer = true;
+		ch.cursorOlder = { since: old.created_at, last_id: old.id };
+		ch.cursorNewer = { since: old.created_at, last_id: old.id };
+		globalState.channels.set('ch_k', { ...ch, byId: new SvelteMap([[old.id, old]]), ids: [old.id] });
+
+		vi.mocked(apiMessages.list).mockResolvedValue({
+			channel_id: 'ch_k',
+			messages: [newer],
+			has_more: false
+		});
+
+		await loadMoreNewer('ch_k');
+		const loaded = globalState.channels.get('ch_k')!;
+		expect(loaded.byId.has('m2')).toBe(true);
+		expect(loaded.hasMoreNewer).toBe(false);
+		expect(loaded.windowMode).toBe('latest');
+		expect(apiMessages.list).toHaveBeenLastCalledWith('ch_k', {
+			since: old.created_at,
+			last_id: old.id,
+			order: 'asc'
+		});
 	});
 });
 
@@ -654,6 +687,7 @@ describe('react / unreact (user_reactions)', () => {
 			hasMoreOlder: false,
 			hasMoreNewer: false,
 			cursorOlder: null,
+			cursorNewer: null,
 			requestGeneration: 0,
 			deletedMessageIds: new Set<string>(),
 			previewTombstones: new Set<string>(),

@@ -73,8 +73,12 @@
 		const setRetained = (next: boolean) => {
 			if (next === retained) return;
 			retained = next;
-			if (next) usersStore.retainProfile(id);
-			else usersStore.releaseProfile(id);
+			if (next) {
+				void usersStore.ensureSummary(id).catch(() => {});
+				usersStore.retainProfile(id);
+			} else {
+				usersStore.releaseProfile(id);
+			}
 		};
 
 		if (typeof IntersectionObserver === 'undefined') {
@@ -113,6 +117,7 @@
 		bind:this={avatarEl}
 		type="button"
 		class="avatar"
+		class:avatar-small={size <= 28}
 		aria-label={ariaLabel ?? `Abrir perfil de ${name}`}
 		style={ringStyle}
 		onclick={onClick}
@@ -120,7 +125,7 @@
 		{@render content()}
 	</button>
 {:else}
-	<span bind:this={avatarEl} class="avatar" style={ringStyle}>
+	<span bind:this={avatarEl} class="avatar" class:avatar-small={size <= 28} style={ringStyle}>
 		{@render content()}
 	</span>
 {/if}
@@ -162,6 +167,17 @@
 		height: 100%;
 		display: block;
 		object-fit: cover;
+		image-rendering: auto;
+	}
+
+	.avatar-small .avatar-image {
+		/* Slight overscan hides subpixel clipping at tiny circular sizes while
+		 * a mild filter keeps facial/detail contrast readable at 18–28px. */
+		width: 104%;
+		height: 104%;
+		max-width: none;
+		filter: saturate(1.06) contrast(1.045);
+		transform: scale(1.02);
 	}
 
 	.avatar-initial {

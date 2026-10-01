@@ -198,6 +198,30 @@
 			error = err instanceof Error ? err.message : 'Erro ao atualizar permissão.';
 		}
 	}
+
+	async function removeRoleBinding(roleId: string): Promise<void> {
+		if (!selected || saving || !channelPerms[roleId]) return;
+
+		const before = channelPerms;
+		const next = { ...channelPerms };
+		delete next[roleId];
+		channelPerms = next;
+		saving = true;
+		error = null;
+		success = '';
+
+		try {
+			await channelsStore.removeRolePermissions(selected.id, roleId);
+			success = 'Vínculo da role removido.';
+			if (feedbackTimer) clearTimeout(feedbackTimer);
+			feedbackTimer = setTimeout(() => (success = ''), 1800);
+		} catch (err) {
+			channelPerms = before;
+			error = err instanceof Error ? err.message : 'Erro ao remover vínculo da role.';
+		} finally {
+			saving = false;
+		}
+	}
 </script>
 
 <div class="channels-page">
@@ -323,7 +347,12 @@
 							{#if loadingPerms}
 								<div class="empty">Carregando permissões…</div>
 							{:else}
-								<PermissionTable perms={channelPerms} {roles} onToggle={togglePermission} />
+								<PermissionTable
+									perms={channelPerms}
+									{roles}
+									onToggle={togglePermission}
+									onRemove={removeRoleBinding}
+								/>
 							{/if}
 						</div>
 					{/if}
@@ -358,7 +387,7 @@
 	.channel-row.selected { background:rgba(100,196,250,.16); box-shadow:inset 0 0 0 1px rgba(100,196,250,.4); }
 	.channel-row-name { display:flex; align-items:center; gap:8px; font-weight:700; font-size:13px; min-width:0; }
 	.channel-row-type { color:var(--muted-soft); font-size:10px; }
-	.type-badge { font-size:9px; font-weight:800; text-transform:uppercase; padding:2px 6px; border-radius:6px; background:rgba(255,255,255,.4); color:var(--muted); }
+	.type-badge { font-size:9px; font-weight:800; text-transform:uppercase; padding:2px 6px; border-radius:6px; background:rgba(75, 75, 75, 0.4); color:var(--muted); }
 	.type-badge.voice { background:rgba(240,61,94,.18); color:#f03d5e; }
 	.channel-row-actions { display:flex; align-items:center; gap:2px; }
 	.channel-row-move,
