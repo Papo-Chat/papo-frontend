@@ -215,7 +215,7 @@
 			<span class="audio-duration">/ {audioDuration > 0 ? formatAudioTime(audioDuration) : (audioLoading ? '…' : '--:--')}</span>
 		</span>
 	</div>
-{:else if attachment.mime_type.startsWith('video/')}
+{:else if attachment.mime_type.startsWith('video/') || attachment.mime_type.startsWith('application/octet-stream')}
 	<!-- Vídeo: player inline. Binários genéricos seguem para o download abaixo. -->
 	<div class="attachment-media">
 		<video src={fullUrl} controls class:pinned-attachment={pinned}></video>

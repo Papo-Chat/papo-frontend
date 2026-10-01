@@ -205,10 +205,6 @@
 								{#each passwordErrors as err (err)}
 									<span class="hint error">{err}</span>
 								{/each}
-							{:else}
-								<span class="hint">
-									Mín. 8 caracteres, 1 maiúscula + 1 especial
-								</span>
 							{/if}
 						{:else}
 							<span class="hint">Servidor público — sem senha.</span>

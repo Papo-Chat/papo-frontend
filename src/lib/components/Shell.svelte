@@ -12,7 +12,6 @@
 		backUrl = null,
 		backLabel = 'Voltar ao chat',
 		brandIcon = 'server',
-		brandName = 'AeroClub',
 		brandSub = 'Administração',
 		nav = [] as NavItem[],
 		server
@@ -20,7 +19,6 @@
 		backUrl?: string | null;
 		backLabel?: string;
 		brandIcon?: string;
-		brandName?: string;
 		brandSub?: string;
 		nav: NavItem[];
 		server?: Server;
@@ -59,7 +57,7 @@
 				{/if}
 			</div>
 			<div>
-				<span class="admin-brand-name">{brandName}</span>
+				<span class="admin-brand-name">{server.name}</span>
 				<span class="admin-brand-sub">{brandSub}</span>
 			</div>
 		</div>
