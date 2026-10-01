@@ -687,6 +687,7 @@ describe('react / unreact (user_reactions)', () => {
 			hasMoreOlder: false,
 			hasMoreNewer: false,
 			cursorOlder: null,
+			cursorNewer: null,
 			requestGeneration: 0,
 			deletedMessageIds: new Set<string>(),
 			previewTombstones: new Set<string>(),
