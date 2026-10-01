@@ -16,10 +16,18 @@
 	import Avatar from './Avatar.svelte';
 	import CompactMessageContent from './CompactMessageContent.svelte';
 
+	let {
+		channelId = null,
+		routePrefix = 'channels'
+	} = $props<{
+		channelId?: string | null;
+		routePrefix?: 'channels' | 'dm';
+	}>();
+
 	let el: HTMLElement | null = null;
 	let open = $derived(state.pinsPopoverOpen);
 
-	const openChannelId = $derived(channelsStore.state.openChannelId);
+	const openChannelId = $derived(channelId ?? channelsStore.state.openChannelId);
 	const pinned = $derived(
 		openChannelId ? (messagesStore.getChannel(openChannelId)?.pinned ?? []) : []
 	);
@@ -41,7 +49,7 @@
 
 	function openPin(m: MessageWithAttachment): void {
 		setScrollTarget(m.id, m.created_at);
-		goto(`/channels/${m.channel_id}`);
+		goto(`/${routePrefix}/${m.channel_id}`);
 		close();
 	}
 
@@ -111,7 +119,7 @@
 				</div>
 				<strong>Fixadas</strong>
 				<p>
-					Nenhuma mensagem fixada neste canal. Passar o mouse sobre uma mensagem e clicar no
+					Nenhuma mensagem fixada nesta conversa. Passar o mouse sobre uma mensagem e clicar no
 					alfinete para fixá-la.
 				</p>
 			{/if}
