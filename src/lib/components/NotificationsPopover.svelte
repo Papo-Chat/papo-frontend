@@ -163,13 +163,9 @@
 	}
 
 	.notification-content {
-		display: -webkit-box;
-		overflow: hidden;
-		white-space: pre-wrap;
+		min-width: 0;
 		overflow-wrap: anywhere;
 		line-height: 1.42;
-		-webkit-box-orient: vertical;
-		-webkit-line-clamp: 3;
 	}
 
 	.notification-item.unread {
