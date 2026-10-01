@@ -33,6 +33,12 @@
 		if (ids.length) void usersStore.ensureSummaries(ids).catch(() => {});
 	});
 
+	function interactiveTarget(target: EventTarget | null): boolean {
+		return !!(target as HTMLElement | null)?.closest(
+			'button, a, input, select, textarea, video, audio, [role="slider"]'
+		);
+	}
+
 	function openPin(m: MessageWithAttachment): void {
 		setScrollTarget(m.id, m.created_at);
 		goto(`/channels/${m.channel_id}`);
@@ -75,7 +81,9 @@
 							class="popover-item pin-item"
 							role="button"
 							tabindex={0}
-							onclick={() => openPin(m)}
+							onclick={(e) => {
+								if (!interactiveTarget(e.target)) openPin(m);
+							}}
 							onkeydown={(e: KeyboardEvent) => {
 								if (e.key === 'Enter' || e.key === ' ') {
 									e.preventDefault();
