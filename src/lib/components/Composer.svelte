@@ -445,12 +445,12 @@
 		});
 	}
 
-	async function onPickGif(gif: { url: string }): Promise<void> {
-		if (disabled || sending || !gif.url) return;
+	async function onPickGif(gif: { id: string }): Promise<void> {
+		if (disabled || sending || !gif.id) return;
 		error = null;
 		sending = true;
 		try {
-			await onSend?.(gif.url);
+			await onSend?.(`giphy:${gif.id}`);
 			desktopEmojiOpen = false;
 			mobileEmojiOpen = false;
 			mobileActionsOpen = false;
