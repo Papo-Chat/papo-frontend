@@ -67,6 +67,39 @@ function escapeText(s: string): string {
 	return s.replace(escapeTestNoEncode, (c) => escapeMap[c]);
 }
 
+// Chat input is intentionally forgiving: three backticks always mean a
+// fenced code block, even when the opening/closing fence is attached to the
+// content (for example: ```{"ok":true}``` or ```\nfoo```).
+// Single backticks are left untouched and remain inline code.
+function normalizeFencedCodeBlocks(content: string): string {
+	return content.replace(/```([\s\S]*?)```/g, (match, rawInner: string, offset: number, source: string) => {
+		const inner = rawInner.replace(/\r\n?/g, '\n');
+		let info = '';
+		let body = inner;
+
+		if (body.startsWith('\n')) {
+			body = body.slice(1);
+		} else {
+			const firstBreak = body.indexOf('\n');
+			if (firstBreak >= 0) {
+				const possibleInfo = body.slice(0, firstBreak).trim();
+				if (/^[A-Za-z0-9_.+-]+$/.test(possibleInfo)) {
+					info = possibleInfo;
+					body = body.slice(firstBreak + 1);
+				}
+			}
+		}
+
+		if (body.endsWith('\n')) body = body.slice(0, -1);
+
+		const before = offset > 0 && source[offset - 1] !== '\n' ? '\n' : '';
+		const afterIndex = offset + match.length;
+		const after = afterIndex < source.length && source[afterIndex] !== '\n' ? '\n' : '';
+
+		return `${before}\`\`\`${info}\n${body}\n\`\`\`${after}`;
+	});
+}
+
 // Safe navigation schemes for message links (same reasoning as
 // markdown renderers that block javascript:/vbscript:).
 const SAFE_LINK_SCHEMES = ['http', 'https', 'mailto'];
@@ -165,9 +198,11 @@ export function renderMessageMarkdown(
 	if (!content) {
 		return '';
 	}
-	// hasText is calculated on the whole content (same as the original component).
-	const hasText = tokenize(content, nameMap).hasText;
-	return marked.parse(content, {
+	const normalizedContent = normalizeFencedCodeBlocks(content);
+	// hasText is calculated on the normalized content so fenced code follows
+	// the same parsing path regardless of how tightly the user typed the fence.
+	const hasText = tokenize(normalizedContent, nameMap).hasText;
+	return marked.parse(normalizedContent, {
 		async: false,
 		gfm: true,
 		breaks: true,
