@@ -979,9 +979,11 @@ async function setScreenShare(targetOn: boolean): Promise<void> {
 			const stream = await navigator.mediaDevices.getDisplayMedia({
 				audio: false,
 				video: {
-					width: { ideal: 1920, max: 2560 },
-					height: { ideal: 1080, max: 1440 },
-					frameRate: { ideal: 30, min: 24, max: 30 }
+					// getDisplayMedia não aceita constraints min/exact.
+					// Deixamos o browser capturar na resolução nativa da fonte
+					// e apenas pedimos até 30 FPS; bitrate/resolução de envio são
+					// controlados no RTCRtpSender abaixo.
+					frameRate: { ideal: 30, max: 30 }
 				}
 			});
 			const track = stream.getVideoTracks().at(0);
