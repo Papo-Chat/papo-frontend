@@ -43,6 +43,7 @@
 	let searchOpen = $state(false);
 
 	let highlightMessageId: string | null = $state(null);
+	let lastVoiceChannelId: string | null = null;
 
 	const loading = $derived(!!ch && ch.loading);
 	const hasMoreNewer = $derived(!!ch && ch.hasMoreNewer);
@@ -76,8 +77,18 @@
 	const typingChars = $derived(Array.from(typingText));
 
 	$effect(() => {
-		if (channel?.type !== 'voice') {
+		const id = channel?.id ?? null;
+		const type = channel?.type;
+
+		if (type !== 'voice') {
+			lastVoiceChannelId = null;
 			uiState.voiceChatDrawerOpen = false;
+			return;
+		}
+
+		if (id && id !== lastVoiceChannelId) {
+			lastVoiceChannelId = id;
+			uiState.voiceChatDrawerOpen = true;
 		}
 	});
 
