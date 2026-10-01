@@ -88,7 +88,7 @@
 
 		if (id && id !== lastVoiceChannelId) {
 			lastVoiceChannelId = id;
-			uiState.voiceChatDrawerOpen = true;
+			uiState.voiceChatDrawerOpen = false;
 		}
 	});
 
