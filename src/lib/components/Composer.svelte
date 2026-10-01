@@ -445,6 +445,22 @@
 		});
 	}
 
+	async function onPickGif(gif: { url: string }): Promise<void> {
+		if (disabled || sending || !gif.url) return;
+		error = null;
+		sending = true;
+		try {
+			await onSend?.(gif.url);
+			desktopEmojiOpen = false;
+			mobileEmojiOpen = false;
+			mobileActionsOpen = false;
+		} catch (err: unknown) {
+			error = err instanceof Error ? err.message : 'Não foi possível enviar o GIF.';
+		} finally {
+			sending = false;
+		}
+	}
+
 	function cancelReply(): void {
 		onReplyCancel?.();
 	}
@@ -806,8 +822,8 @@
 			<div class="emoji-btn-wrap">
 				<button
 					class="composer-tool emoji-btn"
-					title="Emojis"
-					aria-label="Emojis"
+					title="Emojis e GIFs"
+					aria-label="Emojis e GIFs"
 					onclick={toggleEmoji}
 					{disabled}
 				>
@@ -820,6 +836,8 @@
 				<EmojiPicker
 					bind:open={desktopEmojiOpen}
 					onPick={onPickEmoji}
+					enableGifs
+					onPickGif={onPickGif}
 				/>
 			</div>
 		</div>
@@ -835,8 +853,8 @@
 				<div class="mobile-action emoji-mobile-wrap">
 					<button
 						class="composer-tool emoji-btn"
-						title="Emojis"
-						aria-label="Emojis"
+						title="Emojis e GIFs"
+						aria-label="Emojis e GIFs"
 						tabindex={mobileActionsOpen ? 0 : -1}
 						onclick={toggleMobileEmoji}
 						{disabled}
@@ -850,6 +868,8 @@
 					<EmojiPicker
 						bind:open={mobileEmojiOpen}
 						onPick={onPickEmoji}
+						enableGifs
+						onPickGif={onPickGif}
 					/>
 				</div>
 
