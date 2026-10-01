@@ -381,9 +381,9 @@
                         />
                     </label>
 
-                    <label class="search-control search-check">
-                        <input type="checkbox" bind:checked={filters.hasLink} />
+                    <label class="search-link-check">
                         <span>Contém link</span>
+                        <input type="checkbox" bind:checked={filters.hasLink} />
                     </label>
 
                     <label class="search-control">
@@ -583,12 +583,37 @@
         cursor: pointer;
     }
 
-    .search-check {
-        display: flex;
+    .search-link-check {
+        min-width: 0;
+        min-height: 40px;
+        display: inline-flex;
         align-items: center;
-        flex-direction: row;
-        gap: 8px;
-        min-height: 36px;
+        justify-content: flex-start;
+        gap: 9px;
+        padding: 0 2px;
+        color: var(--muted);
+        font-size: 10px;
+        font-weight: 750;
+        letter-spacing: 0.045em;
+        line-height: 1;
+        text-transform: uppercase;
+        cursor: pointer;
+    }
+
+    .search-link-check input {
+        width: 16px;
+        height: 16px;
+        margin: 0;
+        accent-color: var(--accent);
+        flex: none;
+    }
+
+    :global([data-theme='dark']) .search-link-check {
+        color: var(--muted);
+    }
+
+    :global(html[data-ui-flat]) .search-link-check {
+        background: transparent;
     }
 
     .search-filter-panel {
