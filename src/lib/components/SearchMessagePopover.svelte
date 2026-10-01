@@ -96,6 +96,7 @@
             filters.dateEnd,
             filters.order,
             filters.containsAttachment,
+            scopeChannelId ?? '',
             filters.channelId,
             filters.mention,
             filters.hasLink ? 'link' : ''
