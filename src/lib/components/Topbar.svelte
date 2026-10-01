@@ -105,6 +105,7 @@
 				aria-pressed={state.voiceChatDrawerOpen}
 			>
 				<Icon name="chat-circle-text" variant="light" />
+				<span class="voice-chat-label">Chat</span>
 			</button>
 		{/if}
 		<button
@@ -172,9 +173,34 @@
 		appearance: none;
 	}
 
+	.pill.circle.voice-chat-btn {
+		width: auto;
+		padding: 0 12px;
+		display: inline-flex;
+		gap: 6px;
+		border-radius: 14px;
+	}
+
 	.voice-chat-btn.active {
 		border-color: color-mix(in srgb, var(--accent) 48%, transparent);
 		background: color-mix(in srgb, var(--accent) 16%, var(--surface));
 		color: var(--accent);
+	}
+
+	.voice-chat-label {
+		font-size: 12px;
+		font-weight: 750;
+	}
+
+	@media (max-width: 700px) {
+		.pill.circle.voice-chat-btn {
+			width: 38px;
+			padding: 0;
+			border-radius: 50%;
+		}
+
+		.voice-chat-label {
+			display: none;
+		}
 	}
 </style>
