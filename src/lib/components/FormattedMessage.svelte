@@ -18,7 +18,7 @@
 
 	const mentionIds = $derived([...content.matchAll(/@mention\(<@([0-9a-fA-F-]{16,})>\)/g)].map((m) => m[1]));
 	const mentionMap = $derived(new Map(mentionIds.map((id) => { const u = usersStore.state.byId.get(id); return [id, u?.nickname || u?.username || 'usuário'] as const; })));
-	$effect(() => { if (mentionIds.length) void usersStore.ensureProfiles(mentionIds).catch(() => {}); });
+	$effect(() => { if (mentionIds.length) void usersStore.ensureSummaries(mentionIds).catch(() => {}); });
 	const html = $derived(renderMessageMarkdown(content, nameMap, emojiUrl, { mentions: mentionMap, highlightEveryone: allowEveryoneHighlight }));
 
 	function handleMentionClick(event: MouseEvent): void {
@@ -27,7 +27,9 @@
 		if (!id) return;
 		const known = usersStore.state.byId.get(id);
 		if (known) { openProfile(known); return; }
-		void usersStore.ensureProfile(id).then((profile) => openProfile(profile)).catch(() => {});
+		void usersStore.ensureSummary(id).then((summary) => {
+		if (summary) openProfile(summary);
+	}).catch(() => {});
 	}
 
 	// O compilador trata `innerHTML` como atributo (não propriedade) quando o
