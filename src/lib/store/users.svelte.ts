@@ -748,4 +748,6 @@ export async function setBanState(userId: string, ban: boolean): Promise<void> {
     await api.users.ban({ user_id: userId, ban_state: ban });
     if (ban) state.bannedIds.add(userId);
     else state.bannedIds.delete(userId);
+    const summary = state.byId.get(userId);
+    if (summary) syncSummary({ ...summary, banned: ban });
 }
