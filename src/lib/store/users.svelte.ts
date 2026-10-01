@@ -53,9 +53,8 @@ export const state = $state({
     // channelId → userId → expiresAt (ms epoch).
     typing: new SvelteMap<string, SvelteMap<string, number>>(),
     joinNotice: null as { id: number; userId: string } | null,
-    // Ban state. The REST list (GET /users) does NOT expose the `banned`
-    // column (it is excluded from UserSummary), so this is a client-side
-    // session cache: seeded empty and updated on successful ban/unban.
+    // Ban state mirrored from UserSummary.banned and patched after ban/unban.
+    // Kept as a set for quick membership checks across sparse summary eviction.
     // Only reset on logout/full reset — not per list load.
     bannedIds: new SvelteSet<string>(),
     list: {
@@ -810,8 +809,8 @@ export function reset(): void {
         loadGeneration: nextGeneration
     };
 }
-// Ban / unban. The API does not return the resulting ban state; it is
-// applied locally only after the server confirms success.
+// Ban / unban. The mutation does not return a fresh UserSummary, so patch
+// both the summary and quick lookup set after the server confirms success.
 
 export async function setBanState(userId: string, ban: boolean): Promise<void> {
     await api.users.ban({ user_id: userId, ban_state: ban });
