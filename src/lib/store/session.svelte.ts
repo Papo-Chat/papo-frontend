@@ -88,7 +88,9 @@ function scheduleAutoAway(): void {
 				state.status = 'away';
 				setPersistedStatus(userId, 'away');
 			})
-			.catch(() => {})
+			.catch(() => {
+				if (!autoAwayApplied && state.status === null) scheduleAutoAway();
+			})
 			.finally(() => {
 				awayRequestInFlight = false;
 			});
@@ -123,7 +125,7 @@ function startAutoAway(): void {
 			return;
 		}
 
-		if (state.status === null) scheduleAutoAway();
+		if (state.status === null && !awayTimer) scheduleAutoAway();
 	};
 
 	const events: Array<keyof WindowEventMap> = [
