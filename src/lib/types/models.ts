@@ -75,7 +75,7 @@ export interface UserSummary {
 	id: string;
 	username: string;
 	nickname: string | null;
-	banned: boolean;
+	banned?: boolean;
 	status: PersistedStatus | null;
 	status_message: string | null;
 	typing: string | null;
@@ -84,7 +84,7 @@ export interface UserSummary {
 	roles: RoleSummary[];
 }
 
-export interface UserProfile extends Omit<UserSummary, 'banned'> {
+export interface UserProfile extends UserSummary {
 	// base64 blob of the avatar (null when the user has no avatar).
 	avatar_blob: string | null;
 	avatar_format: string;
