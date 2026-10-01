@@ -224,15 +224,11 @@
 
 						{#if msgReply}
 							{#if msgReply.content}
-								{msgReply.content.length > 32
-									? msgReply.content.slice(0, 32) + '...'
-									: msgReply.content}
-							{:else}
-								{#if msgReply.attachments.length}
-									<span class="reply-from">
-										<i>Anexo</i>
-									</span>
-								{/if}
+								<span class="reply-preview-text">
+									<FormattedMessage content={msgReply.content} />
+								</span>
+							{:else if msgReply.attachments.length}
+								<span class="reply-preview-attachment"><i>Anexo</i></span>
 							{/if}
 						{/if}
 					</button>
@@ -514,6 +510,31 @@
 	}
 	.reply-from:hover {
 		color: var(--text);
+	}
+	.reply-preview-text {
+		display: block;
+		min-width: 0;
+		max-width: 280px;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+	.reply-preview-text :global(.msg-text) {
+		display: inline;
+		white-space: nowrap;
+	}
+	.reply-preview-text :global(.msg-text p) {
+		display: inline;
+		margin: 0;
+	}
+	.reply-preview-text :global(.inline-emoji),
+	.reply-preview-text :global(.full-emoji) {
+		width: 1.25em;
+		height: 1.25em;
+		vertical-align: -0.2em;
+	}
+	.reply-preview-attachment {
+		color: var(--muted-soft);
 	}
 	.act-btn {
 		display: flex;
