@@ -50,6 +50,7 @@
 	let initializingPosition = false;
 	let stickToBottom = $state(true);
 	let unreadCount = $state(0);
+	let showReturnRecent = $state(false);
 	let loadingOlder = $state(false);
 	let loadingNewer = $state(false);
 	let suppressScrollHandler = $state(true);
@@ -200,6 +201,7 @@
 			suppressScrollHandler = false;
 			lastScrollTop = listEl?.scrollTop ?? 0;
 			lastMessageId = messages.at(-1)?.id ?? null;
+			updateReturnRecent();
 		} finally {
 			initializingPosition = false;
 		}
@@ -212,6 +214,7 @@
 		requestAnimationFrame(() => {
 			scrollToBottom();
 			clearUnreadAtBottom();
+			showReturnRecent = false;
 		});
 	}
 
@@ -312,6 +315,33 @@
 		});
 	}
 
+	function updateReturnRecent(): void {
+		if (!listEl || !initialScrollDone) {
+			showReturnRecent = hasMoreNewer;
+			return;
+		}
+		if (hasMoreNewer) {
+			showReturnRecent = true;
+			return;
+		}
+
+		const listTop = listEl.getBoundingClientRect().top;
+		const nodes = listEl.querySelectorAll<HTMLElement>('[data-message-id]');
+		let firstVisibleId: string | null = null;
+		for (const node of nodes) {
+			if (node.getBoundingClientRect().bottom >= listTop) {
+				firstVisibleId = node.dataset.messageId ?? null;
+				break;
+			}
+		}
+		if (!firstVisibleId) {
+			showReturnRecent = false;
+			return;
+		}
+		const index = messages.findIndex((message) => message.id === firstVisibleId);
+		showReturnRecent = index >= 0 && messages.length - index - 1 > 100;
+	}
+
 	function handleScroll(): void {
 		if (!listEl || !initialScrollDone || suppressScrollHandler) return;
 
@@ -319,6 +349,7 @@
 		const movedUp = currentScrollTop < lastScrollTop - 0.5;
 		const movedDown = currentScrollTop > lastScrollTop + 0.5;
 		lastScrollTop = currentScrollTop;
+		updateReturnRecent();
 
 		if (movedUp) {
 			scrollDirection = 'up';
@@ -674,6 +705,15 @@
 
 	{#if joinNotice}{#key joinNotice.id}<div class="join-notice" role="status">{joinNotice.name} entrou no servidor</div>{/key}{/if}
 
+	{#if showReturnRecent}
+		<button
+			class="new-messages-bubble return-recent"
+			onclick={jumpToLatest}
+		>
+			↓ Voltar para mensagens recentes
+		</button>
+	{/if}
+
 	{#if unreadCount > 0}
 		<button
 			class="new-messages-bubble"
@@ -769,6 +809,16 @@
 	}
 
 	.new-messages-bubble:hover { background: var(--hover); }
+	.return-recent {
+		bottom: {unreadCount > 0 ? '52px' : '12px'};
+		background: color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);
+	}
+	:global([data-theme='dark']) .return-recent {
+		background: color-mix(in srgb, var(--surface) 92%, #1d79a8 8%);
+	}
+	:global(html[data-ui-flat]) .return-recent {
+		box-shadow: none;
+	}
 	.join-notice{position:absolute;left:50%;bottom:52px;z-index:21;transform:translateX(-50%);padding:7px 12px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text-primary);font-size:12px;font-weight:650;box-shadow:0 4px 14px rgb(0 0 0/.16);white-space:nowrap;pointer-events:none;animation:join-life 4.5s ease forwards}@keyframes join-life{0%{opacity:0}10%,80%{opacity:1}100%{opacity:0}}
 
 	.message-target-highlight {
