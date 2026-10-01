@@ -141,19 +141,30 @@
 	:global(.msg-text code) {
 		font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 		font-size: 0.9em;
-		background: var(--glass-soft);
-		padding: 0.05em 0.3em;
-		border-radius: 4px;
 	}
 
+	/* Single backticks stay inline. */
+	:global(.msg-text :not(pre) > code) {
+		display: inline;
+		padding: 0.08em 0.32em;
+		border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+		border-radius: 5px;
+		background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+		color: var(--text-strong);
+	}
+
+	/* Triple backticks render as a distinct full-width block. */
 	:global(.msg-text pre) {
+		display: block;
 		width: 100%;
 		max-width: 100%;
-		margin: 0.15em 0;
-		padding: 0.5em 0.6em;
+		margin: 0.45em 0;
+		padding: 0.75em 0.85em;
 		box-sizing: border-box;
-		background: var(--glass);
-		border-radius: 8px;
+		border: 1px solid color-mix(in srgb, var(--text) 18%, transparent);
+		border-radius: 10px;
+		background: color-mix(in srgb, var(--text) 10%, var(--surface));
+		box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 20%, transparent);
 		overflow-x: hidden;
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
@@ -162,9 +173,12 @@
 
 	:global(.msg-text pre code) {
 		display: block;
+		width: 100%;
 		max-width: 100%;
 		padding: 0;
+		border: 0;
 		background: transparent;
+		color: var(--text-strong);
 		white-space: inherit;
 		overflow-wrap: inherit;
 		word-break: inherit;
