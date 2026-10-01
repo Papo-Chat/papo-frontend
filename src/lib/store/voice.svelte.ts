@@ -156,7 +156,11 @@ export function join(channelId: string): void {
 		try {
 			// Mic + ICE pertencem à mesma tentativa de join.
 			stream = await navigator.mediaDevices.getUserMedia({
-				audio: true,
+				audio: {
+					noiseSuppression: true,
+					echoCancellation: true,
+					autoGainControl: true
+				},
 				video: false
 			});
 
