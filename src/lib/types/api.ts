@@ -253,6 +253,9 @@ export interface SearchRequest {
 	// Filtros combináveis; pelo menos 1 campo é obrigatório no request.
 	text?: string;
 	author?: string;
+	channel_id?: string;
+	mention?: string;
+	has?: 'link';
 	order?: 'asc' | 'desc';
 	// YYYY-MM-DD, date_start <= date_end.
 	date_start?: string;
