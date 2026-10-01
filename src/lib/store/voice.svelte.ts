@@ -1002,8 +1002,24 @@ export function screenShare(on?: boolean): Promise<void> {
 
 export function onVoiceError(ev: WsError): void {
 	if (!ev.code?.startsWith('voice-')) return;
-	state.lastError = ev.message;
-	clearPendingAnswer(new Error(ev.message));
+
+	// voice-not-found can be a transient track_subscribe race: the publisher
+	// announces camera/screen intent before the negotiated track reaches the
+	// SFU. Subscription retries handle that case without aborting an unrelated
+	// local offer.
+	if (ev.code !== 'voice-not-found') {
+		state.lastError = ev.message;
+	}
+
+	if (
+		pendingAnswer &&
+		(ev.code === 'voice-codec-unsupported' ||
+			ev.code === 'voice-invalid-sdp' ||
+			ev.code === 'voice-forbidden' ||
+			ev.code === 'voice-room-closed')
+	) {
+		clearPendingAnswer(new Error(ev.message));
+	}
 }
 
 function mediaKey(userId: string, kind: VoiceMediaKind): string {
