@@ -96,7 +96,6 @@ function evictSummaries(): void {
         if (state.byId.size <= SUMMARY_CACHE_TARGET) break;
         state.byId.delete(id);
         summaryLastUsed.delete(id);
-        state.bannedIds.delete(id);
     }
 }
 
