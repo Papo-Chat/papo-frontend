@@ -35,7 +35,7 @@
 		channel.type === 'voice'
 			? (voiceState.channelMembers.get(channel.id) ?? []).filter((member) => {
 					const user = usersStore.state.byId.get(member.user_id);
-					return !(user?.banned ?? usersStore.state.bannedIds.has(member.user_id));
+					return !user?.banned && !usersStore.state.bannedIds.has(member.user_id);
 				})
 			: []
 	);
