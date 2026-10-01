@@ -93,7 +93,6 @@ let screenTransceiver: RTCRtpTransceiver | null = null;
 
 const remoteVideoSlots: RemoteVideoSlot[] = [];
 const remoteSubscriptions = new Map<string, RemoteVideoSlot | null>();
-const subscribeRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 let pendingAnswer: PendingAnswer | null = null;
 let offerChain: Promise<void> = Promise.resolve();
@@ -1060,17 +1059,10 @@ function desiredRemoteMedia(): Array<{ key: string; userId: string; kind: VoiceM
 	return desired;
 }
 
-function clearSubscribeRetry(key: string): void {
-	const timer = subscribeRetryTimers.get(key);
-	if (timer) clearTimeout(timer);
-	subscribeRetryTimers.delete(key);
-}
-
-function sendSubscriptionWithRetry(
+function sendSubscription(
 	key: string,
 	userId: string,
-	kind: VoiceMediaKind,
-	attempt = 0
+	kind: VoiceMediaKind
 ): void {
 	if (!currentChannelId || !remoteSubscriptions.has(key)) return;
 
@@ -1080,19 +1072,6 @@ function sendSubscriptionWithRetry(
 		publisher_id: userId,
 		kind
 	} as WsInbound);
-
-	if (attempt >= 3) return;
-
-	clearSubscribeRetry(key);
-	const timer = setTimeout(
-		() => {
-			const stillDesired = desiredRemoteMedia().some((item) => item.key === key);
-			if (!stillDesired || !remoteSubscriptions.has(key)) return;
-			sendSubscriptionWithRetry(key, userId, kind, attempt + 1);
-		},
-		700 * 2 ** attempt
-	);
-	subscribeRetryTimers.set(key, timer);
 }
 
 function subscriptionParts(key: string): { userId: string; kind: VoiceMediaKind } | null {
@@ -1119,7 +1098,6 @@ function releaseRemoteSubscription(key: string, notifyServer = true): void {
 		} as WsInbound);
 	}
 
-	clearSubscribeRetry(key);
 	remoteSubscriptions.delete(key);
 	if (slot) slot.assignmentKey = null;
 	state.remoteMedia.delete(key);
@@ -1155,7 +1133,7 @@ function reconcileRemoteVideoSubscriptions(): void {
 		// Subscribe even before the browser has emitted ontrack for that SFU
 		// slot. The first RTP packet is what makes the receiver track observable.
 		remoteSubscriptions.set(item.key, slot);
-		sendSubscriptionWithRetry(item.key, item.userId, item.kind);
+		sendSubscription(item.key, item.userId, item.kind);
 	}
 }
 
@@ -1170,8 +1148,6 @@ function cleanupVideoMedia(): void {
 	cameraTransceiver = null;
 	screenTransceiver = null;
 
-	for (const timer of subscribeRetryTimers.values()) clearTimeout(timer);
-	subscribeRetryTimers.clear();
 	remoteSubscriptions.clear();
 	remoteVideoSlots.length = 0;
 	state.remoteMedia.clear();
@@ -1229,7 +1205,6 @@ function onRemoteTrack(_peerConn: RTCPeerConnection, event: RTCTrackEvent): void
 						stream: slot.stream
 					});
 				}
-				clearSubscribeRetry(pendingKey);
 			}
 		} else {
 			slot.track = track;
