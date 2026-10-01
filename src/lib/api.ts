@@ -26,6 +26,8 @@ import type {
 	CreateServerRequest,
 	DropConnectionRequest,
 	DropConnectionResponse,
+	DirectConversation,
+	DirectConversationList,
 	LinkPreviewWithImage,
 	LoginRequest,
 	LoginResponse,
@@ -468,6 +470,15 @@ export const users = {
 			`/users/${encodeURIComponent(userId)}/roles/${encodeURIComponent(roleId)}`,
 			{ method: 'DELETE' }
 		);
+	},
+	blocks(): Promise<{ users: UserSummary[] }> {
+		return request<{ users: UserSummary[] }>('/users/blocks');
+	},
+	block(userId: string): Promise<void> {
+		return request<void>(`/users/${encodeURIComponent(userId)}/block`, { method: 'POST' });
+	},
+	unblock(userId: string): Promise<void> {
+		return request<void>(`/users/${encodeURIComponent(userId)}/block`, { method: 'DELETE' });
 	}
 };
 
@@ -757,6 +768,7 @@ export const api = {
 	health,
 	auth,
 	users,
+	dms,
 	server,
 	channels,
 	messages,
