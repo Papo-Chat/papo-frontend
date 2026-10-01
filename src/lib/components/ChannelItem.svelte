@@ -74,24 +74,29 @@
 					<li class="voice-member">
 						<button
 							class="voice-member-profile"
-							aria-label={user ? `Ver perfil de ${name}` : undefined}
-							disabled={!user}
+							aria-label={`Ver perfil de ${name}`}
 							onclick={() => {
-								if (user) openProfile(user);
+								if (user) {
+									openProfile(user);
+								} else {
+									void usersStore.ensureSummary(m.user_id)
+										.then((summary) => {
+											if (summary) openProfile(summary);
+										})
+										.catch(() => {});
+								}
 							}}
 						>
 							<span class="voice-avatar">
 								<Avatar {user} userId={m.user_id} size={24} />
 							</span>
 
-							{#if user}
-								<span
-									class="voice-member-name"
-									style={roleColor ? `color:${roleColor}` : undefined}
-								>
-									{m.user_id === me ? 'você' : name}
-								</span>
-							{/if}
+							<span
+								class="voice-member-name"
+								style={roleColor ? `color:${roleColor}` : undefined}
+							>
+								{m.user_id === me ? 'você' : (user ? name : 'Carregando…')}
+							</span>
 						</button>
 
 						{#if m.muted}
