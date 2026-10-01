@@ -1,5 +1,5 @@
 import { SvelteMap } from 'svelte/reactivity';
-import { api } from '../api';
+import { api, ApiError } from '../api';
 import type { DirectConversation, WsDmUpdate } from '../types';
 import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
 import * as usersStore from './users.svelte';
@@ -10,7 +10,8 @@ export const state = $state({
 	ordered: [] as string[],
 	openDmId: null as string | null,
 	loaded: false,
-	loading: false
+	loading: false,
+	available: null as boolean | null
 });
 
 function sortKey(dm: DirectConversation): string {
@@ -39,8 +40,8 @@ export function upsert(dm: DirectConversation): void {
 	rebuildOrdered();
 }
 
-export async function load(): Promise<void> {
-	if (state.loading) return;
+export async function load(force = false): Promise<void> {
+	if (state.loading || (!force && state.available === false)) return;
 	const epoch = currentSessionEpoch();
 	state.loading = true;
 	try {
@@ -58,13 +59,19 @@ export async function load(): Promise<void> {
 		state.byId = byId;
 		rebuildOrdered();
 		state.loaded = true;
+		state.available = true;
+	} catch (error) {
+		if (error instanceof ApiError && error.status === 404) {
+			state.available = false;
+		}
+		throw error;
 	} finally {
 		state.loading = false;
 	}
 }
 
 export async function ensureLoaded(): Promise<void> {
-	if (state.loaded) return;
+	if (state.loaded || state.available === false) return;
 	await load();
 }
 
@@ -151,4 +158,5 @@ export function reset(): void {
 	state.openDmId = null;
 	state.loaded = false;
 	state.loading = false;
+	state.available = null;
 }
