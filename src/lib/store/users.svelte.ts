@@ -438,6 +438,11 @@ function syncSummary(summary: UserSummary): void {
     syncSummaries([summary]);
 }
 
+export function cacheSummaries(summaries: UserSummary[]): void {
+    syncSummaries(summaries);
+    evictSummaries();
+}
+
 export function setPersistedStatus(userId: string, status: 'away' | 'busy' | null): void {
     const summary = state.byId.get(userId);
     if (summary) syncSummary({ ...summary, status, status_updated_at: new Date().toISOString() });
