@@ -428,6 +428,15 @@
 		min-width: 0;
 	}
 
+	.bubble.giphy-bubble {
+		display: inline-flex;
+		align-self: flex-start;
+		width: fit-content;
+		max-width: calc(100vw - 96px);
+		box-sizing: border-box;
+		padding: 8px;
+	}
+
 	.meta {
 		display: flex;
 		align-items: center;
