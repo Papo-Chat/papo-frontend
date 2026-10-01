@@ -462,15 +462,16 @@
                                             {/if}
                                             <span class="time">{formatTime(m.created_at)}</span>
                                         </div>
-
-                                        {@const cachedMessage = messagesStore.getMessage(m.channel_id, m.id)}
-                                        <div class="content search-message-content">
-                                            <CompactMessageContent
-                                                content={m.content}
-                                                message={cachedMessage}
-                                                highlightText={searchQuery}
-                                            />
-                                        </div>
+                                        {#if m.channel_id}
+                                            {@const cachedMessage = messagesStore.getMessage(m.channel_id, m.id)}
+                                            <div class="content search-message-content">
+                                                <CompactMessageContent
+                                                    content={m.content}
+                                                    message={cachedMessage}
+                                                    highlightText={searchQuery}
+                                                />
+                                            </div>
+                                        {/if}
                                     </div>
                                 </div>
                             {/each}
