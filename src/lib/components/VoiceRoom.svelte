@@ -127,6 +127,15 @@
 		}
 	}
 
+	function setParticipantVolume(userId: string, event: Event): void {
+		const input = event.currentTarget as HTMLInputElement;
+		voiceStore.setRemoteUserVolume(userId, Number(input.value) / 100);
+	}
+
+	function toggleParticipantMute(userId: string): void {
+		voiceStore.toggleRemoteUserMuted(userId);
+	}
+
 	async function toggleCamera(): Promise<void> {
 		try {
 			await voiceStore.camera(!myCameraOn);
@@ -327,6 +336,33 @@
 							</span>
 						</button>
 
+						{#if joined && m.user_id !== me}
+							{@const localMuted = voiceStore.remoteUserMuted(m.user_id)}
+							{@const localVolume = Math.round(voiceStore.remoteUserVolume(m.user_id) * 100)}
+							<div class="voice-member-audio-controls">
+								<button
+									class="voice-member-local-mute"
+									class:active={localMuted}
+									onclick={() => toggleParticipantMute(m.user_id)}
+									aria-label={localMuted ? `Ouvir ${name}` : `Silenciar ${name} localmente`}
+									title={localMuted ? 'Ativar áudio local' : 'Silenciar localmente'}
+								>
+									<Icon name={localMuted ? 'speaker-slash' : 'speaker-high'} variant="light" />
+								</button>
+								<input
+									class="voice-member-volume"
+									type="range"
+									min="0"
+									max="100"
+									step="1"
+									value={localVolume}
+									oninput={(event) => setParticipantVolume(m.user_id, event)}
+									aria-label={`Volume de ${name}: ${localVolume}%`}
+									title={`Volume: ${localVolume}%`}
+								/>
+							</div>
+						{/if}
+
 						<div
 							class="voice-member-state"
 							class:muted={m.muted}
@@ -338,20 +374,11 @@
 									: 'Microfone ativo'}
 						>
 							{#if m.muted}
-								<Icon
-									name="microphone-slash"
-									variant="light"
-								/>
+								<Icon name="microphone-slash" variant="light" />
 							{:else if isSpeaking}
-								<Icon
-									name="microphone-stage"
-									variant="light"
-								/>
+								<Icon name="microphone-stage" variant="light" />
 							{:else}
-								<Icon
-									name="microphone"
-									variant="light"
-								/>
+								<Icon name="microphone" variant="light" />
 							{/if}
 						</div>
 					</div>
@@ -960,6 +987,45 @@
 		text-transform: uppercase;
 	}
 
+	.voice-member-audio-controls {
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		flex: 0 1 130px;
+		min-width: 86px;
+	}
+
+	.voice-member-local-mute {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		flex: 0 0 28px;
+		padding: 0;
+		border: 1px solid rgba(255, 255, 255, 0.55);
+		border-radius: 8px;
+		background: rgba(255, 255, 255, 0.24);
+		color: var(--muted-soft);
+		cursor: pointer;
+	}
+
+	.voice-member-local-mute:hover {
+		background: rgba(255, 255, 255, 0.45);
+	}
+
+	.voice-member-local-mute.active {
+		color: var(--danger);
+		background: color-mix(in srgb, var(--danger) 10%, transparent);
+	}
+
+	.voice-member-volume {
+		width: 92px;
+		min-width: 48px;
+		accent-color: var(--accent);
+		cursor: pointer;
+	}
+
 	.voice-member-state {
 		display: flex;
 		align-items: center;
@@ -1393,6 +1459,15 @@
 	@media (max-width: 900px) {
 		.voice-media-grid {
 			grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+		}
+	}
+
+	@media (max-width: 700px) {
+		.voice-member-audio-controls {
+			flex-basis: 88px;
+		}
+		.voice-member-volume {
+			width: 56px;
 		}
 	}
 
