@@ -290,6 +290,7 @@ export function dispatchEvent(event: WsOutbound): void {
 		case 'heartbeat_ack':
 			break;
 		case 'error':
+			voiceStore.onVoiceError(event);
 			break;
 		default:
 			break;
