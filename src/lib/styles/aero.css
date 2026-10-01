@@ -691,8 +691,10 @@ button.name:focus-visible {
 		border-color 0.22s ease;
 }
 .bubble.giphy-bubble {
-	width: fit-content;
+	display: inline-flex;
+	width: auto;
 	max-width: 100%;
+	box-sizing: border-box;
 	padding: 8px;
 }
 .bubble::after {
