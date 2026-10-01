@@ -100,7 +100,7 @@
 									<span class="name">{author?.nickname || author?.username || 'Usuário'}</span>
 									<span class="time">{formatTime(m.created_at)}</span>
 								</div>
-								<CompactMessageContent message={m} />
+								<CompactMessageContent message={m} pinned />
 							</div>
 							<span class="pin-badge" aria-hidden="true"><Icon name="push-pin" variant="duotone" size={13} /></span>
 						</div>
