@@ -17,41 +17,28 @@ export type NotificationSoundInfo = {
 	custom: boolean;
 };
 
-let audioContext: AudioContext | null = null;
+let player: HTMLAudioElement | null = null;
+let preparedUserId: string | null = null;
+let playerObjectUrl: string | null = null;
 let unlockInstalled = false;
+let unlocked = false;
+let pendingPlay = false;
 
-function getAudioContext(): AudioContext | null {
-	if (typeof window === 'undefined' || typeof AudioContext === 'undefined') return null;
-	if (!audioContext || audioContext.state === 'closed') {
-		audioContext = new AudioContext();
+function getPlayer(): HTMLAudioElement | null {
+	if (typeof window === 'undefined' || typeof Audio === 'undefined') return null;
+	if (!player) {
+		player = new Audio(DEFAULT_SOUND_URL);
+		player.preload = 'auto';
+		player.playsInline = true;
 	}
-	return audioContext;
+	return player;
 }
 
-// Chrome suspends Web Audio until the page receives a user gesture. Resume the
-// shared context on the first interaction so later WebSocket notifications can
-// play without requiring a click at notification time.
-export function installNotificationSoundUnlock(): void {
-	if (typeof window === 'undefined' || unlockInstalled) return;
-	unlockInstalled = true;
-
-	const unlock = () => {
-		const ctx = getAudioContext();
-		if (!ctx) return;
-		void ctx.resume().finally(() => {
-			if (ctx.state !== 'running') return;
-			window.removeEventListener('pointerdown', unlock, true);
-			window.removeEventListener('keydown', unlock, true);
-			window.removeEventListener('touchstart', unlock, true);
-		});
-	};
-
-	window.addEventListener('pointerdown', unlock, { capture: true, passive: true });
-	window.addEventListener('keydown', unlock, { capture: true });
-	window.addEventListener('touchstart', unlock, { capture: true, passive: true });
+function revokePlayerObjectUrl(): void {
+	if (!playerObjectUrl) return;
+	URL.revokeObjectURL(playerObjectUrl);
+	playerObjectUrl = null;
 }
-
-installNotificationSoundUnlock();
 
 function openDb(): Promise<IDBDatabase | null> {
 	if (typeof indexedDB === 'undefined') return Promise.resolve(null);
@@ -85,6 +72,72 @@ async function getRecord(userId: string): Promise<SoundRecord | null> {
 		};
 	});
 }
+
+// Preload the current user's source before a notification arrives. This keeps
+// Chrome's actual notification playback free of IndexedDB/fetch awaits.
+export async function prepareNotificationSound(userId: string): Promise<void> {
+	const audio = getPlayer();
+	if (!audio) return;
+
+	const record = await getRecord(userId);
+	audio.pause();
+	audio.currentTime = 0;
+	revokePlayerObjectUrl();
+
+	if (record) {
+		playerObjectUrl = URL.createObjectURL(record.blob);
+		audio.src = playerObjectUrl;
+	} else {
+		audio.src = DEFAULT_SOUND_URL;
+	}
+
+	preparedUserId = userId;
+	audio.load();
+}
+
+// Chrome blocks audible playback until the origin receives a user gesture.
+// Prime the same persistent media element used by notifications. A tiny volume
+// avoids an audible click while still exercising the audible media path.
+export function installNotificationSoundUnlock(): void {
+	if (typeof window === 'undefined' || unlockInstalled) return;
+	unlockInstalled = true;
+
+	const unlock = () => {
+		const audio = getPlayer();
+		if (!audio || unlocked) return;
+
+		const previousVolume = audio.volume;
+		audio.volume = 0.0001;
+		audio.currentTime = 0;
+
+		void audio
+			.play()
+			.then(() => {
+				audio.pause();
+				audio.currentTime = 0;
+				audio.volume = previousVolume;
+				unlocked = true;
+				window.removeEventListener('pointerdown', unlock, true);
+				window.removeEventListener('keydown', unlock, true);
+				window.removeEventListener('touchstart', unlock, true);
+				if (pendingPlay) {
+					pendingPlay = false;
+					queueMicrotask(() => {
+						void playPrepared();
+					});
+				}
+			})
+			.catch(() => {
+				audio.volume = previousVolume;
+			});
+	};
+
+	window.addEventListener('pointerdown', unlock, { capture: true, passive: true });
+	window.addEventListener('keydown', unlock, { capture: true });
+	window.addEventListener('touchstart', unlock, { capture: true, passive: true });
+}
+
+installNotificationSoundUnlock();
 
 export async function notificationSoundInfo(userId: string): Promise<NotificationSoundInfo> {
 	const record = await getRecord(userId);
@@ -123,6 +176,8 @@ export async function setNotificationSound(userId: string, file: File): Promise<
 			reject(tx.error ?? new Error('Falha ao salvar som de notificação.'));
 		};
 	});
+
+	await prepareNotificationSound(userId);
 }
 
 export async function clearNotificationSound(userId: string): Promise<void> {
@@ -141,36 +196,34 @@ export async function clearNotificationSound(userId: string): Promise<void> {
 			reject(tx.error ?? new Error('Falha ao restaurar som padrão.'));
 		};
 	});
+
+	await prepareNotificationSound(userId);
+}
+
+async function playPrepared(): Promise<boolean> {
+	const audio = getPlayer();
+	if (!audio) return false;
+
+	try {
+		audio.pause();
+		audio.currentTime = 0;
+		audio.volume = 1;
+		await audio.play();
+		return true;
+	} catch (err) {
+		if (err instanceof DOMException && err.name === 'NotAllowedError') {
+			pendingPlay = true;
+		}
+		return false;
+	}
 }
 
 export async function playNotificationSound(userId: string): Promise<boolean> {
 	try {
-		const ctx = getAudioContext();
-		if (!ctx) return false;
-
-		if (ctx.state === 'suspended') {
-			try {
-				await ctx.resume();
-			} catch {
-				return false;
-			}
+		if (preparedUserId !== userId) {
+			await prepareNotificationSound(userId);
 		}
-		if (ctx.state !== 'running') return false;
-
-		const record = await getRecord(userId);
-		const bytes = record
-			? await record.blob.arrayBuffer()
-			: await fetch(DEFAULT_SOUND_URL, { cache: 'force-cache' }).then((res) => {
-					if (!res.ok) throw new Error(`Falha ao carregar som padrão: ${res.status}`);
-					return res.arrayBuffer();
-				});
-
-		const buffer = await ctx.decodeAudioData(bytes.slice(0));
-		const source = ctx.createBufferSource();
-		source.buffer = buffer;
-		source.connect(ctx.destination);
-		source.start();
-		return true;
+		return await playPrepared();
 	} catch {
 		return false;
 	}
