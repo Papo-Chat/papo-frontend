@@ -482,6 +482,26 @@ export const users = {
 	}
 };
 
+// ── direct messages ────────────────────────────────────
+
+export const dms = {
+	list(): Promise<DirectConversationList> {
+		return request<DirectConversationList>('/dms');
+	},
+	open(userId: string): Promise<DirectConversation> {
+		return request<DirectConversation>('/dms', {
+			method: 'POST',
+			body: { user_id: userId }
+		});
+	},
+	get(id: string): Promise<DirectConversation> {
+		return request<DirectConversation>(`/dms/${encodeURIComponent(id)}`);
+	},
+	hide(id: string): Promise<void> {
+		return request<void>(`/dms/${encodeURIComponent(id)}`, { method: 'DELETE' });
+	}
+};
+
 // ── server ─────────────────────────────────────────────
 
 export const server = {
