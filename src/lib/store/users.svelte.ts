@@ -246,6 +246,10 @@ export async function ensureSummaries(ids: string[]): Promise<UserSummary[]> {
             summaryInFlight.set(id, request);
             waits.add(request);
         }
+
+        // Avoid a burst of many 1000-id requests on very large presence_sync
+        // snapshots. Each page is ingested before requesting the next.
+        await batch;
     }
 
     if (waits.size) await Promise.all(waits);
