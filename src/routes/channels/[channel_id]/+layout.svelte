@@ -5,6 +5,7 @@
 	import * as channelsStore from '$lib/store/channels.svelte';
 	import Rail from '$lib/components/Rail.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
+	import Members from '$lib/components/Members.svelte';
 	import MemberDirectory from '$lib/components/MemberDirectory.svelte';
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
 
@@ -17,12 +18,20 @@
 	const profileUser = $derived(state.profileOpen ? state.profileUser : null);
 </script>
 
-<div class="app-shell chat-shell">
+<div class="app-shell">
 	{#if state.channelsDrawerOpen}
 		<button
 			class="mobile-overlay channels-overlay"
 			aria-hidden="true"
 			onclick={() => (state.channelsDrawerOpen = false)}
+		></button>
+	{/if}
+
+	{#if state.membersDrawerOpen}
+		<button
+			class="mobile-overlay members-overlay"
+			aria-hidden="true"
+			onclick={() => (state.membersDrawerOpen = false)}
 		></button>
 	{/if}
 
@@ -34,11 +43,11 @@
 		></button>
 	{/if}
 
-	{#if state.membersDrawerOpen}
+	{#if state.dmDirectoryOpen}
 		<button
 			class="directory-overlay"
-			aria-label="Fechar membros"
-			onclick={() => (state.membersDrawerOpen = false)}
+			aria-label="Fechar lista de membros para DM"
+			onclick={() => (state.dmDirectoryOpen = false)}
 		></button>
 	{/if}
 
@@ -50,7 +59,9 @@
 		<slot />
 	</main>
 
-	{#if state.membersDrawerOpen}
+	<Members />
+
+	{#if state.dmDirectoryOpen}
 		<MemberDirectory />
 	{/if}
 
@@ -66,10 +77,6 @@
 </div>
 
 <style>
-	:global(.app-shell.chat-shell) {
-		grid-template-columns: 78px 264px minmax(0, 1fr);
-	}
-
 	.directory-overlay,
 	.rail-overlay {
 		position: absolute;
@@ -103,22 +110,7 @@
 		background: rgba(4, 18, 31, 0.34);
 	}
 
-	@media (max-width: 1220px) {
-		:global(.app-shell.chat-shell) {
-			grid-template-columns: 74px 240px minmax(0, 1fr);
-		}
-	}
-
-	@media (max-width: 940px) {
-		:global(.app-shell.chat-shell) {
-			grid-template-columns: 70px minmax(0, 1fr);
-		}
-	}
-
 	@media (max-width: 700px) {
-		:global(.app-shell.chat-shell) {
-			grid-template-columns: minmax(0, 1fr);
-		}
 		.rail-overlay {
 			display: block;
 		}
