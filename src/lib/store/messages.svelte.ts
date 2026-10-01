@@ -1527,11 +1527,19 @@ export function loadPinned(channelId: string, force = false): void {
 				return;
 			}
 
+			const pinned = res.pinned
+				.map(coerceMessage)
+				.filter((message) => !current.deletedMessageIds.has(message.id));
+
+			for (const message of pinned) {
+				for (const preview of message.previews) {
+					void ensurePreview(preview.id).catch(() => {});
+				}
+			}
+
 			state.channels.set(channelId, {
 				...current,
-				pinned: res.pinned
-					.map(coerceMessage)
-					.filter((message) => !current.deletedMessageIds.has(message.id)),
+				pinned,
 				pinnedLoaded: true
 			});
 		})
