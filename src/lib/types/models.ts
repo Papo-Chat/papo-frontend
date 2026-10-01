@@ -67,6 +67,22 @@ export interface Channel {
 	notification_settings: NotificationSettings;
 }
 
+// ── direct messages ────────────────────────────────────
+
+export interface DirectConversation {
+	id: string;
+	user: UserSummary;
+	created_at: string;
+	last_message: ChannelLastMessage | null;
+	last_read_message: string | null;
+	last_read_at: string | null;
+	unread_count: number;
+}
+
+export interface DirectConversationList {
+	dms: DirectConversation[];
+}
+
 // ── users ──────────────────────────────────────────────
 
 export type PersistedStatus = 'away' | 'busy';
