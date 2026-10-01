@@ -177,8 +177,8 @@ describe('ApiError (RFC 7807) parsing', () => {
 			() => auth.whoami(),
 			(err) => {
 				expect(err.name).toBe('ApiError');
-				// status comes from the body field, absent → 0.
-				expect(err.status).toBe(0);
+				// Non-RFC responses fall back to the actual HTTP status.
+				expect(err.status).toBe(500);
 				expect(err.type).toBe('about:blank');
 				expect(err.title).toBe('Error');
 			}
