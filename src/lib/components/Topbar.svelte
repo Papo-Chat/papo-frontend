@@ -46,6 +46,10 @@
 		state.membersDrawerOpen = true;
 	}
 
+	function toggleVoiceChat(): void {
+		state.voiceChatDrawerOpen = !state.voiceChatDrawerOpen;
+	}
+
 	function openNotifications(): void {
 		state.notificationsPopoverOpen = true;
 	}
@@ -84,6 +88,18 @@
 	</div>
 
 	<div class="actions">
+		{#if channel.type === 'voice'}
+			<button
+				class="pill circle header-icon-btn voice-chat-btn"
+				class:active={state.voiceChatDrawerOpen}
+				onclick={toggleVoiceChat}
+				aria-label={state.voiceChatDrawerOpen ? 'Fechar chat de texto' : 'Abrir chat de texto'}
+				title={state.voiceChatDrawerOpen ? 'Fechar chat de texto' : 'Abrir chat de texto'}
+				aria-pressed={state.voiceChatDrawerOpen}
+			>
+				<Icon name="chat-circle-text" variant="light" />
+			</button>
+		{/if}
 		<button
 			class="pill circle header-icon-btn members-btn"
 			onclick={openMembers}
@@ -147,5 +163,11 @@
 		font: inherit;
 		-webkit-appearance: none;
 		appearance: none;
+	}
+
+	.voice-chat-btn.active {
+		border-color: color-mix(in srgb, var(--accent) 48%, transparent);
+		background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+		color: var(--accent);
 	}
 </style>
