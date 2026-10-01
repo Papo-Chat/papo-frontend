@@ -9,10 +9,12 @@
 	import { state, setScrollTarget } from '$lib/store/ui.svelte';
 	import * as notificationsStore from '$lib/store/notifications.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
+	import * as messagesStore from '$lib/store/messages.svelte';
 	import { formatTime } from '$lib/utils/time';
 	import type { NotificationSummary } from '$lib/types';
 	import Icon from './Icon.svelte';
 	import Avatar from './Avatar.svelte';
+	import CompactMessageContent from './CompactMessageContent.svelte';
 
 	let el: HTMLElement | null = null;
 	let open = $derived(state.notificationsPopoverOpen);
@@ -20,6 +22,14 @@
 	function close(): void {
 		state.notificationsPopoverOpen = false;
 	}
+
+	$effect(() => {
+		if (!open) return;
+		const ids = notificationsStore.state.items
+			.map((notification) => notification.author_id)
+			.filter((id): id is string => !!id);
+		if (ids.length) void usersStore.ensureSummaries(ids).catch(() => {});
+	});
 
 	// Scroll-based loading: while the user scrolls the body towards the
 	// bottom (distance < 200px) and there are more pages, load the next.
@@ -75,6 +85,7 @@
 			{#if notificationsStore.state.items.length}
 				{#each notificationsStore.state.items as n (n.id)}
 					{@const author = usersStore.state.byId.get(n.author_id ?? '')}
+					{@const cachedMessage = messagesStore.getMessage(n.channel_id, n.message_id)}
 					<div
 							class="popover-item notification-item {!n.read ? 'unread' : ''}"
 							role="button"
@@ -96,7 +107,12 @@
 										<span class="unread-dot" aria-hidden="true"></span>
 									{/if}
 								</div>
-								<div class="content notification-content">{n.message_content}</div>
+								<div class="notification-content">
+									<CompactMessageContent
+										content={n.message_content}
+										message={cachedMessage}
+									/>
+								</div>
 							</div>
 						</div>
 				{/each}
