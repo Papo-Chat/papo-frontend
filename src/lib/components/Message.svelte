@@ -177,7 +177,6 @@
 
 <article
 	class="message"
-	class:gold-highlight={goldHighlight}
 	data-message-id={message.id}
 	bind:this={messageEl}
 	onpointerenter={onEnter}
