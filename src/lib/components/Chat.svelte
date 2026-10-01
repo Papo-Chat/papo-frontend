@@ -708,6 +708,7 @@
 	{#if showReturnRecent}
 		<button
 			class="new-messages-bubble return-recent"
+			class:with-unread={unreadCount > 0}
 			onclick={jumpToLatest}
 		>
 			↓ Voltar para mensagens recentes
@@ -810,8 +811,11 @@
 
 	.new-messages-bubble:hover { background: var(--hover); }
 	.return-recent {
-		bottom: {unreadCount > 0 ? '52px' : '12px'};
+		bottom: 12px;
 		background: color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);
+	}
+	.return-recent.with-unread {
+		bottom: 52px;
 	}
 	:global([data-theme='dark']) .return-recent {
 		background: color-mix(in srgb, var(--surface) 92%, #1d79a8 8%);
