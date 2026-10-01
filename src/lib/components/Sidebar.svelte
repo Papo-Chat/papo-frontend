@@ -4,7 +4,7 @@
 	import * as channelsStore from '$lib/store/channels.svelte';
 	import { state as serverState } from '$lib/store/server.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
-	import { state as sessionState, meId } from '$lib/store/session.svelte';
+	import { state as sessionState, meId, logout } from '$lib/store/session.svelte';
 	import * as rolesStore from '$lib/store/roles.svelte';
 	import { can } from '$lib/store/roles.svelte';
 	import Icon from './Icon.svelte';
@@ -72,6 +72,12 @@
 		state.channelsDrawerOpen = false;
 		goto(to);
 	}
+
+	async function doLogout(): Promise<void> {
+		state.channelsDrawerOpen = false;
+		await logout();
+		await goto('/auth');
+	}
 </script>
 
 <aside class="sidebar {drawerOpen ? 'open' : ''}">
@@ -130,6 +136,16 @@
 					<span>{s.label}</span>
 				</button>
 			{/each}
+			<button
+				class="mobile-rail-action mobile-rail-logout"
+				aria-label="Sair"
+				onclick={doLogout}
+			>
+				<span class="mobile-rail-icon">
+					<Icon name="sign-out" variant="light" />
+				</span>
+				<span>Sair</span>
+			</button>
 		</div>
 	</div>
 </aside>
