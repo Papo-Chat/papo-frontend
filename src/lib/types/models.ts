@@ -84,7 +84,7 @@ export interface UserSummary {
 	roles: RoleSummary[];
 }
 
-export interface UserProfile extends UserSummary {
+export interface UserProfile extends Omit<UserSummary, 'banned'> {
 	// base64 blob of the avatar (null when the user has no avatar).
 	avatar_blob: string | null;
 	avatar_format: string;
