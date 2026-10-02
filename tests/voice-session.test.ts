@@ -12,6 +12,36 @@ afterEach(() => {
 });
 
 describe('persistent global voice session', () => {
+	it('treats failed and closed peer connections as terminal', () => {
+		expect(voiceStore.isTerminalPeerConnectionState('failed')).toBe(true);
+		expect(voiceStore.isTerminalPeerConnectionState('closed')).toBe(true);
+		expect(voiceStore.isTerminalPeerConnectionState('connected')).toBe(false);
+		expect(voiceStore.isTerminalPeerConnectionState('disconnected')).toBe(false);
+	});
+
+	it('detects a voice_leave for the local active session only', () => {
+		expect(
+			voiceStore.isLocalVoiceLeave(
+				{ channel_id: 'voice-1', user_id: 'me' },
+				'voice-1',
+				'me'
+			)
+		).toBe(true);
+		expect(
+			voiceStore.isLocalVoiceLeave(
+				{ channel_id: 'voice-1', user_id: 'other' },
+				'voice-1',
+				'me'
+			)
+		).toBe(false);
+		expect(
+			voiceStore.isLocalVoiceLeave(
+				{ channel_id: 'voice-2', user_id: 'me' },
+				'voice-1',
+				'me'
+			)
+		).toBe(false);
+	});
 	it('stays represented while navigating to DMs, admin and settings', () => {
 		expect(voiceStore.shouldShowGlobalSession('/dm/dm-1')).toBe(true);
 		expect(voiceStore.shouldShowGlobalSession('/admin/channels')).toBe(true);
