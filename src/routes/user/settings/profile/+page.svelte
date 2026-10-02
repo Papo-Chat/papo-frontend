@@ -351,7 +351,7 @@
                     aria-label="Escolher capa"
                     aria-describedby="pf-banner-limit"
                 />
-                <span id="pf-banner-limit" class="field-hint">Máximo: 1024 × 1024 px.</span>
+                <span id="pf-banner-limit" class="field-hint">Máximo: 2048 × 2048 px.</span>
                 {#if bannerError}
                     <span class="field-error">{bannerError}</span>
                 {/if}
