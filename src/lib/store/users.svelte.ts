@@ -12,6 +12,7 @@ const TYPING_TTL = 5000; // ms
 
 const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 let joinNoticeSerial = 0;
+let consumedJoinNoticeSerial = 0;
 
 const PROFILE_CACHE_TARGET = 75;
 const PROFILE_CACHE_MAX = 120;
@@ -713,6 +714,19 @@ export function handleUserJoin(userId: string): void {
         if (summary) appendJoinedUserToVisibleWindow(summary);
     });
 }
+
+export function consumeJoinNotice(
+    expectedId?: number
+): { id: number; userId: string } | null {
+    const notice = state.joinNotice;
+    if (!notice) return null;
+    if (expectedId !== undefined && notice.id !== expectedId) return null;
+    if (notice.id <= consumedJoinNoticeSerial) return null;
+
+    consumedJoinNoticeSerial = notice.id;
+    state.joinNotice = null;
+    return notice;
+}
 // presence_sync is the authoritative snapshot on (re)connect: replace the
 // whole presence map (users absent from the snapshot are no longer online).
 
@@ -819,6 +833,7 @@ export function reset(): void {
     state.typing.clear();
     state.joinNotice = null;
     joinNoticeSerial = 0;
+    consumedJoinNoticeSerial = 0;
     state.bannedIds.clear();
     const nextGeneration = state.list.loadGeneration + 1;
     state.list = {
