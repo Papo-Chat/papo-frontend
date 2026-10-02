@@ -22,6 +22,10 @@
 	let actionError = $state<string | null>(null);
 	let busyUsers = $state(new Set<string>());
 	let feedbackTimer: ReturnType<typeof setTimeout> | null = null;
+	let resetTarget: UserSummary | null = $state(null);
+	let resetPassword = $state('');
+	let resetConfirm = $state('');
+	let resetBusy = $state(false);
 
 	function setFeedback(success: string, error: string | null = null): void {
 		actionSuccess = error ? '' : success;
@@ -290,6 +294,22 @@
 			setUserBusy(userId, false);
 		}
 	}
+	async function submitPasswordReset(): Promise<void> {
+		if (!resetTarget || resetBusy || resetPassword !== resetConfirm) return;
+		resetBusy = true;
+		try {
+			await api.users.resetPassword(resetTarget.id, resetPassword);
+			setFeedback(`Senha de ${resetTarget.nickname || resetTarget.username} redefinida.`);
+			resetTarget = null;
+			resetPassword = '';
+			resetConfirm = '';
+		} catch (err) {
+			setFeedback('', err instanceof Error ? err.message : 'Erro ao redefinir senha.');
+		} finally {
+			resetBusy = false;
+		}
+	}
+
 	function statusDotClass(id: string): string {
 		const s = usersStore.effectiveStatus(id);
 		if (s === 'online') return '';
@@ -385,6 +405,21 @@
 								{/each}
 							</div>
 
+{#if isOwner && u.id !== me}
+							<button
+								class="admin-btn ghost small"
+								type="button"
+								disabled={busyUsers.has(u.id)}
+								onclick={() => {
+									resetTarget = u;
+									resetPassword = '';
+									resetConfirm = '';
+								}}
+							>
+								<Icon name="key" variant="light" size={14} />
+								Resetar senha
+							</button>
+							{/if}
 {#if canManageServer}
 							<button
 								class="admin-btn ghost small"
@@ -407,7 +442,29 @@
 	</div>
 </div>
 
+{#if resetTarget}
+	<div class="reset-backdrop" role="presentation">
+		<div class="reset-modal" role="dialog" aria-modal="true" aria-label="Resetar senha">
+			<h3>Resetar senha de {resetTarget.nickname || resetTarget.username}</h3>
+			<input class="admin-input" type="password" placeholder="Nova senha" bind:value={resetPassword} autocomplete="new-password" />
+			<input class="admin-input" type="password" placeholder="Confirmar senha" bind:value={resetConfirm} autocomplete="new-password" />
+			<div class="reset-actions">
+				<button class="admin-btn ghost" type="button" onclick={() => (resetTarget = null)} disabled={resetBusy}>Cancelar</button>
+				<button class="admin-btn" type="button" onclick={submitPasswordReset}
+					disabled={resetBusy || resetPassword.length < 8 || resetPassword !== resetConfirm}>
+					{resetBusy ? 'Resetando…' : 'Resetar senha'}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
 <style>
+	.reset-backdrop { position:fixed; inset:0; z-index:2500; display:grid; place-items:center; padding:20px; background:rgba(0,0,0,.55); }
+	.reset-modal { width:min(440px,100%); display:grid; gap:12px; padding:18px; border-radius:14px; background:var(--surface,#fff); box-shadow:0 20px 60px rgba(0,0,0,.3); }
+	.reset-modal h3 { margin:0; font-size:16px; }
+	.reset-actions { display:flex; justify-content:flex-end; gap:8px; }
+
 	.users-page {
 		padding: 4px 0 8px;
 		display: flex;
