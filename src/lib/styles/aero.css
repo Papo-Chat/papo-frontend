@@ -3312,6 +3312,9 @@ button.name:focus-visible {
 	position: relative;
 	z-index: 1;
 	width: min(1450px, calc(100vw - 42px));
+	max-width: calc(100vw - 42px);
+	min-width: 0;
+	box-sizing: border-box;
 	height: min(900px, calc(100vh - 36px));
 	/* Auto margins let the body flex container distribute free space
 	 * equally top/bottom (F11 fullscreen keeps it anchored top+bottom). */
@@ -3392,7 +3395,9 @@ button.name:focus-visible {
 }
 .admin-layout {
 	display: grid;
-	grid-template-columns: 152px 1fr;
+	grid-template-columns: 152px minmax(0, 1fr);
+	min-width: 0;
+	min-height: 0;
 	overflow: hidden;
 }
 .admin-nav {
@@ -3436,7 +3441,11 @@ button.name:focus-visible {
 	flex: none;
 }
 .admin-main {
-	overflow: auto;
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
+	overflow-y: auto;
+	overflow-x: hidden;
 	padding: 22px 26px;
 	scrollbar-width: thin;
 	scrollbar-color: rgba(72, 130, 170, 0.28) transparent;
@@ -3477,6 +3486,10 @@ button.name:focus-visible {
 	flex-wrap: wrap;
 }
 .admin-card {
+	width: 100%;
+	max-width: 100%;
+	min-width: 0;
+	box-sizing: border-box;
 	border-radius: var(--radius-md);
 	border: 1px solid rgba(255, 255, 255, 0.6);
 	background:
@@ -3490,6 +3503,9 @@ button.name:focus-visible {
 }
 .admin-card-head {
 	display: flex;
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
 	align-items: center;
 	justify-content: space-between;
 	gap: 10px;
@@ -3500,7 +3516,10 @@ button.name:focus-visible {
 }
 .admin-card-body {
 	flex: 1;
+	min-width: 0;
+	max-width: 100%;
 	min-height: 0;
+	box-sizing: border-box;
 	overflow-y: auto;
 	overflow-x: hidden;
 	padding: 12px 16px;
@@ -3561,6 +3580,9 @@ button.name:focus-visible {
 }
 .admin-input {
 	height: 46px;
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
 	border-radius: 13px;
 	padding: 0 12px;
 	border: 1px solid rgba(255, 255, 255, 0.8);
@@ -3578,6 +3600,9 @@ button.name:focus-visible {
 	box-shadow: 0 0 0 3px rgba(100, 196, 250, 0.18);
 }
 .admin-textarea {
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
 	font-size: 16px;
 	resize: vertical;
 	min-height: 70px;
@@ -3597,6 +3622,9 @@ button.name:focus-visible {
 }
 .admin-select {
 	height: 46px;
+	min-width: 0;
+	max-width: 100%;
+	box-sizing: border-box;
 	border-radius: 13px;
 	font-size: 16px;
 	padding: 0 12px;
@@ -3931,8 +3959,10 @@ button.name:focus-visible {
 /* mobile + dark: admin shell */
 @media (max-width: 700px) {
 	.admin-shell {
+		width: calc(100vw - 16px);
+		max-width: calc(100vw - 16px);
 		margin: 8px;
-		height: calc(100vh - 16px);
+		height: calc(100dvh - 16px);
 		border-radius: 22px;
 	}
 	.admin-layout {
@@ -3954,7 +3984,10 @@ button.name:focus-visible {
 		margin-bottom: 0;
 	}
 	.admin-main {
+		min-width: 0;
+		max-width: 100%;
 		padding: 14px;
+		overflow-x: hidden;
 	}
 	.admin-grid-2 {
 		grid-template-columns: 1fr;
