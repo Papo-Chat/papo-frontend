@@ -315,6 +315,18 @@ export function join(channelId: string, userId?: string): void {
 				onRemoteTrack(conn, event);
 			};
 
+			const handlePeerState = () => {
+				if (peer !== conn || !isCurrentJoin(generation, channelId)) return;
+				if (
+					isTerminalPeerConnectionState(conn.connectionState) ||
+					conn.iceConnectionState === 'failed'
+				) {
+					cleanupLocalVoiceSession({ error: 'A conexão com a sala de voz foi perdida.' });
+				}
+			};
+			conn.onconnectionstatechange = handlePeerState;
+			conn.oniceconnectionstatechange = handlePeerState;
+
 			const audioTrack = stream.getAudioTracks().at(0);
 
 			if (audioTrack) {
@@ -439,31 +451,21 @@ function sendOffer(): Promise<void> {
 	return run;
 }
 
-export function leave(channelId: string | null): void {
-	if (channelId !== null && currentChannelId !== null && channelId !== currentChannelId) {
-		return;
-	}
-
+function cleanupLocalVoiceSession(options: {
+	clearChannelMembers?: boolean;
+	error?: string | null;
+} = {}): void {
 	voiceGeneration += 1;
 	cancelJoinWait();
-
-	const cid = currentChannelId;
-
-	if (cid && serverJoinSent) {
-		wsSend({
-			type: 'voice_leave',
-			channel_id: cid
-		} as WsInbound);
-	}
-
 	serverJoinSent = false;
 
 	cleanupAudioMixer();
-	peer?.close();
+	const oldPeer = peer;
+	peer = null;
+	oldPeer?.close();
 
 	if (mediaStream) {
 		mediaStream.getTracks().forEach((track) => track.stop());
-
 		mediaStream = null;
 	}
 
@@ -471,10 +473,9 @@ export function leave(channelId: string | null): void {
 	offerChain = Promise.resolve();
 	mediaActionChain = Promise.resolve();
 	mediaSubscriptionsReady = false;
-	clearPendingAnswer(new Error('voice left'));
+	clearPendingAnswer(new Error(options.error ?? 'voice ended'));
 	cleanupVideoMedia();
 
-	peer = null;
 	state.peer = null;
 	state.members = [];
 	state.activeSpeakers = [];
@@ -482,16 +483,29 @@ export function leave(channelId: string | null): void {
 	state.connected = false;
 	state.channelId = null;
 	state.localMuted = true;
-
-	// Não limpar channelMembers aqui.
-	// O roster representa o estado global dos canais de voz,
-	// não apenas o canal em que este usuário está conectado.
+	if (options.clearChannelMembers) state.channelMembers.clear();
 
 	currentChannelId = null;
 	currentUserId = null;
-	state.lastError = null;
+	state.lastError = options.error ?? null;
 
 	cleanupRemoteAudio();
+}
+
+export function leave(channelId: string | null): void {
+	if (channelId !== null && currentChannelId !== null && channelId !== currentChannelId) {
+		return;
+	}
+
+	const cid = currentChannelId;
+	if (cid && serverJoinSent) {
+		wsSend({
+			type: 'voice_leave',
+			channel_id: cid
+		} as WsInbound);
+	}
+
+	cleanupLocalVoiceSession();
 }
 
 // Evict the room when the channel is deleted.
@@ -506,6 +520,12 @@ export function isJoined(channelId: string): boolean {
 	// Lê `state.channelId` (reativo) em vez do `currentChannelId` de módulo
 	// (variável não rastreada): sem isso, o UI nunca sai do estado inicial.
 	return state.channelId === channelId;
+}
+
+export function isTerminalPeerConnectionState(
+	connectionState: RTCPeerConnectionState
+): boolean {
+	return connectionState === 'failed' || connectionState === 'closed';
 }
 
 export function shouldShowGlobalSession(pathname: string): boolean {
@@ -574,41 +594,7 @@ export function onPresenceSync(members: PresenceMember[]): void {
 // Called by the websocket store when the WS closes (P0.1). The call belongs
 // to the old connection; tear down the peer and local state. No auto-rejoin.
 export function onSocketClose(): void {
-	voiceGeneration += 1;
-	cancelJoinWait();
-
-	serverJoinSent = false;
-
-	cleanupAudioMixer();
-	peer?.close();
-
-	if (mediaStream) {
-		mediaStream.getTracks().forEach((track) => track.stop());
-
-		mediaStream = null;
-	}
-
-	signalQueue = Promise.resolve();
-	offerChain = Promise.resolve();
-	mediaActionChain = Promise.resolve();
-	mediaSubscriptionsReady = false;
-	clearPendingAnswer(new Error('socket closed'));
-	cleanupVideoMedia();
-
-	peer = null;
-	state.peer = null;
-	state.members = [];
-	state.activeSpeakers = [];
-	state.activeSpeaker = null;
-	state.connected = false;
-	state.channelId = null;
-	state.localMuted = true;
-	state.channelMembers.clear();
-
-	currentChannelId = null;
-	currentUserId = null;
-
-	cleanupRemoteAudio();
+	cleanupLocalVoiceSession({ clearChannelMembers: true });
 }
 
 // ── signalling handlers (called by the websocket store) ───
@@ -867,6 +853,10 @@ export function onVoiceLeave(ev: WsVoiceLeave): void {
 	removeUserFromRoster(ev.channel_id, ev.user_id);
 
 	if (currentChannelId !== ev.channel_id) {
+		return;
+	}
+	if (ev.user_id === currentUserId) {
+		cleanupLocalVoiceSession({ error: 'Você não está mais conectado à sala de voz.' });
 		return;
 	}
 	state.members = state.members.filter((m) => m.user_id !== ev.user_id);
