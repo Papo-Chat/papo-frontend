@@ -74,3 +74,21 @@ describe('user_join store integration', () => {
 		expect(usersStore.state.list.items.some((user) => user.id === 'u-new')).toBe(false);
 	});
 });
+
+
+describe('join notice consumption', () => {
+	it('consumes each join notice only once', () => {
+		usersStore.state.joinNotice = { id: 41, userId: 'u41' };
+
+		expect(usersStore.consumeJoinNotice(41)).toEqual({ id: 41, userId: 'u41' });
+		expect(usersStore.consumeJoinNotice(41)).toBeNull();
+		expect(usersStore.state.joinNotice).toBeNull();
+	});
+
+	it('does not consume a newer notice using an older component/event id', () => {
+		usersStore.state.joinNotice = { id: 42, userId: 'u42' };
+
+		expect(usersStore.consumeJoinNotice(41)).toBeNull();
+		expect(usersStore.state.joinNotice).toEqual({ id: 42, userId: 'u42' });
+	});
+});
