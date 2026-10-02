@@ -30,7 +30,6 @@ import {
 
 // 11h — refreshes before the 12h cookie expiry.
 const REFRESH_INTERVAL = 11 * 3600 * 1000;
-const AUTO_AWAY_MS = 5 * 60 * 1000;
 
 export const state = $state({
 	userId: null as string | null,
@@ -45,11 +44,6 @@ export const state = $state({
 });
 
 let timer: ReturnType<typeof setInterval> | null = null;
-let awayTimer: ReturnType<typeof setTimeout> | null = null;
-let lastActivityAt = Date.now();
-let autoAwayApplied = false;
-let awayRequestInFlight = false;
-let returnOnlineRequested = false;
 let activityCleanup: (() => void) | null = null;
 
 function stopTimer(): void {
@@ -59,110 +53,19 @@ function stopTimer(): void {
 	}
 }
 
-function stopAutoAway(): void {
-	if (awayTimer) {
-		clearTimeout(awayTimer);
-		awayTimer = null;
-	}
+function stopPresenceActivity(): void {
 	activityCleanup?.();
 	activityCleanup = null;
-	autoAwayApplied = false;
-	awayRequestInFlight = false;
-	returnOnlineRequested = false;
 }
 
-function restoreOnlineAfterAutoAway(): void {
-	const userId = state.userId;
-	if (!userId || !autoAwayApplied || awayRequestInFlight) return;
-
-	returnOnlineRequested = false;
-	awayRequestInFlight = true;
-	void api.users.updateStatus(userId, { status: null })
-		.then(() => {
-			if (state.userId !== userId || !autoAwayApplied) return;
-			autoAwayApplied = false;
-			state.status = null;
-			setPersistedStatus(userId, null);
-			scheduleAutoAway();
-		})
-		.catch(() => {
-			// Keep the auto-away marker so the next real activity retries.
-			returnOnlineRequested = false;
-		})
-		.finally(() => {
-			awayRequestInFlight = false;
-			if (returnOnlineRequested && autoAwayApplied && state.userId === userId) {
-				queueMicrotask(restoreOnlineAfterAutoAway);
-			}
-		});
-}
-
-function scheduleAutoAway(): void {
-	if (awayTimer) clearTimeout(awayTimer);
-	if (!state.userId || state.status !== null || autoAwayApplied) return;
-
-	const remaining = Math.max(0, AUTO_AWAY_MS - (Date.now() - lastActivityAt));
-	awayTimer = setTimeout(() => {
-		awayTimer = null;
-		if (!state.userId || state.status !== null || autoAwayApplied || awayRequestInFlight) return;
-		if (Date.now() - lastActivityAt < AUTO_AWAY_MS) {
-			scheduleAutoAway();
-			return;
-		}
-
-		const userId = state.userId;
-		awayRequestInFlight = true;
-		void api.users.updateStatus(userId, { status: 'away' })
-			.then(() => {
-				if (state.userId !== userId || state.status !== null) return;
-				autoAwayApplied = true;
-				state.status = 'away';
-				setPersistedStatus(userId, 'away');
-			})
-			.catch(() => {
-				returnOnlineRequested = false;
-				if (!autoAwayApplied && state.status === null) scheduleAutoAway();
-			})
-			.finally(() => {
-				awayRequestInFlight = false;
-				// Activity can happen while the request that marks the user away is
-				// still in flight (especially after a suspended/background tab wakes).
-				// Do not lose that activity: immediately restore online afterwards.
-				if (returnOnlineRequested && autoAwayApplied && state.userId === userId) {
-					queueMicrotask(restoreOnlineAfterAutoAway);
-				}
-			});
-	}, remaining);
-}
-
-function startAutoAway(): void {
-	stopAutoAway();
+function startPresenceActivity(): void {
+	stopPresenceActivity();
 	if (typeof window === 'undefined') return;
 
-	lastActivityAt = Date.now();
-
-	const onActivity = () => {
-		lastActivityAt = Date.now();
-
-		if (state.userId && (autoAwayApplied || awayRequestInFlight)) {
-			// Remember activity even while the away request itself is still
-			// completing. Otherwise the first interaction after returning can be
-			// swallowed and the user remains stuck as away.
-			returnOnlineRequested = true;
-			if (autoAwayApplied && !awayRequestInFlight) {
-				restoreOnlineAfterAutoAway();
-			}
-			return;
-		}
-
-		if (state.status === null && !awayTimer) scheduleAutoAway();
-	};
-
+	const onActivity = () => websocketStore.reportPresenceActivity();
 	const events: Array<keyof WindowEventMap> = [
 		'pointerdown',
 		'pointermove',
-		'mousedown',
-		'mousemove',
 		'keydown',
 		'touchstart',
 		'wheel',
@@ -173,7 +76,7 @@ function startAutoAway(): void {
 		window.addEventListener(event, onActivity, { passive: true });
 	}
 	const onVisibility = () => {
-		if (!document.hidden) onActivity();
+		if (!document.hidden) websocketStore.reportPresenceActivity(true);
 	};
 	document.addEventListener('visibilitychange', onVisibility);
 
@@ -183,7 +86,6 @@ function startAutoAway(): void {
 		}
 		document.removeEventListener('visibilitychange', onVisibility);
 	};
-	scheduleAutoAway();
 }
 
 function startTimer(): void {
@@ -241,7 +143,7 @@ export async function load(): Promise<void> {
 		state.loaded = true;
 		void loadUsersList().catch(() => {});
 		startTimer();
-		startAutoAway();
+		startPresenceActivity();
 		// Conexão WS (handshake com o mesmo cookie Auth). Só conecta quando a
 		// sessão é válida; `clearLocalSession()`/logout chamam disconnect().
 		websocketStore.connect();
@@ -254,7 +156,7 @@ export async function load(): Promise<void> {
 export function clearLocalSession(): void {
 	bumpSessionEpoch();
 	stopTimer();
-	stopAutoAway();
+	stopPresenceActivity();
 	// Stop the refresh timer, disconnect the WS (no reconnect), drop voice.
 	websocketStore.disconnect();
 	// disconnect() already tears down voice state.
@@ -283,16 +185,11 @@ export async function setStatus(status: 'away' | 'busy' | null): Promise<void> {
 	const userId = state.userId;
 	if (!userId) throw new Error('usuário não autenticado');
 	await api.users.updateStatus(userId, { status });
-	autoAwayApplied = false;
-	returnOnlineRequested = false;
 	state.status = status;
 	setPersistedStatus(userId, status);
-	lastActivityAt = Date.now();
-	if (status === null) scheduleAutoAway();
-	else if (awayTimer) {
-		clearTimeout(awayTimer);
-		awayTimer = null;
-	}
+	// Manual status changes are independent from automatic inactivity. When
+	// returning to online, report activity immediately so presence converges.
+	if (status === null) websocketStore.reportPresenceActivity(true);
 }
 
 // Explicit "leave": revoke the server session, then tear down locally.
