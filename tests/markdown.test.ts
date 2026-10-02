@@ -103,6 +103,14 @@ describe('renderMessageMarkdown', () => {
 		expect(out).toContain('inline-emoji');
 	});
 
+	it('renders a multiline profile-style description with custom emoji and preserved blank line', () => {
+		const out = renderMessageMarkdown('sobre mim\n\n:x: projetos', nameMap, urlFn);
+		expect(out).toContain('sobre mim');
+		expect(out).toContain('message-blank-line');
+		expect(out).toContain('src="/e/x"');
+		expect(out).toContain('projetos');
+	});
+
 	it('renders a lone emoji at full size (no text in content)', () => {
 		const out = renderMessageMarkdown(':x:', nameMap, urlFn);
 		expect(out).toContain('full-emoji');
