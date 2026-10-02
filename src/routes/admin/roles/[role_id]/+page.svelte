@@ -172,11 +172,12 @@
 
 	.role-actions {
 		display: flex;
+		flex-wrap: wrap;
 		align-items: center;
 		gap: 10px;
 		margin-top: 14px;
 	}
-	.color-pick { display:flex; gap:6px; align-items:center; }
+	.color-pick { display:flex; gap:6px; align-items:center; min-width:0; max-width:100%; }
 	.color-input { width:38px; height:34px; padding:2px; border:0; background:transparent; cursor:pointer; }
 	.color-hex { width:100px; }
 	.color-pick .swatch {
@@ -186,6 +187,12 @@
 		border-color: #fff;
 		box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
 	}
+	@media (max-width:560px) {
+		.role-head { align-items:flex-start; flex-wrap:wrap; }
+		.role-actions { width:100%; }
+		.role-actions .admin-btn { flex:1 1 auto; }
+	}
+
 	.empty {
 		font-size: 14px;
 		color: var(--muted);
