@@ -68,6 +68,22 @@
 	function toggleSearch(): void {
 		onSearchOpenChange?.(!searchOpen);
 	}
+
+	let topicOpen = $state(false);
+
+	function openTopic(): void {
+		topicOpen = true;
+	}
+
+	function closeTopic(): void {
+		topicOpen = false;
+	}
+
+	function handleTopicKeydown(event: KeyboardEvent): void {
+		if (event.key === 'Escape') {
+			closeTopic();
+		}
+	}
 </script>
 
 <header class="topbar">
@@ -90,7 +106,14 @@
 			{/if}
 		</div>
 		{#if channel.topic}
-			<p>{channel.topic}</p>
+			<button
+				class="topic-preview"
+				onclick={openTopic}
+				aria-label="Ver tópico completo"
+				title="Clique para ver o tópico completo"
+			>
+				{channel.topic}
+			</button>
 		{/if}
 	</div>
 
@@ -160,7 +183,152 @@
 	{/if}
 </header>
 
+{#if topicOpen}
+	<svelte:window onkeydown={handleTopicKeydown} />
+	<div
+		class="topic-backdrop"
+		role="presentation"
+		onclick={(event) => {
+			if (event.target === event.currentTarget) closeTopic();
+		}}
+	>
+		<section
+			class="topic-dialog"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="topic-dialog-title"
+		>
+			<div class="topic-dialog-head">
+				<div>
+					<span class="topic-dialog-eyebrow">Tópico do canal</span>
+					<h3 id="topic-dialog-title">{channel.name}</h3>
+				</div>
+				<button
+					class="topic-close"
+					onclick={closeTopic}
+					aria-label="Fechar tópico"
+					title="Fechar"
+				>
+					<Icon name="x" variant="light" size={18} />
+				</button>
+			</div>
+			<p class="topic-full">{channel.topic}</p>
+		</section>
+	</div>
+{/if}
+
 <style>
+	.title-wrap {
+		flex: 1 1 auto;
+		min-width: 0;
+		overflow: hidden;
+	}
+
+	.topic-preview {
+		display: block;
+		width: 100%;
+		max-width: 100%;
+		margin: 2px 0 0;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		color: var(--muted);
+		font: inherit;
+		font-size: 13px;
+		line-height: 1.35;
+		text-align: left;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		cursor: pointer;
+	}
+
+	.topic-preview:hover {
+		color: var(--text);
+		text-decoration: underline;
+		text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+		text-underline-offset: 3px;
+	}
+
+	.topic-preview:focus-visible {
+		outline: 2px solid color-mix(in srgb, var(--accent) 65%, transparent);
+		outline-offset: 3px;
+		border-radius: 4px;
+	}
+
+	.topic-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 4000;
+		display: grid;
+		place-items: center;
+		padding: 20px;
+		background: rgba(8, 22, 38, 0.26);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+	}
+
+	.topic-dialog {
+		width: min(560px, 100%);
+		max-height: min(70vh, 560px);
+		overflow: auto;
+		padding: 18px;
+		border: 1px solid rgba(255, 255, 255, 0.62);
+		border-radius: 20px;
+		background: color-mix(in srgb, var(--surface) 92%, transparent);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.7),
+			0 24px 60px rgba(8, 28, 46, 0.28);
+		backdrop-filter: blur(24px) saturate(140%);
+		-webkit-backdrop-filter: blur(24px) saturate(140%);
+	}
+
+	.topic-dialog-head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 16px;
+		margin-bottom: 14px;
+	}
+
+	.topic-dialog-eyebrow {
+		display: block;
+		margin-bottom: 3px;
+		color: var(--muted);
+		font-size: 11px;
+		font-weight: 750;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	.topic-dialog h3 {
+		margin: 0;
+		font-size: 20px;
+	}
+
+	.topic-close {
+		flex: none;
+		width: 34px;
+		height: 34px;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: 1px solid rgba(255, 255, 255, 0.48);
+		border-radius: 50%;
+		background: color-mix(in srgb, var(--surface) 72%, transparent);
+		color: var(--text);
+		cursor: pointer;
+	}
+
+	.topic-full {
+		margin: 0;
+		color: var(--text);
+		font-size: 14px;
+		line-height: 1.6;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+
 	button.chat-icon {
 		font: inherit;
 		-webkit-appearance: none;
