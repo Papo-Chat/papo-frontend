@@ -68,7 +68,9 @@
 		untrack(() => {
 			dmsStore.setOpen(id);
 			channelsStore.setOpen(null);
-			void messagesStore.ensureLoaded(id);
+			// DMs ocultadas são removidas do rail/cache; ao reabrir, force uma
+			// reconciliação real em vez de confiar apenas no flag loaded.
+			void messagesStore.setLatest(id);
 			void messagesStore.loadPinned(id);
 		});
 
