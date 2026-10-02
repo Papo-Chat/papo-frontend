@@ -800,8 +800,8 @@ button.name:focus-visible {
 		inset 0 1px 0 rgba(255, 255, 255, 0.96),
 		0 18px 40px rgba(11, 60, 96, 0.2),
 		0 8px 18px rgba(11, 60, 96, 0.1);
-	backdrop-filter: blur(18px) saturate(150%);
-	-webkit-backdrop-filter: blur(18px) saturate(150%);
+	backdrop-filter: blur(10px) saturate(130%);
+	-webkit-backdrop-filter: blur(10px) saturate(130%);
 	z-index: 220;
 	overflow: hidden;
 	transform-origin: top left;
@@ -2571,7 +2571,8 @@ button.name:focus-visible {
 	inset: 0;
 	z-index: 9999;
 
-	display: block;
+	display: grid;
+	place-items: center;
 	pointer-events: auto;
 
 	background: rgba(4, 18, 31, 0.12);
@@ -2599,17 +2600,17 @@ button.name:focus-visible {
 @keyframes profile-card-pop {
 	0% {
 		opacity: 0;
-		transform: translate(-50%, -50%) translateY(12px) scale(0.96);
+		transform: translateY(12px) scale(0.96);
 	}
 
 	65% {
 		opacity: 1;
-		transform: translate(-50%, -50%) translateY(-2px) scale(1.015);
+		transform: translateY(-2px) scale(1.015);
 	}
 
 	100% {
 		opacity: 1;
-		transform: translate(-50%, -50%) translateY(0) scale(1);
+		transform: none;
 	}
 }
 
@@ -2640,9 +2641,7 @@ button.name:focus-visible {
 	--banner-h: 150px;
 	--avatar-size: 92px;
 
-	position: absolute;
-	top: 50%;
-	left: 50%;
+	position: relative;
 
 	width: min(380px, calc(100vw - 32px));
 
@@ -2662,8 +2661,8 @@ button.name:focus-visible {
 		),
 		linear-gradient(
 			145deg,
-			rgba(249, 253, 255, 0.84),
-			rgba(221, 241, 251, 0.68)
+			rgba(249, 253, 255, 0.94),
+			rgba(221, 241, 251, 0.88)
 		);
 
 	box-shadow:
@@ -2679,23 +2678,21 @@ button.name:focus-visible {
 	opacity: 0;
 	pointer-events: none;
 
-	transform: translate(-50%, -50%) translateY(12px) scale(0.98);
+	transform: translateY(12px) scale(0.98);
 
 	transition:
 		opacity 0.24s ease,
 		transform 0.28s var(--ease);
 
 	animation: profile-card-pop 380ms
-		cubic-bezier(0.34, 1.56, 0.64, 1) both;
-
-	will-change: transform, opacity;
+		cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .profile-card.open {
 	opacity: 1;
 	pointer-events: auto;
 
-	transform: translate(-50%, -50%) translateY(0) scale(1);
+	transform: none;
 }
 
 /* ---------------------------------------------------------------------
@@ -3179,8 +3176,8 @@ button.name:focus-visible {
 		),
 		linear-gradient(
 			145deg,
-			rgba(25, 51, 68, 0.9),
-			rgba(10, 33, 48, 0.82)
+			rgba(25, 51, 68, 0.97),
+			rgba(10, 33, 48, 0.95)
 		);
 
 	border-color: rgba(182, 224, 250, 0.18);
@@ -3240,7 +3237,7 @@ button.name:focus-visible {
 
 	@media (min-width: 701px) {
 		.profile-card {
-			transform: translate(-50%, -50%);
+			transform: none;
 		}
 	}
 
