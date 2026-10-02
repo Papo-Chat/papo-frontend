@@ -161,10 +161,11 @@
 
 	async function loadPage(
 		q?: { since?: string; last_id?: string },
-		gen = ++userLoadGen
+		requestGen?: number
 	): Promise<void> {
 		if (loadingUsers) return;
 
+		const gen = requestGen ?? ++userLoadGen;
 		loadingUsers = true;
 		try {
 			const res = await messagesStore.reactionUsers(channelId, messageId, q);
