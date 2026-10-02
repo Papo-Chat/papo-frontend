@@ -773,19 +773,30 @@
 	.chat-wrapper {
 		position: relative;
 		flex: 1 1 0;
+		min-width: 0;
+		max-width: 100%;
 		min-height: 0;
 		overflow: hidden;
 	}
 
 	.chat {
 		height: 100%;
+		min-width: 0;
+		max-width: 100%;
 		min-height: 0;
+		box-sizing: border-box;
 		overflow-y: auto;
+		overflow-x: hidden;
 		display: block;
 	}
 
 	.chat-content {
+		width: 100%;
+		max-width: 100%;
+		min-width: 0;
 		min-height: 100%;
+		box-sizing: border-box;
+		overflow-x: hidden;
 		display: flex;
 		flex-direction: column;
 		justify-content: flex-end;
