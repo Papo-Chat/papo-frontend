@@ -282,8 +282,9 @@
                 ></textarea>
             </div>
             <div class="admin-field">
-                <label>Avatar</label>
+                <label for="pf-avatar">Avatar</label>
                 <input
+                    id="pf-avatar"
                     type="file"
                     accept="image/*"
                     onchange={onAvatarSelect}
@@ -294,8 +295,9 @@
                 {/if}
             </div>
             <div class="admin-field">
-                <label>Capa</label>
+                <label for="pf-banner">Capa</label>
                 <input
+                    id="pf-banner"
                     type="file"
                     accept="image/*"
                     onchange={onBannerSelect}
