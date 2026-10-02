@@ -62,14 +62,12 @@
 	}
 
 	$effect(() => {
-		const id = dm?.id;
+		const id = page.params.dm_id;
 		if (!id) return;
 
 		untrack(() => {
 			dmsStore.setOpen(id);
 			channelsStore.setOpen(null);
-			// DMs ocultadas são removidas do rail/cache; ao reabrir, force uma
-			// reconciliação real em vez de confiar apenas no flag loaded.
 			void messagesStore.setLatest(id);
 			void messagesStore.loadPinned(id);
 		});
