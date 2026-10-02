@@ -58,6 +58,7 @@
 	let touchY: number | null = null;
 	let lastScrollTop = 0;
 	let scrollDirection: 'up' | 'down' | null = null;
+	let pointerScrollActive = false;
 
 	let animatedMessageId = $state<string | null>(null);
 	let lastMessageId = $state<string | null>(null);
@@ -275,6 +276,17 @@
 		touchY = nextY;
 	}
 
+	function handlePointerDown(e: PointerEvent): void {
+		// Native scrollbar interactions target the scroll container itself.
+		// Mark them as explicit user intent so dragging the thumb upward can
+		// disable follow mode, while clicks on messages/attachments do not.
+		pointerScrollActive = e.target === listEl;
+	}
+
+	function handlePointerEnd(): void {
+		pointerScrollActive = false;
+	}
+
 	async function loadNewer(): Promise<void> {
 		if (loadingNewer || !hasMoreNewer || !listEl) return;
 
@@ -354,7 +366,10 @@
 
 		if (movedUp) {
 			scrollDirection = 'up';
-			stopFollowingBottom();
+			// Wheel/touch handlers already disable follow mode before the scroll
+			// event fires. This covers native scrollbar dragging without treating
+			// media/layout reflows as user scrolling.
+			if (pointerScrollActive) stopFollowingBottom();
 		} else if (movedDown) {
 			scrollDirection = 'down';
 			if (hasMoreNewer && distanceFromBottom() <= 180) {
@@ -365,15 +380,26 @@
 
 		const atBottom = isAtBottom();
 
-		if (!atBottom) {
-			stickToBottom = false;
+		if (stickToBottom) {
+			// A ResizeObserver/load event can race with this scroll event when an
+			// attachment acquires its intrinsic height. Follow mode is user intent:
+			// only explicit upward input should turn it off. If layout moved the
+			// bottom away, pin it again on the next frame.
+			if (!atBottom && !hasMoreNewer) {
+				if (pendingBottomFrame) cancelAnimationFrame(pendingBottomFrame);
+				pendingBottomFrame = requestAnimationFrame(() => {
+					pendingBottomFrame = 0;
+					if (!stickToBottom || hasMoreNewer) return;
+					scrollToBottom();
+					lastScrollTop = listEl?.scrollTop ?? lastScrollTop;
+				});
+			}
 			return;
 		}
 
 		// Re-enter follow mode only by actually scrolling down to the real
-		// bottom (or via an explicit jumpToLatest). Merely remaining inside the
-		// bottom threshold after an upward gesture must not snap back.
-		if (!stickToBottom && movedDown) {
+		// bottom (or via an explicit jumpToLatest).
+		if (atBottom && movedDown) {
 			clearUnreadAtBottom();
 		}
 	}
@@ -640,8 +666,12 @@
 			const el = listEl?.querySelector<HTMLElement>(
 				`[data-message-id="${highlightMessageId}"]`
 			);
+			if (!el) return;
 
-			el?.scrollIntoView({
+			// Highlight navigation is an intentional move away from the latest
+			// message, so it must opt out of sticky-bottom mode explicitly.
+			stopFollowingBottom();
+			el.scrollIntoView({
 				block: 'nearest',
 				inline: 'nearest',
 				behavior: 'auto'
@@ -666,6 +696,10 @@
 		onwheel={handleWheel}
 		ontouchstart={handleTouchStart}
 		ontouchmove={handleTouchMove}
+		onpointerdown={handlePointerDown}
+		onpointerup={handlePointerEnd}
+		onpointercancel={handlePointerEnd}
+		onpointerleave={handlePointerEnd}
 	>
 		<div class="chat-content" bind:this={contentEl}>
 			<div class="chat-top-anchor" bind:this={topEl} aria-hidden="true"></div>
