@@ -160,10 +160,6 @@
             return;
         }
         error = null;
-        if (nickname.trim().length > 0 && nickname.trim().length < 3) {
-            error = 'O nickname deve ter no mínimo 3 caracteres.';
-            return;
-        }
         saved = false;
         saving = true;
         showSaving = false;
@@ -300,7 +296,7 @@
                     class="admin-input"
                     bind:value={nickname}
                     placeholder="Como você quer ser chamado"
-                    minlength="3"
+                    maxlength="32"
                 />
             </div>
             <div class="admin-field">
