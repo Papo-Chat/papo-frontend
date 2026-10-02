@@ -6,8 +6,8 @@
 	import * as healthStore from '$lib/store/health.svelte';
 
 	let username = $state('');
-	let nickname = $state('');
 	let password = $state('');
+	let serverPassword = $state('');
 	let confirmPassword = $state('');
 	let error = $state<string | null>(null);
 	let busy = $state(false);
@@ -28,25 +28,30 @@
 			if (password !== confirmPassword) {
 				throw new Error('As senhas não coincidem.');
 			}
+
+			// Servidores privados exigem uma autorização temporária antes de
+			// /auth/register. Sem isso o backend rejeita o registro antes de
+			// criar o usuário.
+			const server = await api.server.get();
+			if (server && !server.public) {
+				if (!serverPassword) {
+					throw new Error('Informe a senha do servidor.');
+				}
+				await api.auth.loginServer({ server_password: serverPassword });
+			}
+
 			await api.auth.register({ username, password });
 
-			// O registro não cria sessão; loga para persistir via cookie e
-			// continuar o fluxo até / (bootstrap canônico no raiz).
-			const login = await api.auth.login({ username, password });
-
-			// O API de registro não aceita apelido; persiste via perfil logo
-			// após a sessão existir. `status` aqui é a mensagem de status
-			// (users.status_message), não o status online — vazio = neutro.
-			if (nickname) {
-				await api.users.update(login.user.id, {
-					nickname,
-					status: '',
-					description: '',
-					typing: null
-				});
-			}
+			// O registro não cria sessão permanente; faz login imediatamente
+			// para concluir o cadastro em um único fluxo.
+			await api.auth.login({ username, password });
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Erro ao registrar a conta. Tente novamente.';
+			error =
+				e instanceof ApiError
+					? e.detail
+					: e instanceof Error
+						? e.message
+						: 'Erro ao registrar a conta. Tente novamente.';
 		}
 		busy = false;
 		if (error) {
@@ -73,13 +78,7 @@
 <div class="form-grid">
 	<AuthField label="Usuário" icon="user" placeholder="Seu usuário" bind:value={username} />
 	<AuthField
-		label="Apelido"
-		icon="user"
-		placeholder="Como quer ser chamado"
-		bind:value={nickname}
-	/>
-	<AuthField
-		label="Senha"
+		label="Senha da conta"
 		icon="lock-key"
 		type="password"
 		placeholder="Sua senha"
@@ -87,13 +86,30 @@
 	/>
 
 	<div class="field">
-		<label>Confirmar senha</label>
+		<label>Senha do servidor</label>
+		<div class="input-shell">
+			<div class="input-icon"><Icon name="hard-drives" variant="light" /></div>
+			<input
+				type="password"
+				placeholder="Senha de acesso ao servidor"
+				aria-label="Senha de acesso ao servidor"
+				bind:value={serverPassword}
+			/>
+		</div>
+		<div class="server-note">
+			<i class="ph-light ph-info"></i>
+			<span>Necessária apenas quando o servidor for privado.</span>
+		</div>
+	</div>
+
+	<div class="field">
+		<label>Confirmar senha da conta</label>
 		<div class="input-shell">
 			<div class="input-icon"><Icon name="lock-key" variant="light" /></div>
 			<input
 				type="password"
-				placeholder="Confirme sua senha"
-				aria-label="Confirmar senha"
+				placeholder="Confirme a senha da sua conta"
+				aria-label="Confirmar senha da conta"
 				bind:value={confirmPassword}
 			/>
 		</div>
@@ -112,6 +128,11 @@
 		Criar conta
 		<i class="ph-light ph-arrow-right"></i>
 	</button>
+
+	<div class="auth-register">
+		<span>Já tem conta?</span>
+		<a href="/auth">Voltar para o login</a>
+	</div>
 </div>
 
 <div class="auth-bottom">
