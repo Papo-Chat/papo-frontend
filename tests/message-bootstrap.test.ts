@@ -40,7 +40,7 @@ describe('initial message history recovery', () => {
 		});
 	});
 
-	it('retries open history when presence_sync confirms the fresh websocket session', async () => {
+	it('retries open history only once when presence_sync repeats', async () => {
 		const setLatest = vi.spyOn(messagesStore, 'setLatest').mockResolvedValue(undefined);
 		const event = {
 			type: 'presence_sync',
@@ -48,8 +48,11 @@ describe('initial message history recovery', () => {
 		} satisfies WsPresenceSync;
 
 		websocketStore.dispatchEvent(event);
+		websocketStore.dispatchEvent(event);
+		websocketStore.dispatchEvent(event);
 
 		await vi.waitFor(() => {
+			expect(setLatest).toHaveBeenCalledTimes(1);
 			expect(setLatest).toHaveBeenCalledWith('ch1');
 		});
 	});
