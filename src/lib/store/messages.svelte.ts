@@ -453,6 +453,7 @@ export function patchPinned(state: MessagesState, messageId: string, isPinned: b
 }
 
 const previewRequests = new SvelteMap<string, Promise<LinkPreviewWithImage>>();
+const removeRequests = new Map<string, Promise<void>>();
 
 export function ensurePreview(previewId: string): Promise<LinkPreviewWithImage> {
 	const cached = previewCache.get(previewId);
@@ -1275,7 +1276,10 @@ export function edit(messageId: string, content: string): Promise<MessageWithAtt
 	});
 }
 
-export async function remove(messageId: string): Promise<void> {
+export function remove(messageId: string): Promise<void> {
+	const existing = removeRequests.get(messageId);
+	if (existing) return existing;
+
 	let channelId: string | null = null;
 	for (const [id, channel] of state.channels) {
 		if (channel.byId.has(messageId)) {
@@ -1284,10 +1288,21 @@ export async function remove(messageId: string): Promise<void> {
 		}
 	}
 
-	await api.messages.remove(messageId);
-	if (channelId) {
-		removeMessage(state, channelId, messageId);
-	}
+	const request = api.messages
+		.remove(messageId)
+		.then(() => {
+			if (channelId) {
+				removeMessage(state, channelId, messageId);
+			}
+		})
+		.finally(() => {
+			if (removeRequests.get(messageId) === request) {
+				removeRequests.delete(messageId);
+			}
+		});
+
+	removeRequests.set(messageId, request);
+	return request;
 }
 
 export function pin(
@@ -1593,6 +1608,7 @@ export function reset(): void {
 	storeEpoch += 1;
 
 	previewRequests.clear();
+	removeRequests.clear();
 	freshGuards.clear();
 	_freshInflight.clear();
 	state.channels.clear();
