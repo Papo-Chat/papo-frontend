@@ -47,6 +47,7 @@
 <style>
 	.dm-rail-item {
 		position: relative;
+		overflow: visible;
 		width: 54px;
 		height: 54px;
 		flex: 0 0 54px;
@@ -55,6 +56,8 @@
 	}
 	.dm-open {
 		position: relative;
+		overflow: visible;
+		isolation: isolate;
 		width: 50px;
 		height: 50px;
 		padding: 2px;
@@ -109,8 +112,9 @@
 	}
 	.dm-unread {
 		position: absolute;
-		right: -6px;
-		bottom: -3px;
+		right: -2px;
+		bottom: -2px;
+		z-index: 6;
 		min-width: 18px;
 		height: 18px;
 		box-sizing: border-box;
