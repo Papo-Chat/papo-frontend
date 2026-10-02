@@ -2,7 +2,7 @@
 	import type { LinkPreview } from '$lib/types';
 	import { getPreview, ensurePreview } from '$lib/store/messages.svelte';
 	import { onMount } from 'svelte';
-	import { blobToUrl, mimeToFormat } from '$lib/utils/media';
+	import { blobToUrl, linkPreviewVideoUrl, mimeToFormat } from '$lib/utils/media';
 	import { truncate } from '$lib/utils/text';
 
 	let { preview } = $props<{ preview: LinkPreview }>();
@@ -52,8 +52,10 @@
 	}
 
 	// O detalhe completo só é buscado quando o card chega perto do viewport.
-	// Isso também impede que dezenas de vídeos iniciem preload fora da tela.
-	const videoUrl = $derived(safeXVideoUrl(resolved?.video_url));
+	// O video_url remoto serve apenas para validar que existe mídia de X; o
+	// player usa o relay autenticado do backend para não hotlinkar video.twimg.com.
+	const hasXVideo = $derived(Boolean(safeXVideoUrl(resolved?.video_url)));
+	const videoUrl = $derived(hasXVideo ? linkPreviewVideoUrl(preview.id) : '');
 	let failedVideoUrl = $state('');
 
 	function handleVideoError(): void {
