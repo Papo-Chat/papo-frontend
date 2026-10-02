@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import * as channelsStore from '$lib/store/channels.svelte';
 	import * as voiceStore from '$lib/store/voice.svelte';
+	import { meId } from '$lib/store/session.svelte';
 	import { parseChannelName } from '$lib/utils/channel-icon';
 	import Icon from './Icon.svelte';
 
@@ -14,6 +15,14 @@
 	);
 	const cameraOn = $derived(voiceStore.state.localCameraStream !== null);
 	const screenOn = $derived(voiceStore.state.localScreenStream !== null);
+	const me = $derived(meId());
+	const localMuted = $derived(
+		voiceStore.state.channelId && me
+			? (voiceStore.state.channelMembers
+					.get(voiceStore.state.channelId)
+					?.find((member) => member.user_id === me)?.muted ?? true)
+			: true
+	);
 	const showGlobalSession = $derived(voiceStore.shouldShowGlobalSession(page.url.pathname));
 
 	function returnToVoice(): void {
@@ -22,7 +31,7 @@
 	}
 
 	function toggleMute(): void {
-		voiceStore.mute(!voiceStore.state.localMuted);
+		voiceStore.mute(!localMuted);
 	}
 
 	async function toggleCamera(): Promise<void> {
@@ -57,13 +66,13 @@
 		<div class="voice-session-actions">
 			<button
 				type="button"
-				class:active={voiceStore.state.localMuted}
+				class:active={localMuted}
 				onclick={toggleMute}
-				aria-label={voiceStore.state.localMuted ? 'Ativar microfone' : 'Silenciar microfone'}
-				title={voiceStore.state.localMuted ? 'Ativar microfone' : 'Silenciar microfone'}
+				aria-label={localMuted ? 'Ativar microfone' : 'Silenciar microfone'}
+				title={localMuted ? 'Ativar microfone' : 'Silenciar microfone'}
 			>
 				<Icon
-					name={voiceStore.state.localMuted ? 'microphone-slash' : 'microphone'}
+					name={localMuted ? 'microphone-slash' : 'microphone'}
 					variant="light"
 				/>
 			</button>
