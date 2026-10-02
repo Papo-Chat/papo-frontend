@@ -334,7 +334,9 @@
                     accept="image/*"
                     onchange={onAvatarSelect}
                     aria-label="Escolher avatar"
+                    aria-describedby="pf-avatar-limit"
                 />
+                <span id="pf-avatar-limit" class="field-hint">Máximo: 512 × 512 px.</span>
                 {#if avatarError}
                     <span class="field-error">{avatarError}</span>
                 {/if}
@@ -347,7 +349,9 @@
                     accept="image/*"
                     onchange={onBannerSelect}
                     aria-label="Escolher capa"
+                    aria-describedby="pf-banner-limit"
                 />
+                <span id="pf-banner-limit" class="field-hint">Máximo: 1024 × 1024 px.</span>
                 {#if bannerError}
                     <span class="field-error">{bannerError}</span>
                 {/if}
@@ -534,6 +538,13 @@
         background: var(--surface);
         color: var(--text-secondary);
         cursor: pointer;
+    }
+
+    .field-hint {
+        color: var(--muted-soft);
+        font-size: 11px;
+        display: block;
+        margin-top: 4px;
     }
 
     .field-error {
