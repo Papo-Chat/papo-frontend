@@ -220,14 +220,21 @@
 
 <style>
 	.title-wrap {
-		flex: 1 1 auto;
+		/* width: 0 + flex-basis: 0 is intentional: it prevents a long topic
+		 * from contributing its intrinsic width and pushing into the members
+		 * column. The flex item receives only the actually available space. */
+		flex: 1 1 0;
+		width: 0;
 		min-width: 0;
+		max-width: 100%;
 		overflow: hidden;
 	}
 
 	.topic-preview {
 		display: block;
+		box-sizing: border-box;
 		width: 100%;
+		min-width: 0;
 		max-width: 100%;
 		margin: 2px 0 0;
 		padding: 0;
@@ -264,24 +271,26 @@
 		display: grid;
 		place-items: center;
 		padding: 20px;
-		background: rgba(8, 22, 38, 0.26);
-		backdrop-filter: blur(8px);
-		-webkit-backdrop-filter: blur(8px);
+		background: rgba(8, 22, 38, 0.48);
+		backdrop-filter: blur(6px);
+		-webkit-backdrop-filter: blur(6px);
 	}
 
 	.topic-dialog {
+		box-sizing: border-box;
 		width: min(560px, 100%);
-		max-height: min(70vh, 560px);
+		max-height: min(70dvh, 560px);
 		overflow: auto;
 		padding: 18px;
-		border: 1px solid rgba(255, 255, 255, 0.62);
+		border: 1px solid #c5dbe8;
 		border-radius: 20px;
-		background: color-mix(in srgb, var(--surface) 92%, transparent);
+		/* Deliberately opaque: topic text must remain readable over arbitrary
+		 * user backgrounds. */
+		background: #f2f9fd;
 		box-shadow:
-			inset 0 1px 0 rgba(255, 255, 255, 0.7),
-			0 24px 60px rgba(8, 28, 46, 0.28);
-		backdrop-filter: blur(24px) saturate(140%);
-		-webkit-backdrop-filter: blur(24px) saturate(140%);
+			inset 0 1px 0 #ffffff,
+			0 24px 60px rgba(8, 28, 46, 0.32);
+		color: var(--text);
 	}
 
 	.topic-dialog-head {
@@ -314,9 +323,9 @@
 		display: grid;
 		place-items: center;
 		padding: 0;
-		border: 1px solid rgba(255, 255, 255, 0.48);
+		border: 1px solid #bfd5e2;
 		border-radius: 50%;
-		background: color-mix(in srgb, var(--surface) 72%, transparent);
+		background: #e2f0f7;
 		color: var(--text);
 		cursor: pointer;
 	}
@@ -361,6 +370,41 @@
 		font-weight: 750;
 	}
 
+	.actions {
+		flex: 0 0 auto;
+		min-width: 0;
+	}
+
+	:global([data-theme='dark']) .topic-dialog {
+		border-color: #315264;
+		background: #142f40;
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.08),
+			0 24px 60px rgba(0, 0, 0, 0.48);
+	}
+
+	:global([data-theme='dark']) .topic-close {
+		border-color: #3a5e72;
+		background: #203f51;
+	}
+
+	:global(html[data-ui-flat]) .topic-backdrop,
+	:global(html[data-ui-mobile]) .topic-backdrop {
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+		background: rgba(8, 22, 38, 0.58);
+	}
+
+	:global(html[data-ui-flat]) .topic-dialog,
+	:global(html[data-ui-mobile]) .topic-dialog {
+		box-shadow: 0 10px 28px rgba(8, 28, 46, 0.24);
+	}
+
+	:global(html[data-ui-flat][data-theme='dark']) .topic-dialog,
+	:global(html[data-ui-mobile][data-theme='dark']) .topic-dialog {
+		box-shadow: 0 10px 28px rgba(0, 0, 0, 0.36);
+	}
+
 	@media (min-width: 701px) {
 		.members-btn {
 			display: none;
@@ -368,6 +412,36 @@
 	}
 
 	@media (max-width: 700px) {
+		.title-wrap {
+			flex-basis: 0;
+			width: 0;
+		}
+
+		.topic-preview {
+			font-size: 12px;
+		}
+
+		.topic-backdrop {
+			place-items: end center;
+			padding: 0;
+			background: rgba(8, 22, 38, 0.62);
+		}
+
+		.topic-dialog {
+			width: 100%;
+			max-height: 78dvh;
+			padding: 18px 16px max(18px, env(safe-area-inset-bottom));
+			border-right: 0;
+			border-bottom: 0;
+			border-left: 0;
+			border-radius: 20px 20px 0 0;
+		}
+
+		.topic-full {
+			font-size: 16px;
+			line-height: 1.55;
+		}
+
 		.pill.circle.voice-chat-btn {
 			width: 38px;
 			height: 38px;
