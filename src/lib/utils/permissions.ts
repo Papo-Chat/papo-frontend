@@ -99,3 +99,13 @@ export function channelAccess(channel: Channel, ctx: RoleContext): ChannelAccess
 export function can(perm: keyof RolePermissions, ctx: RoleContext): boolean {
 	return myRolePermissions(ctx.roles, ctx.isOwner)[perm];
 }
+
+
+export function hasAnyChannelPermission(perms: {
+	read_channel: boolean;
+	send_messages: boolean;
+	delete_messages: boolean;
+	connect_voice: boolean;
+}): boolean {
+	return Object.values(perms).some(Boolean);
+}
