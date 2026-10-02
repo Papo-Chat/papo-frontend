@@ -45,6 +45,7 @@
 
 	let highlightMessageId: string | null = $state(null);
 	let lastVoiceChannelId: string | null = null;
+	let lastHistoryChannelId: string | null = null;
 
 	const loading = $derived(!!ch && ch.loading);
 	const hasMoreNewer = $derived(!!ch && ch.hasMoreNewer);
@@ -97,7 +98,8 @@
 	// retriggerar a própria request de mensagens.
 	$effect(() => {
 		const id = page.params.channel_id;
-		if (!id) return;
+		if (!id || id === lastHistoryChannelId) return;
+		lastHistoryChannelId = id;
 
 		untrack(() => {
 			void messagesStore.setLatest(id);
