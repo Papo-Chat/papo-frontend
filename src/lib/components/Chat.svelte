@@ -406,13 +406,6 @@
 		return listEl?.querySelector<HTMLElement>(`[data-message-id="${id}"]`) ?? null;
 	}
 
-	function topSentinelNearViewport(): boolean {
-		if (!listEl || !topEl) return false;
-		const listRect = listEl.getBoundingClientRect();
-		const topRect = topEl.getBoundingClientRect();
-		return topRect.top <= listRect.top + 280 && topRect.bottom >= listRect.top - 320;
-	}
-
 	async function loadOlder(): Promise<void> {
 		if (loadingOlder || !hasMoreOlder || !listEl) return;
 
@@ -448,17 +441,6 @@
 			}
 
 			loadingOlder = false;
-
-			// Short pages or unusual media heights can leave the top sentinel
-			// inside the preload zone. Continue automatically until there is
-			// enough history above the viewport or history is exhausted.
-			if (
-				hasMoreOlder &&
-				scrollDirection !== 'down' &&
-				topSentinelNearViewport()
-			) {
-				queueMicrotask(() => void loadOlder());
-			}
 		});
 	}
 
