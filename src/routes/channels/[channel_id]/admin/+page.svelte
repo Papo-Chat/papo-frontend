@@ -11,6 +11,7 @@
     } from '$lib/types';
     import Icon from '$lib/components/Icon.svelte';
     import PermissionTable from '$lib/components/PermissionTable.svelte';
+    import { hasAnyChannelPermission } from '$lib/utils/permissions';
     import Topbar from '$lib/components/Topbar.svelte';
 
     // Resolve o canal da URL (id exato, depois nome). O guard garante resolvido.
@@ -94,7 +95,7 @@
                 connect_voice: false
             };
         const next: ChannelPermission = { ...current, [key]: value };
-        const hasAnyPermission = Object.values(next).some(Boolean);
+        const hasAnyPermission = hasAnyChannelPermission(next);
 
         if (hasAnyPermission) {
             perms = { ...perms, [roleId]: next };
