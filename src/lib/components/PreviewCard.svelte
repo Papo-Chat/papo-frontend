@@ -1,10 +1,31 @@
 <script lang="ts">
 	import type { LinkPreview } from '$lib/types';
-	import { getPreview } from '$lib/store/messages.svelte';
+	import { getPreview, ensurePreview } from '$lib/store/messages.svelte';
+	import { onMount } from 'svelte';
 	import { blobToUrl, mimeToFormat } from '$lib/utils/media';
 	import { truncate } from '$lib/utils/text';
 
 	let { preview } = $props<{ preview: LinkPreview }>();
+	let cardEl: HTMLElement | null = null;
+
+	onMount(() => {
+		if (!cardEl) return;
+		const load = () => void ensurePreview(preview.id).catch(() => {});
+		if (!('IntersectionObserver' in window)) {
+			load();
+			return;
+		}
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (!entries.some((entry) => entry.isIntersecting)) return;
+				observer.disconnect();
+				load();
+			},
+			{ rootMargin: '320px' }
+		);
+		observer.observe(cardEl);
+		return () => observer.disconnect();
+	});
 
 	// Preview completo (com image_data) vem do cache do store de mensagens.
 	const resolved = $derived(getPreview(preview.id));
@@ -31,7 +52,7 @@
 	}
 </script>
 
-<div class="preview-card">
+<div class="preview-card" bind:this={cardEl}>
 	<a class="preview-title" href={preview.url} target="_blank" rel="noopener">
 		{title}
 	</a>
