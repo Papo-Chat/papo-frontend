@@ -20,8 +20,8 @@
 <style>
 	.reaction-emoji {
 		display: inline;
-		width: 1.1em;
-		height: 1.1em;
+		width: 1.7em;
+		height: 1.7em;
 		vertical-align: text-bottom;
 	}
 </style>
