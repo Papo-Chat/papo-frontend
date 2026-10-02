@@ -263,7 +263,7 @@
 		background: rgba(255, 255, 255, 0.34);
 		color: var(--text);
 		font: inherit;
-		font-size: 11px;
+		font-size: 13px;
 		font-weight: 750;
 		cursor: pointer;
 	}
