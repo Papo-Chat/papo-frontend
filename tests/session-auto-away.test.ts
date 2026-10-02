@@ -1,17 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const updateStatus = vi.fn();
-const whoami = vi.fn();
+const mocks = vi.hoisted(() => ({
+	updateStatus: vi.fn(),
+	whoami: vi.fn()
+}));
 
 vi.mock('../src/lib/api', () => ({
 	api: {
 		auth: {
-			whoami,
+			whoami: mocks.whoami,
 			refresh: vi.fn(),
 			logout: vi.fn()
 		},
 		users: {
-			updateStatus
+			updateStatus: mocks.updateStatus
 		}
 	},
 	setOnUnauthorized: vi.fn()
@@ -81,9 +83,9 @@ describe('automatic away status', () => {
 		vi.useFakeTimers();
 		vi.stubGlobal('window', new WindowStub());
 		vi.stubGlobal('document', new DocumentStub());
-		whoami.mockResolvedValue(me);
-		updateStatus.mockReset();
-		updateStatus.mockResolvedValue({ response: 'ok' });
+		mocks.whoami.mockResolvedValue(me);
+		mocks.updateStatus.mockReset();
+		mocks.updateStatus.mockResolvedValue({ response: 'ok' });
 	});
 
 	afterEach(async () => {
@@ -100,13 +102,13 @@ describe('automatic away status', () => {
 		await session.load();
 
 		await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
-		expect(updateStatus).toHaveBeenCalledWith('me', { status: 'away' });
+		expect(mocks.updateStatus).toHaveBeenCalledWith('me', { status: 'away' });
 		expect(session.state.status).toBe('away');
 
 		window.dispatchEvent(new Event('pointermove'));
 		await vi.runAllTicks();
 
-		expect(updateStatus).toHaveBeenLastCalledWith('me', { status: null });
+		expect(mocks.updateStatus).toHaveBeenLastCalledWith('me', { status: null });
 		expect(session.state.status).toBeNull();
 	});
 
@@ -115,7 +117,7 @@ describe('automatic away status', () => {
 		const awayPending = new Promise<{ response: string }>((resolve) => {
 			resolveAway = resolve;
 		});
-		updateStatus.mockImplementationOnce(() => awayPending);
+		mocks.updateStatus.mockImplementationOnce(() => awayPending);
 
 		const session = await import('../src/lib/store/session.svelte');
 		await session.load();
@@ -128,8 +130,8 @@ describe('automatic away status', () => {
 		await Promise.resolve();
 		await vi.runAllTicks();
 
-		expect(updateStatus).toHaveBeenNthCalledWith(1, 'me', { status: 'away' });
-		expect(updateStatus).toHaveBeenNthCalledWith(2, 'me', { status: null });
+		expect(mocks.updateStatus).toHaveBeenNthCalledWith(1, 'me', { status: 'away' });
+		expect(mocks.updateStatus).toHaveBeenNthCalledWith(2, 'me', { status: null });
 		expect(session.state.status).toBeNull();
 	});
 });
