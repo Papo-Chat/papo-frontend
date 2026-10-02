@@ -206,11 +206,8 @@
 		margin: 0;
 	}
 
-	/* Markdown turns a blank line into a paragraph boundary. Keep that
-	 * boundary visually equivalent to an empty text row instead of collapsing
-	 * it into a tiny paragraph margin. */
-	:global(.msg-text p + p) {
-		margin-top: 1.55em;
+	:global(.message-blank-line) {
+		height: 1.55em;
 	}
 
 	:global(.msg-text :is(ul, ol)) {
