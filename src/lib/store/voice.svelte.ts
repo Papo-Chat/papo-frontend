@@ -198,6 +198,82 @@ async function flushQueuedCandidates(conn: RTCPeerConnection): Promise<void> {
 	}
 }
 
+
+// Local ICE usa trickle: o SDP vai primeiro; candidates posteriores seguem
+// pelo WebSocket. Durante setLocalDescription, candidatos podem surgir antes
+// de o offer/answer chegar ao backend, então ficam enfileirados até o SDP ser
+// enviado (WebSocket preserva a ordem das mensagens).
+const queuedLocalCandidates = new WeakMap<RTCPeerConnection, RTCIceCandidateInit[]>();
+const localCandidatesSignalingReady = new WeakSet<RTCPeerConnection>();
+
+function beginLocalCandidateBatch(conn: RTCPeerConnection): void {
+	localCandidatesSignalingReady.delete(conn);
+	queuedLocalCandidates.set(conn, []);
+}
+
+function sendLocalCandidate(
+	conn: RTCPeerConnection,
+	candidate: RTCIceCandidateInit
+): boolean {
+	const channelId = currentChannelId;
+
+	if (peer !== conn || !channelId || !candidate.candidate) {
+		return false;
+	}
+
+	return wsSend({
+		type: 'voice_ice_candidate',
+		channel_id: channelId,
+		candidate: candidate.candidate,
+		sdp_mid: candidate.sdpMid ?? null,
+		sdp_mline_index: candidate.sdpMLineIndex ?? null
+	} as WsInbound);
+}
+
+function flushLocalCandidates(conn: RTCPeerConnection): void {
+	localCandidatesSignalingReady.add(conn);
+
+	const pending = queuedLocalCandidates.get(conn) ?? [];
+	queuedLocalCandidates.delete(conn);
+
+	for (const candidate of pending) {
+		if (!sendLocalCandidate(conn, candidate)) {
+			break;
+		}
+	}
+}
+
+function setupLocalIceTrickle(conn: RTCPeerConnection): void {
+	conn.onicecandidate = (event) => {
+		if (!event.candidate || peer !== conn || !currentChannelId) {
+			return;
+		}
+
+		const candidate = event.candidate.toJSON();
+
+		if (!localCandidatesSignalingReady.has(conn)) {
+			const pending = queuedLocalCandidates.get(conn) ?? [];
+			pending.push(candidate);
+			queuedLocalCandidates.set(conn, pending);
+			return;
+		}
+
+		sendLocalCandidate(conn, candidate);
+	};
+
+	// Falha em um STUN/TURN não implica falha da call: outros candidates
+	// (host/srflx/relay) ainda podem estabelecer a conexão.
+	conn.onicecandidateerror = (event) => {
+		if (peer !== conn) return;
+
+		console.warn('ICE candidate error; continuing with other candidates', {
+			url: event.url,
+			errorCode: event.errorCode,
+			errorText: event.errorText
+		});
+	};
+}
+
 // ── lifecycle ─────────────────────────────────────────────
 
 export function join(channelId: string, userId?: string): void {
@@ -292,6 +368,7 @@ export function join(channelId: string, userId?: string): void {
 
 			peer = conn;
 			state.peer = conn;
+			setupLocalIceTrickle(conn);
 
 			// Reserve SFU receive slots in the client offer. The backend ignores
 			// recvonly m-lines when classifying our own camera/screen publications.
@@ -398,9 +475,9 @@ async function sendOfferOnce(): Promise<void> {
 			}
 
 			const offer = await conn.createOffer();
-			await conn.setLocalDescription(offer);
 
-			await waitForIceGatheringComplete(conn);
+			beginLocalCandidateBatch(conn);
+			await conn.setLocalDescription(offer);
 
 			if (peer !== conn || currentChannelId !== cid || !conn.localDescription) {
 				throw new Error('peer stale');
@@ -415,6 +492,8 @@ async function sendOfferOnce(): Promise<void> {
 			) {
 				throw new Error('ws not open');
 			}
+
+			flushLocalCandidates(conn);
 		});
 	} catch (error) {
 		clearPendingAnswer(error instanceof Error ? error : new Error(String(error)));
@@ -700,36 +779,6 @@ export function onVoiceAnswer(ev: WsVoiceAnswer): void {
 	});
 }
 
-function waitForIceGatheringComplete(conn: RTCPeerConnection, timeoutMs = 4500): Promise<void> {
-	if (conn.iceGatheringState === 'complete') {
-		return Promise.resolve();
-	}
-
-	return new Promise((resolve) => {
-		let finished = false;
-
-		const finish = () => {
-			if (finished) return;
-			finished = true;
-
-			conn.removeEventListener('icegatheringstatechange', onIceGatheringChange);
-
-			clearTimeout(timer);
-			resolve();
-		};
-
-		const onIceGatheringChange = () => {
-			if (conn.iceGatheringState === 'complete') {
-				finish();
-			}
-		};
-
-		const timer = setTimeout(finish, timeoutMs);
-
-		conn.addEventListener('icegatheringstatechange', onIceGatheringChange);
-	});
-}
-
 // Server-initiated renegotiation (P0.1: was previously unhandled).
 export function onVoiceOffer(ev: WsVoiceOffer): void {
 	if (currentChannelId !== ev.channel_id || !peer) return;
@@ -757,19 +806,23 @@ export function onVoiceOffer(ev: WsVoiceOffer): void {
 		await flushQueuedCandidates(conn);
 
 		const answer = await conn.createAnswer();
-		await conn.setLocalDescription(answer);
 
-		await waitForIceGatheringComplete(conn);
+		beginLocalCandidateBatch(conn);
+		await conn.setLocalDescription(answer);
 
 		if (peer !== conn || currentChannelId !== cid || !conn.localDescription) {
 			return;
 		}
 
-		wsSend({
-			type: 'voice_answer',
-			channel_id: cid,
-			sdp: conn.localDescription.sdp
-		} as WsInbound);
+		if (
+			wsSend({
+				type: 'voice_answer',
+				channel_id: cid,
+				sdp: conn.localDescription.sdp
+			} as WsInbound)
+		) {
+			flushLocalCandidates(conn);
+		}
 	}).catch(() => {});
 }
 
