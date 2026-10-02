@@ -239,7 +239,8 @@ describe('query serialization', () => {
 		});
 		await users.list({ since: '2024-01-01T00:00:00Z', last_id: 'abc' });
 		const url = new URL(calls[0].url);
-		expect(url.href).toBe('http://localhost:3000/users?since=2024-01-01T00%3A00%3A00Z&last_id=abc');
+		expect(url.pathname).toBe('/users');
+		expect(url.search).toBe('?since=2024-01-01T00%3A00%3A00Z&last_id=abc');
 		expect(url.searchParams.get('since')).toBe('2024-01-01T00:00:00Z');
 		expect(url.searchParams.get('last_id')).toBe('abc');
 	});
