@@ -46,6 +46,17 @@ export async function load({ url }: { url: URL }): Promise<void> {
 	if (!serverStore.state.loaded) {
 		await serverStore.load();
 	}
+
+	// First-run bootstrap: before the singleton server exists, the only
+	// meaningful admin route is the server creation screen. Do not preload
+	// channels/roles that depend on a configured server.
+	if (!serverStore.state.server) {
+		if (url.pathname === '/admin/server' || url.pathname.startsWith('/admin/server/')) {
+			return;
+		}
+		redirect(307, '/admin/server');
+	}
+
 	if (!channelsStore.state.loaded) {
 		await channelsStore.load();
 	}
