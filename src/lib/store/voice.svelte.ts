@@ -847,6 +847,14 @@ export function onVoiceAudioRoutes(ev: WsVoiceAudioRoutes): void {
 	applyAllRemoteAudioPreferences();
 }
 
+export function isLocalVoiceLeave(
+	ev: Pick<WsVoiceLeave, 'channel_id' | 'user_id'>,
+	channelId: string | null,
+	userId: string | null
+): boolean {
+	return channelId !== null && userId !== null && ev.channel_id === channelId && ev.user_id === userId;
+}
+
 export function onVoiceLeave(ev: WsVoiceLeave): void {
 	// Roster: broadcast to the channel audience (connect_voice holders) —
 	// never gated on the current room.
@@ -855,7 +863,7 @@ export function onVoiceLeave(ev: WsVoiceLeave): void {
 	if (currentChannelId !== ev.channel_id) {
 		return;
 	}
-	if (ev.user_id === currentUserId) {
+	if (isLocalVoiceLeave(ev, currentChannelId, currentUserId)) {
 		cleanupLocalVoiceSession({ error: 'Você não está mais conectado à sala de voz.' });
 		return;
 	}
