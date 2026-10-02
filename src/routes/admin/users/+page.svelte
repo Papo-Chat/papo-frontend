@@ -416,31 +416,33 @@
 								{/each}
 							</div>
 
-{#if canManageServer && u.id !== me}
-							<button
-								class="admin-btn ghost small"
-								type="button"
-								disabled={busyUsers.has(u.id) || resetBusy}
-								onclick={() => void createPasswordResetLink(u)}
-							>
-								<Icon name="key" variant="light" size={14} />
-								Resetar senha
-							</button>
-							{/if}
 {#if canManageServer}
-							<button
-								class="admin-btn ghost small"
-								class:unban={isBanned(u.id)}
-								aria-label={isBanned(u.id)
-									? `Desbanir ${u.nickname || u.username}`
-									: `Banir ${u.nickname || u.username}`}
-								disabled={busyUsers.has(u.id)}
-								onclick={() => void toggleBan(u)}
-							>
-								<Icon name={isBanned(u.id) ? 'arrow-counter-clockwise' : 'x-circle'} variant="light" size={14} />
-								{isBanned(u.id) ? 'Desbanir' : 'Banir'}
-							</button>
-							{/if}
+							<div class="user-actions">
+								{#if u.id !== me}
+									<button
+										class="admin-btn ghost small"
+										type="button"
+										disabled={busyUsers.has(u.id) || resetBusy}
+										onclick={() => void createPasswordResetLink(u)}
+									>
+										<Icon name="key" variant="light" size={14} />
+										Resetar senha
+									</button>
+								{/if}
+								<button
+									class="admin-btn ghost small"
+									class:unban={isBanned(u.id)}
+									aria-label={isBanned(u.id)
+										? `Desbanir ${u.nickname || u.username}`
+										: `Banir ${u.nickname || u.username}`}
+									disabled={busyUsers.has(u.id)}
+									onclick={() => void toggleBan(u)}
+								>
+									<Icon name={isBanned(u.id) ? 'arrow-counter-clockwise' : 'x-circle'} variant="light" size={14} />
+									{isBanned(u.id) ? 'Desbanir' : 'Banir'}
+								</button>
+							</div>
+						{/if}
 						</div>
 				{/each}
 
@@ -569,9 +571,12 @@
 	}
 	.users-list {
 		flex: 1;
+		min-width: 0;
+		max-width: 100%;
 		min-height: 0;
 		max-height: none;
 		overflow-y: auto;
+		overflow-x: clip;
 		scroll-behavior: smooth;
 		scrollbar-width: thin;
 		scrollbar-color: rgba(72, 130, 170, 0.28) transparent;
@@ -587,8 +592,10 @@
 	}
 	.user-row {
 		display: grid;
-		grid-template-columns: auto 1fr auto auto 1fr auto;
+		grid-template-columns: auto minmax(100px, 1fr) auto minmax(120px, 180px) minmax(0, 1fr) auto;
 		align-items: center;
+		min-width: 0;
+		max-width: 100%;
 		gap: 12px;
 		padding: 9px 6px;
 		border-radius: 12px;
@@ -613,7 +620,14 @@
 		font-size: 12px;
 		color: var(--muted-soft);
 	}
+	.role-select {
+		min-width: 0;
+		max-width: 100%;
+	}
 	.user-role-select {
+		width: 100%;
+		max-width: 180px;
+		min-width: 0;
 		height: 34px;
 		border-radius: 9px;
 		padding: 0 8px;
@@ -630,8 +644,18 @@
 	}
 	.role-chips {
 		display: flex;
+		min-width: 0;
+		max-width: 100%;
 		flex-wrap: wrap;
 		gap: 6px;
+	}
+	.user-actions {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 6px;
+		min-width: 0;
+		white-space: nowrap;
 	}
 	.chip {
 		position: relative;
@@ -696,15 +720,49 @@
 		font-size: 13px;
 		color: var(--muted);
 	}
-	@media (max-width: 760px) {
+	@media (max-width: 980px) {
 		.user-row {
-			grid-template-columns: auto 1fr;
+			grid-template-columns: auto minmax(0, 1fr) auto;
 			row-gap: 10px;
 		}
 		.user-row .role-select,
 		.user-row .role-chips,
-		.user-row .admin-btn.ghost {
+		.user-row .user-actions {
 			grid-column: 1 / -1;
+		}
+		.user-role-select {
+			max-width: 100%;
+		}
+		.user-actions {
+			justify-content: flex-start;
+			flex-wrap: wrap;
+		}
+	}
+
+	@media (max-width: 560px) {
+		.users-head-actions {
+			width: 100%;
+			min-width: 0;
+			flex-wrap: wrap;
+		}
+		.users-head-actions .filter-input {
+			width: 100%;
+			flex: 1 1 100%;
+		}
+		.user-row {
+			grid-template-columns: auto minmax(0, 1fr);
+			padding-inline: 2px;
+		}
+		.user-row > .status-dot {
+			grid-column: 2;
+			grid-row: 2;
+			justify-self: start;
+		}
+		.user-actions {
+			width: 100%;
+		}
+		.user-actions .admin-btn {
+			flex: 1 1 auto;
 		}
 	}
 </style>
