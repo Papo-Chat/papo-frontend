@@ -11,6 +11,8 @@
 	} from '$lib/utils/notification-sound';
 	import type { Channel, NotificationSettings, UserConfig } from '$lib/types';
 	import Icon from '$lib/components/Icon.svelte';
+	import { api } from '$lib/api';
+	import { isValidPassword, minPasswordLength } from '$lib/utils/password';
 
 	let config: UserConfig | null = $state(null);
 	let seededVersion = $state(-1);
@@ -26,6 +28,11 @@
 	let soundInfo = $state<NotificationSoundInfo>({ name: 'MSN padrão', type: 'audio/mpeg', custom: false });
 	let soundSaving = $state(false);
 	let soundInput: HTMLInputElement | null = null;
+	let newPassword = $state('');
+	let confirmPassword = $state('');
+	let passwordSaving = $state(false);
+	let passwordSaved = $state(false);
+	const passwordCheck = $derived(isValidPassword(newPassword));
 
 	function isNotCategoryChannel(channel: Channel | undefined): channel is Channel {
 		return channel !== undefined && channel.type !== 'category';
@@ -177,6 +184,32 @@
 		}
 	}
 
+	async function changePassword(): Promise<void> {
+		if (!sessionState.userId || passwordSaving) return;
+		error = null;
+		passwordSaved = false;
+		if (!passwordCheck.ok) {
+			error = passwordCheck.errors[0] ?? 'Senha inválida.';
+			return;
+		}
+		if (newPassword !== confirmPassword) {
+			error = 'As senhas não coincidem.';
+			return;
+		}
+		passwordSaving = true;
+		try {
+			await api.users.changePassword(sessionState.userId, { password: newPassword });
+			newPassword = '';
+			confirmPassword = '';
+			passwordSaved = true;
+			setTimeout(() => (passwordSaved = false), 1800);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Erro ao alterar senha.';
+		} finally {
+			passwordSaving = false;
+		}
+	}
+
 	function notificationLabel(value: NotificationSettings): string {
 		if (value === 'all') return 'Todas';
 		if (value === 'only_mentions') return 'Somente menções';
@@ -185,6 +218,34 @@
 </script>
 
 <div class="settings-page">
+	<div class="admin-card">
+		<div class="admin-card-head">
+			<Icon name="lock-key" variant="duotone" size={16} />
+			Segurança
+		</div>
+		<div class="admin-card-body">
+			<div class="admin-field">
+				<label for="set-new-password">Nova senha</label>
+				<input id="set-new-password" class="admin-input" type="password" bind:value={newPassword} autocomplete="new-password" />
+			</div>
+			<div class="password-rules">
+				<span class:ok={newPassword.length >= minPasswordLength}>✓ {minPasswordLength}+ caracteres</span>
+				<span class:ok={/[A-Z]/.test(newPassword)}>✓ 1 letra maiúscula</span>
+				<span class:ok={/[^A-Za-z0-9]/.test(newPassword)}>✓ 1 caractere especial</span>
+			</div>
+			<div class="admin-field">
+				<label for="set-confirm-password">Confirmar nova senha</label>
+				<input id="set-confirm-password" class="admin-input" type="password" bind:value={confirmPassword} autocomplete="new-password" />
+			</div>
+			<div class="password-actions">
+				<button class="admin-btn" type="button" onclick={changePassword}
+					disabled={passwordSaving || !passwordCheck.ok || newPassword !== confirmPassword}>
+					{passwordSaving ? 'Alterando…' : 'Alterar senha'}
+				</button>
+				{#if passwordSaved}<span class="channel-saved">Senha alterada.</span>{/if}
+			</div>
+		</div>
+	</div>
 	{#if error}
 		<div class="settings-error" role="alert">
 			<Icon name="warning-circle" variant="light" />
@@ -356,6 +417,10 @@
 </div>
 
 <style>
+	.password-rules { display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:-4px; font-size:12px; color:var(--muted-soft); }
+	.password-rules span.ok { color:#24a46d; }
+	.password-actions { display:flex; align-items:center; gap:10px; }
+
 	.settings-page { padding:4px 0 8px; display:grid; gap:14px; }
 	.cb-text { display:flex; flex-direction:column; gap:2px; }
 	.settings-actions { display:flex; align-items:center; gap:12px; }
