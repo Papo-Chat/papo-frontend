@@ -38,6 +38,23 @@
 
 	const title = $derived(preview.title ?? truncate(preview.url, 60));
 
+	function safeXVideoUrl(raw: string | null | undefined): string {
+		if (!raw) return '';
+		try {
+			const url = new URL(raw);
+			if (url.protocol !== 'https:') return '';
+			const host = url.hostname.toLowerCase();
+			if (host !== 'video.twimg.com' && !host.endsWith('.video.twimg.com')) return '';
+			return url.href;
+		} catch {
+			return '';
+		}
+	}
+
+	// O detalhe completo só é buscado quando o card chega perto do viewport.
+	// Isso também impede que dezenas de vídeos iniciem preload fora da tela.
+	const videoUrl = $derived(safeXVideoUrl(resolved?.video_url));
+
 	// Embed de vídeo: apenas se casar exatamente com o contrato do backend
 	// (YouTube, ID válido). Frontend revalida antes de renderizar o iframe
 	// (THUMBNAILS_IMPLEMENTATION.md §9.4).
@@ -81,6 +98,15 @@
 					allowfullscreen
 				></iframe>
 			{/if}
+		{:else if videoUrl}
+			<video
+				class="preview-video"
+				src={videoUrl}
+				poster={imageUrl || undefined}
+				controls
+				playsinline
+				preload="metadata"
+			></video>
 		{:else if imageUrl}
 			<img class="preview-image" src={imageUrl} alt="" loading="lazy" />
 		{/if}
@@ -129,6 +155,18 @@
 		padding: 8px 0 0;
 		box-sizing: border-box;
 		overflow: hidden;
+	}
+
+	.preview-video {
+		display: block;
+		width: 100%;
+		max-width: 100%;
+		max-height: min(70dvh, 620px);
+		aspect-ratio: 16 / 9;
+		object-fit: contain;
+		background: #000;
+		border-radius: 10px;
+		margin-bottom: 8px;
 	}
 
 	.preview-image {
