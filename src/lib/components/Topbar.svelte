@@ -413,8 +413,18 @@
 
 	@media (max-width: 700px) {
 		.title-wrap {
-			flex-basis: 0;
-			width: 0;
+			width: auto;
+			min-width: 0;
+			max-width: 100%;
+		}
+
+		.title-row {
+			min-width: 0;
+		}
+
+		.title-row h2 {
+			flex: 1 1 auto;
+			min-width: 0;
 		}
 
 		.topic-preview {
