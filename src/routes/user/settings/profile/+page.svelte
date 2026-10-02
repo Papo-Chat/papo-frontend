@@ -119,12 +119,38 @@
         });
     }
 
+    async function useOriginalGif(file: File, kind: 'avatar' | 'banner'): Promise<void> {
+        try {
+            const converted = await fileToBase64(file, kind);
+            if (kind === 'avatar') {
+                avatarImg = converted;
+                avatarError = '';
+                removeAvatar = false;
+            } else {
+                bannerImg = converted;
+                bannerError = '';
+                removeBanner = false;
+            }
+        } catch (err) {
+            if (kind === 'avatar') avatarError = (err as Error).message;
+            else bannerError = (err as Error).message;
+        }
+    }
+
     function onAvatarSelect(e: Event): void {
         avatarError = '';
         const input = e.target as HTMLInputElement;
         const file = input.files?.[0];
         input.value = '';
-        if (file) cropRequest = { file, kind: 'avatar' };
+        if (!file) return;
+
+        // Canvas/cropper achata GIF animado no primeiro frame. Para GIF,
+        // preservamos o arquivo original; imagens estáticas continuam no cropper.
+        if (file.type === 'image/gif') {
+            void useOriginalGif(file, 'avatar');
+            return;
+        }
+        cropRequest = { file, kind: 'avatar' };
     }
 
     function onBannerSelect(e: Event): void {
@@ -132,7 +158,13 @@
         const input = e.target as HTMLInputElement;
         const file = input.files?.[0];
         input.value = '';
-        if (file) cropRequest = { file, kind: 'banner' };
+        if (!file) return;
+
+        if (file.type === 'image/gif') {
+            void useOriginalGif(file, 'banner');
+            return;
+        }
+        cropRequest = { file, kind: 'banner' };
     }
 
     async function applyCrop(file: File): Promise<void> {
@@ -346,7 +378,7 @@
                     aria-label="Escolher avatar"
                     aria-describedby="pf-avatar-limit"
                 />
-                <span id="pf-avatar-limit" class="field-hint">Máximo: 512 × 512 px.</span>
+                <span id="pf-avatar-limit" class="field-hint">Máximo: 512 × 512 px. GIF mantém animação e não passa pelo recorte.</span>
                 {#if avatarError}
                     <span class="field-error">{avatarError}</span>
                 {/if}
@@ -361,7 +393,7 @@
                     aria-label="Escolher capa"
                     aria-describedby="pf-banner-limit"
                 />
-                <span id="pf-banner-limit" class="field-hint">Máximo: 2048 × 2048 px.</span>
+                <span id="pf-banner-limit" class="field-hint">Máximo: 2048 × 2048 px. GIF mantém animação e não passa pelo recorte.</span>
                 {#if bannerError}
                     <span class="field-error">{bannerError}</span>
                 {/if}
