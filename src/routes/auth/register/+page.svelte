@@ -4,6 +4,7 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import { api, ApiError } from '$lib/api';
 	import * as healthStore from '$lib/store/health.svelte';
+	import { isValidPassword, minPasswordLength } from '$lib/utils/password';
 
 	let username = $state('');
 	let password = $state('');
@@ -11,6 +12,8 @@
 	let confirmPassword = $state('');
 	let error = $state<string | null>(null);
 	let busy = $state(false);
+	const passwordCheck = $derived(isValidPassword(password));
+	const usernameValid = $derived(username.trim().length >= 3);
 
 	async function register(): Promise<void> {
 		error = null;
@@ -25,6 +28,12 @@
 			return;
 		}
 		try {
+			if (!usernameValid) {
+				throw new Error('O usuário deve ter no mínimo 3 caracteres.');
+			}
+			if (!passwordCheck.ok) {
+				throw new Error(passwordCheck.errors[0] ?? 'Senha inválida.');
+			}
 			if (password !== confirmPassword) {
 				throw new Error('As senhas não coincidem.');
 			}
@@ -85,6 +94,25 @@
 		bind:value={password}
 	/>
 
+	<div class="password-rules" aria-live="polite">
+		<span class:ok={password.length >= minPasswordLength}>✓ {minPasswordLength}+ caracteres</span>
+		<span class:ok={/[A-Z]/.test(password)}>✓ 1 letra maiúscula</span>
+		<span class:ok={/[^A-Za-z0-9]/.test(password)}>✓ 1 caractere especial</span>
+	</div>
+
+	<div class="field">
+		<label>Confirmar senha da conta</label>
+		<div class="input-shell">
+			<div class="input-icon"><Icon name="lock-key" variant="light" /></div>
+			<input
+				type="password"
+				placeholder="Confirme a senha da sua conta"
+				aria-label="Confirmar senha da conta"
+				bind:value={confirmPassword}
+			/>
+		</div>
+	</div>
+
 	<div class="field">
 		<label>Senha do servidor</label>
 		<div class="input-shell">
@@ -102,19 +130,6 @@
 		</div>
 	</div>
 
-	<div class="field">
-		<label>Confirmar senha da conta</label>
-		<div class="input-shell">
-			<div class="input-icon"><Icon name="lock-key" variant="light" /></div>
-			<input
-				type="password"
-				placeholder="Confirme a senha da sua conta"
-				aria-label="Confirmar senha da conta"
-				bind:value={confirmPassword}
-			/>
-		</div>
-	</div>
-
 	{#if error}
 		<p class="form-error" role="alert">{error}</p>
 	{/if}
@@ -122,7 +137,7 @@
 	<button
 		class="submit"
 		type="button"
-		disabled={busy || healthStore.state.status !== 'online'}
+		disabled={busy || healthStore.state.status !== 'online' || !usernameValid || !passwordCheck.ok || password !== confirmPassword}
 		onclick={register}
 	>
 		Criar conta
@@ -150,3 +165,8 @@
 	</span>
 	<span>Papo Client V1</span>
 </div>
+
+<style>
+	.password-rules { display:flex; flex-wrap:wrap; gap:6px 12px; font-size:12px; color:var(--muted-soft); margin-top:-4px; }
+	.password-rules span.ok { color:#24a46d; }
+</style>
