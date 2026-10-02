@@ -159,37 +159,34 @@
 	let openEmoji = $state<string | null>(null);
 	let emojiOpen = $state(false);
 
-	function loadPage(q?: { since?: string; last_id?: string }): void {
+	async function loadPage(
+		q?: { since?: string; last_id?: string },
+		gen = ++userLoadGen
+	): Promise<void> {
 		if (loadingUsers) return;
 
 		loadingUsers = true;
-		const gen = ++userLoadGen;
+		try {
+			const res = await messagesStore.reactionUsers(channelId, messageId, q);
+			if (userLoadGen !== gen) return;
 
-		messagesStore
-			.reactionUsers(channelId, messageId, q)
-			.then((res) => {
-				if (userLoadGen !== gen) return;
+			const fresh = res.reactions.map((r) => ({
+				emoji_id: r.emoji_id,
+				unicode: r.unicode,
+				count: r.count,
+				users: r.users
+			}));
 
-				const fresh = res.reactions.map((r) => ({
-					emoji_id: r.emoji_id,
-					unicode: r.unicode,
-					count: r.count,
-					users: r.users
-				}));
-
-				cached = cached
-					? { reactions: mergeGroups([...cached.reactions, ...fresh]) }
-					: { reactions: mergeGroups(fresh) };
-
-				cursor = reactionPageCursor(res);
-				hasMore = res.has_more;
-			})
-			.catch(() => {})
-			.finally(() => {
-				if (userLoadGen === gen) {
-					loadingUsers = false;
-				}
-			});
+			cached = cached
+				? { reactions: mergeGroups([...cached.reactions, ...fresh]) }
+				: { reactions: mergeGroups(fresh) };
+			cursor = reactionPageCursor(res);
+			hasMore = res.has_more;
+		} catch {
+			// Best effort: keep the existing reaction counters visible.
+		} finally {
+			if (userLoadGen === gen) loadingUsers = false;
+		}
 	}
 
 	function reactionPageCursor(res: {
@@ -209,9 +206,24 @@
 		return { since: last.created_at, last_id: last.id };
 	}
 
-	function ensureUsers(): void {
-		if (cached || loadingUsers) return;
-		loadPage();
+	async function ensureUsers(emoji: string): Promise<void> {
+		if (loadingUsers) return;
+		const existing = cached?.reactions.find((r) => (r.unicode ?? r.emoji_id) === emoji);
+		if (existing?.users.length) return;
+
+		const gen = ++userLoadGen;
+		let nextCursor: KeysetCursor | null = null;
+		let more = true;
+		while (more && userLoadGen === gen) {
+			await loadPage(
+				nextCursor ? { since: nextCursor.since, last_id: nextCursor.last_id } : undefined,
+				gen
+			);
+			const found = cached?.reactions.find((r) => (r.unicode ?? r.emoji_id) === emoji);
+			if (found?.users.length) return;
+			nextCursor = cursor;
+			more = hasMore && nextCursor !== null;
+		}
 	}
 
 	function loadMoreFor(emoji: string): void {
@@ -233,7 +245,7 @@
 
 	function openPopover(emoji: string): void {
 		openEmoji = emoji;
-		ensureUsers();
+		void ensureUsers(emoji);
 	}
 
 	function close(): void {
@@ -248,7 +260,7 @@
 			onpointerenter={(e) => {
 				if (e.pointerType === 'mouse') {
 					openEmoji = r.unicode ?? r.emoji_id ?? '';
-					ensureUsers();
+					void ensureUsers(emoji);
 				}
 			}}
 			onpointerleave={(e) => {
