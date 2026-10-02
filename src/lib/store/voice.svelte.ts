@@ -508,6 +508,14 @@ export function isJoined(channelId: string): boolean {
 	return state.channelId === channelId;
 }
 
+export function shouldShowGlobalSession(pathname: string): boolean {
+	return (
+		state.connected &&
+		state.channelId !== null &&
+		pathname !== `/channels/${state.channelId}`
+	);
+}
+
 // ── roster helpers (árvore de voz na sidebar) ──────────────
 // Upsert a user's voice state into the per-channel roster. When the channel
 // has no snapshot yet (the user never received `voice_joined` for it — a
