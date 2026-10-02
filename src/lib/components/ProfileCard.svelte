@@ -7,12 +7,14 @@
 	import type { RoleSummary, UserSummary } from '$lib/types';
 	import { mediaUrl } from '$lib/utils/media';
 	import * as usersStore from '$lib/store/users.svelte';
+	import * as emojisStore from '$lib/store/emojis.svelte';
 	import * as dmsStore from '$lib/store/dms.svelte';
 	import * as blocksStore from '$lib/store/blocks.svelte';
 	import * as channelsStore from '$lib/store/channels.svelte';
 	import { meId } from '$lib/store/session.svelte';
 	import { hash } from '$lib/utils/avatars';
 	import Avatar from './Avatar.svelte';
+	import FormattedMessage from './FormattedMessage.svelte';
 
 	let {
 		user,
@@ -45,6 +47,16 @@
 			void usersStore.ensureProfile(id).finally(() => {
 				loadingProfile = null;
 			});
+		}
+	});
+
+	$effect(() => {
+		if (
+			profile?.description?.includes(':') &&
+			!emojisStore.state.fullyLoaded &&
+			!emojisStore.state.loading
+		) {
+			void emojisStore.loadAll().catch(() => {});
 		}
 	});
 
@@ -196,7 +208,7 @@
 			<div class="profile-divider" />
 
 			{#if profile?.description}
-				<p class="profile-bio">{profile.description}</p>
+				<div class="profile-bio"><FormattedMessage content={profile.description} /></div>
 			{:else}
 				<p class="profile-bio profile-bio-empty">Sem descrição.</p>
 			{/if}
@@ -251,7 +263,7 @@
 		background: rgba(255, 255, 255, 0.34);
 		color: var(--text);
 		font: inherit;
-		font-size: 11px;
+		font-size: 13px;
 		font-weight: 750;
 		cursor: pointer;
 	}

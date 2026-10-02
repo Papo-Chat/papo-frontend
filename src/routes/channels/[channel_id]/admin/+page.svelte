@@ -11,6 +11,7 @@
     } from '$lib/types';
     import Icon from '$lib/components/Icon.svelte';
     import PermissionTable from '$lib/components/PermissionTable.svelte';
+    import { hasAnyChannelPermission } from '$lib/utils/permissions';
     import Topbar from '$lib/components/Topbar.svelte';
 
     // Resolve o canal da URL (id exato, depois nome). O guard garante resolvido.
@@ -77,8 +78,9 @@
         }
     });
 
-    // Toggle de permissão: atualiza o estado local (UI imediata) e persiste
-    // via PUT /channels/:id/permissions/:role_id (PUT dos 4 booleans).
+    // Toggle de permissão: atualiza o estado local (UI imediata). Quando
+    // nenhum flag resta ativo, remove a relação channel x role via DELETE;
+    // caso contrário persiste os quatro flags via PUT.
     function onTogglePerm(
         roleId: string,
         key: keyof ChannelPermission,
@@ -93,8 +95,20 @@
                 connect_voice: false
             };
         const next: ChannelPermission = { ...current, [key]: value };
-        perms = { ...perms, [roleId]: next };
-        channelsStore.setRolePermissions(channel.id, roleId, next);
+        const hasAnyPermission = hasAnyChannelPermission(next);
+
+        if (hasAnyPermission) {
+            perms = { ...perms, [roleId]: next };
+            void channelsStore.setRolePermissions(channel.id, roleId, next).catch((err) => {
+                error = err instanceof Error ? err.message : 'Não foi possível atualizar as permissões.';
+            });
+        } else {
+            const { [roleId]: _removed, ...rest } = perms;
+            perms = rest;
+            void channelsStore.removeRolePermissions(channel.id, roleId).catch((err) => {
+                error = err instanceof Error ? err.message : 'Não foi possível remover as permissões da role.';
+            });
+        }
     }
 
     // Nome do canal a persistir: prefixo de emoji (picker) + nome de exibição.

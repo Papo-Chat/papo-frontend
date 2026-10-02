@@ -9,6 +9,8 @@
 	import '@phosphor-icons/web/duotone';
 	import ThemeSwitch from '$lib/components/ThemeSwitch.svelte';
 	import BackgroundPicker from '$lib/components/BackgroundPicker.svelte';
+	import GlobalVoiceSession from '$lib/components/GlobalVoiceSession.svelte';
+	import GlobalJoinNotice from '$lib/components/GlobalJoinNotice.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import { state as wsState } from '$lib/store/websocket.svelte';
 	import { meId } from '$lib/store/session.svelte';
@@ -19,6 +21,9 @@
 </script>
 
 <slot />
+
+<GlobalVoiceSession />
+<GlobalJoinNotice />
 
 {#if showReconnect}
 	<div class="reconnect-overlay" role="alert" aria-live="assertive">

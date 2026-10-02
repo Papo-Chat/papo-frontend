@@ -49,9 +49,22 @@ describe('renderMessageMarkdown', () => {
 		expect(renderMessageMarkdown('a\nb', nameMap, urlFn)).toContain('<br>');
 	});
 
-	it('renders two paragraphs separated by a blank line', () => {
+	it('preserves blank lines between paragraphs', () => {
 		const out = renderMessageMarkdown('a\n\nb', nameMap, urlFn);
-		expect((out.match(/<p>/g) ?? []).length).toBe(2);
+		expect((out.match(/message-blank-line/g) ?? []).length).toBe(1);
+		expect(out).toContain('<p>a</p>');
+		expect(out).toContain('<p>b</p>');
+	});
+
+	it('preserves consecutive blank lines without collapsing them', () => {
+		const out = renderMessageMarkdown('a\n\n\nb', nameMap, urlFn);
+		expect((out.match(/message-blank-line/g) ?? []).length).toBe(2);
+	});
+
+	it('does not inject blank-line markers inside fenced code blocks', () => {
+		const out = renderMessageMarkdown('```\na\n\nb\n```', nameMap, urlFn);
+		expect(out).toContain('a\n\nb');
+		expect(out).not.toContain('message-blank-line');
 	});
 
 	it('renders fenced code blocks, escaping their content', () => {
@@ -88,6 +101,14 @@ describe('renderMessageMarkdown', () => {
 		expect(out).toContain('<img');
 		expect(out).toContain('src="/e/x"');
 		expect(out).toContain('inline-emoji');
+	});
+
+	it('renders a multiline profile-style description with custom emoji and preserved blank line', () => {
+		const out = renderMessageMarkdown('sobre mim\n\n:x: projetos', nameMap, urlFn);
+		expect(out).toContain('sobre mim');
+		expect(out).toContain('message-blank-line');
+		expect(out).toContain('src="/e/x"');
+		expect(out).toContain('projetos');
 	});
 
 	it('renders a lone emoji at full size (no text in content)', () => {

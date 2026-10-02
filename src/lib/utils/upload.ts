@@ -9,7 +9,7 @@
 //   avatar   : ≤2MB, ≤512px
 //   icon     : ≤2MB, ≤512px
 //   banner   : ≤2MB, ≤2048px
-//   emoji    : ≤256KB, ≤512px
+//   emoji    : ≤256KB, ≤128px
 //   attachments: ≤10 files, ≤100MB total (multipart POST /messages, F13)
 //
 // RESIZE_DIM is the *client-side* canvas downscale target (longest side, px).

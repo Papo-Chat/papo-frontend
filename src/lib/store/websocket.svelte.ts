@@ -88,20 +88,33 @@ function startPing(socket: WebSocket, gen: number): void {
 // Minimal REST reconciliation after a reconnect (P1.10). Only run when a
 // session is active. The fresh WS's `presence_sync` is the online source of
 // truth; no full history reload.
+export function ensureOpenMessageHistory(): void {
+	const openChannel = channelsStore.state.openChannelId;
+	if (openChannel) {
+		void messagesStore.ensureLoaded(openChannel).then(() => {
+			if (!messagesStore.getChannel(openChannel)?.loaded) {
+				messagesStore.load(openChannel);
+			}
+		});
+	}
+
+	const openDm = dmsStore.state.openDmId;
+	if (openDm) {
+		void messagesStore.ensureLoaded(openDm).then(() => {
+			if (!messagesStore.getChannel(openDm)?.loaded) {
+				messagesStore.load(openDm);
+			}
+		});
+	}
+}
+
 function resync(): void {
 	if (!sessionMeId()) {
 		return;
 	}
 	channelsStore.load();
 	void dmsStore.load().catch(() => {});
-	const open = channelsStore.state.openChannelId;
-	if (open) {
-		messagesStore.load(open);
-	}
-	const openDm = dmsStore.state.openDmId;
-	if (openDm) {
-		messagesStore.load(openDm);
-	}
+	ensureOpenMessageHistory();
 	notificationsStore.load();
 	rolesStore.load();
 	if (usersStore.state.list.items.length === 0) {
@@ -279,6 +292,10 @@ export function dispatchEvent(event: WsOutbound): void {
 		case 'presence_sync':
 			usersStore.handlePresenceSync(event.members);
 			voiceStore.onPresenceSync(event.members);
+			// presence_sync is the first authoritative "you are fully joined"
+			// signal after a fresh connection. If the initial route bootstrap raced
+			// membership propagation, retry the open history here.
+			ensureOpenMessageHistory();
 			break;
 		case 'user_join':
 			usersStore.handleUserJoin(event.user_id);

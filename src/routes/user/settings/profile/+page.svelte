@@ -2,16 +2,21 @@
     import * as api from '$lib/api';
     import { meId } from '$lib/store/session.svelte';
     import * as usersStore from '$lib/store/users.svelte';
+    import * as emojisStore from '$lib/store/emojis.svelte';
     import { fileToBase64 } from '$lib/utils/upload';
+    import { insertEmojiAtSelection, type EmojiOption } from '$lib/utils/emojis';
     import { blobToUrl, mimeToFormat, mediaUrl } from '$lib/utils/media';
     import type { UserProfile, UserSummary } from '$lib/types';
     import Icon from '$lib/components/Icon.svelte';
     import Avatar from '$lib/components/Avatar.svelte';
+    import EmojiPicker from '$lib/components/EmojiPicker.svelte';
 
     let profile: UserProfile | null = $state(null);
     let nickname = $state('');
     let statusMessage = $state('');
     let description = $state('');
+    let descriptionEmojiOpen = $state(false);
+    let descriptionEl: HTMLTextAreaElement | null = null;
     let avatarImg: { base64: string; mime: string } | null = $state(null);
     let bannerImg: { base64: string; mime: string } | null = $state(null);
     let avatarError = $state('');
@@ -88,6 +93,28 @@
             description = '';
         }
         seeded = true;
+    }
+
+    function toggleDescriptionEmoji(): void {
+        descriptionEmojiOpen = !descriptionEmojiOpen;
+        if (descriptionEmojiOpen && !emojisStore.state.fullyLoaded && !emojisStore.state.loading) {
+            void emojisStore.loadAll().catch(() => {});
+        }
+    }
+
+    function onPickDescriptionEmoji(emoji: EmojiOption): void {
+        const start = descriptionEl?.selectionStart ?? description.length;
+        const end = descriptionEl?.selectionEnd ?? description.length;
+        const inserted = insertEmojiAtSelection(description, start, end, emoji);
+        description = inserted.text;
+
+        queueMicrotask(() => {
+            if (!descriptionEl) return;
+            const cursor = inserted.cursor;
+            descriptionEl.selectionStart = cursor;
+            descriptionEl.selectionEnd = cursor;
+            descriptionEl.focus();
+        });
     }
 
     async function onAvatarSelect(e: Event): Promise<void> {
@@ -274,12 +301,30 @@
             </div>
             <div class="admin-field">
                 <label for="pf-desc">Descrição</label>
-                <textarea
-                    id="pf-desc"
-                    class="admin-textarea"
-                    bind:value={description}
-                    placeholder="Sobre você, seus interesses, seu papel no AeroClub…"
-                ></textarea>
+                <div class="description-editor">
+                    <textarea
+                        id="pf-desc"
+                        class="admin-textarea"
+                        bind:this={descriptionEl}
+                        bind:value={description}
+                        placeholder="Sobre você, seus interesses, seu papel no AeroClub…"
+                    ></textarea>
+                    <div class="description-emoji-wrap">
+                        <button
+                            class="description-emoji-btn"
+                            type="button"
+                            aria-label="Adicionar emoji à descrição"
+                            aria-expanded={descriptionEmojiOpen}
+                            onclick={toggleDescriptionEmoji}
+                        >
+                            <Icon name="smiley" variant="light" />
+                        </button>
+                        <EmojiPicker
+                            bind:open={descriptionEmojiOpen}
+                            onPick={onPickDescriptionEmoji}
+                        />
+                    </div>
+                </div>
             </div>
             <div class="admin-field">
                 <label for="pf-avatar">Avatar</label>
@@ -289,7 +334,9 @@
                     accept="image/*"
                     onchange={onAvatarSelect}
                     aria-label="Escolher avatar"
+                    aria-describedby="pf-avatar-limit"
                 />
+                <span id="pf-avatar-limit" class="field-hint">Máximo: 512 × 512 px.</span>
                 {#if avatarError}
                     <span class="field-error">{avatarError}</span>
                 {/if}
@@ -302,7 +349,9 @@
                     accept="image/*"
                     onchange={onBannerSelect}
                     aria-label="Escolher capa"
+                    aria-describedby="pf-banner-limit"
                 />
+                <span id="pf-banner-limit" class="field-hint">Máximo: 2048 × 2048 px.</span>
                 {#if bannerError}
                     <span class="field-error">{bannerError}</span>
                 {/if}
@@ -459,6 +508,43 @@
         display: flex;
         flex-direction: column;
         gap: 10px;
+    }
+
+    .description-editor {
+        position: relative;
+    }
+
+    .description-editor .admin-textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding-right: 42px;
+        white-space: pre-wrap;
+    }
+
+    .description-emoji-wrap {
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+    }
+
+    .description-emoji-btn {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        padding: 0;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--surface);
+        color: var(--text-secondary);
+        cursor: pointer;
+    }
+
+    .field-hint {
+        color: var(--muted-soft);
+        font-size: 11px;
+        display: block;
+        margin-top: 4px;
     }
 
     .field-error {

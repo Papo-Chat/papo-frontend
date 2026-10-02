@@ -16,7 +16,6 @@
 		onLoadMoreNewer,
 		highlightMessageId = null,
 		lastReadMessageId = null,
-		joinNotice = null,
 		scrollToLatestToken = 0,
 		onUnreadCountChange,
 		onReachLatest
@@ -33,7 +32,6 @@
 		onLoadMoreNewer?: () => void | Promise<void>;
 		highlightMessageId?: string | null;
 		lastReadMessageId?: string | null;
-		joinNotice?: { id: number; name: string } | null;
 		scrollToLatestToken?: number;
 		onUnreadCountChange?: (count: number) => void;
 		onReachLatest?: (message: MessageWithAttachment | null) => void;
@@ -747,7 +745,6 @@
 		</div>
 	</div>
 
-	{#if joinNotice}{#key joinNotice.id}<div class="join-notice" role="status">{joinNotice.name} entrou no servidor</div>{/key}{/if}
 
 	{#if showReturnRecent}
 		<button
@@ -867,7 +864,6 @@
 	:global(html[data-ui-flat]) .return-recent {
 		box-shadow: none;
 	}
-	.join-notice{position:absolute;left:50%;bottom:52px;z-index:21;transform:translateX(-50%);padding:7px 12px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--text-primary);font-size:12px;font-weight:650;box-shadow:0 4px 14px rgb(0 0 0/.16);white-space:nowrap;pointer-events:none;animation:join-life 4.5s ease forwards}@keyframes join-life{0%{opacity:0}10%,80%{opacity:1}100%{opacity:0}}
 
 	.message-target-highlight {
 		border-radius: 12px;

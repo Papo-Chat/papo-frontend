@@ -503,6 +503,14 @@ export function isJoined(channelId: string): boolean {
 	return state.channelId === channelId;
 }
 
+export function shouldShowGlobalSession(pathname: string): boolean {
+	return (
+		state.connected &&
+		state.channelId !== null &&
+		pathname !== `/channels/${state.channelId}`
+	);
+}
+
 // ── roster helpers (árvore de voz na sidebar) ──────────────
 // Upsert a user's voice state into the per-channel roster. When the channel
 // has no snapshot yet (the user never received `voice_joined` for it — a
@@ -532,6 +540,42 @@ function removeUserFromRoster(channelId: string, userId: string): void {
 	}
 	const next = members.filter((m) => m.user_id !== userId);
 	state.channelMembers.set(channelId, next);
+}
+
+
+function dropLocalVoiceSession(error: string): void {
+	voiceGeneration += 1;
+	cancelJoinWait();
+	serverJoinSent = false;
+
+	cleanupAudioMixer();
+	peer?.close();
+
+	if (mediaStream) {
+		mediaStream.getTracks().forEach((track) => track.stop());
+		mediaStream = null;
+	}
+
+	signalQueue = Promise.resolve();
+	offerChain = Promise.resolve();
+	mediaActionChain = Promise.resolve();
+	mediaSubscriptionsReady = false;
+	clearPendingAnswer(new Error(error));
+	cleanupVideoMedia();
+
+	peer = null;
+	state.peer = null;
+	state.members = [];
+	state.activeSpeakers = [];
+	state.activeSpeaker = null;
+	state.connected = false;
+	state.channelId = null;
+
+	currentChannelId = null;
+	currentUserId = null;
+	state.lastError = error;
+
+	cleanupRemoteAudio();
 }
 
 export function onPresenceSync(members: PresenceMember[]): void {
@@ -835,12 +879,24 @@ export function onVoiceAudioRoutes(ev: WsVoiceAudioRoutes): void {
 	applyAllRemoteAudioPreferences();
 }
 
+export function isLocalVoiceLeave(
+	ev: Pick<WsVoiceLeave, 'channel_id' | 'user_id'>,
+	channelId: string | null,
+	userId: string | null
+): boolean {
+	return channelId !== null && userId !== null && ev.channel_id === channelId && ev.user_id === userId;
+}
+
 export function onVoiceLeave(ev: WsVoiceLeave): void {
 	// Roster: broadcast to the channel audience (connect_voice holders) —
 	// never gated on the current room.
 	removeUserFromRoster(ev.channel_id, ev.user_id);
 
 	if (currentChannelId !== ev.channel_id) {
+		return;
+	}
+	if (isLocalVoiceLeave(ev, currentChannelId, currentUserId)) {
+		dropLocalVoiceSession('Você não está mais conectado à sala de voz.');
 		return;
 	}
 	state.members = state.members.filter((m) => m.user_id !== ev.user_id);

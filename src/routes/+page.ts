@@ -13,6 +13,7 @@ import { redirect } from '@sveltejs/kit';
 import { load as sessionLoad, state as sessionState } from '$lib/store/session.svelte';
 import * as channelsStore from '$lib/store/channels.svelte';
 import * as serverStore from '$lib/store/server.svelte';
+import * as messagesStore from '$lib/store/messages.svelte';
 
 export async function load(): Promise<void> {
 	// 1. Sessão.
@@ -47,5 +48,9 @@ export async function load(): Promise<void> {
 
 	// 4. Canal "home": primeiro canal de texto (fallback: qualquer canal).
 	channelsStore.setOpen(home.id);
+	// History is part of bootstrap, not a component-mount side effect. This is
+	// especially important immediately after registration, when the first
+	// client-side navigation can otherwise render an empty message cache.
+	await messagesStore.ensureLoaded(home.id);
 	redirect(307, `/channels/${home.id}`);
 }

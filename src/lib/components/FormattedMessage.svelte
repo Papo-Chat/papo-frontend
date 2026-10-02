@@ -203,7 +203,11 @@
 	}
 
 	:global(.msg-text p) {
-		margin: 0.15em 0;
+		margin: 0;
+	}
+
+	:global(.message-blank-line) {
+		height: 1.55em;
 	}
 
 	:global(.msg-text :is(ul, ol)) {

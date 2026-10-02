@@ -8,6 +8,7 @@ import {
 	health,
 	server,
 	users,
+	channels,
 	messages,
 	auth,
 	ApiError,
@@ -294,5 +295,17 @@ describe('multipart upload credentials', () => {
 		expect(instance).not.toBeNull();
 		const request = instance as FakeXMLHttpRequest | null;
 		expect(request?.withCredentials).toBe(true);
+	});
+});
+
+
+describe('channel role permission deletion', () => {
+	it('uses DELETE /channels/:channel_id/role/:role_id', async () => {
+		const { calls } = installFetch({ status: 204, text: '' });
+		await channels.removeRolePermissions('channel 1', 'role/1');
+		expect(calls).toHaveLength(1);
+		const url = new URL(calls[0].url);
+		expect(url.pathname).toBe('/channels/channel%201/role/role%2F1');
+		expect(calls[0].init.method).toBe('DELETE');
 	});
 });

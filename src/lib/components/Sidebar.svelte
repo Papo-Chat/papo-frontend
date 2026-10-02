@@ -50,10 +50,12 @@
 	}
 
 	function selectChannel(id: string): void {
-		onSelectChannel(id);
+		state.channelsDrawerOpen = false;
+		onSelectChannel?.(id);
 	}
 
 	function goHome(): void {
+		state.channelsDrawerOpen = false;
 		const home = channelsStore.homeChannel();
 		if (home) goto(`/channels/${home.id}`);
 	}

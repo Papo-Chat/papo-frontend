@@ -96,13 +96,17 @@
 				bind:value={name}
 				aria-label="Nome do emoji"
 			/>
-			<input
-				class="emoji-file"
-				type="file"
-				accept="image/gif,image/jpeg,image/png,image/webp"
-				onchange={onFileSelect}
-				aria-label="Imagem do emoji"
-			/>
+			<div class="emoji-upload-field">
+				<input
+					class="emoji-file"
+					type="file"
+					accept="image/gif,image/jpeg,image/png,image/webp"
+					onchange={onFileSelect}
+					aria-label="Imagem do emoji"
+					aria-describedby="emoji-image-limit"
+				/>
+				<span id="emoji-image-limit" class="emoji-limit">Máximo: 128 × 128 px.</span>
+			</div>
 			<button class="admin-btn" onclick={add} disabled={saving || !name.trim() || !selectedFile}>
 				{saving ? 'Criando…' : 'Criar'}
 			</button>
@@ -166,7 +170,9 @@
 	.emojis-actions .filter-input { width:150px; }
 	.new-emoji { margin-bottom:12px; }
 	.new-emoji .admin-input { min-width:180px; }
+	.emoji-upload-field { display:flex; flex-direction:column; gap:3px; }
 	.emoji-file { max-width:260px; color:var(--muted); font-size:12px; }
+	.emoji-limit { color:var(--muted-soft); font-size:11px; }
 	.emoji-card { flex:1; min-height:0; display:flex; flex-direction:column; }
 	.emoji-list { flex:1; min-height:0; overflow-y:auto; }
 	.emoji-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; width:100%; }

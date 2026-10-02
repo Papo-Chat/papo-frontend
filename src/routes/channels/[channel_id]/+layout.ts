@@ -19,6 +19,7 @@ import { redirect } from '@sveltejs/kit';
 import { load as sessionLoad, state as sessionState } from '$lib/store/session.svelte';
 import * as channelsStore from '$lib/store/channels.svelte';
 import * as serverStore from '$lib/store/server.svelte';
+import * as messagesStore from '$lib/store/messages.svelte';
 
 // Fallback para o ID do canal a partir da URL, caso `params.channel_id`
 // esteja vazio no LoadEvent (defesa extra contra o estado intermediário de
@@ -66,6 +67,7 @@ export async function load({
 	const channel = channelsStore.resolve(channelId);
 	if (channel) {
 		channelsStore.setOpen(channel.id);
+		await messagesStore.ensureLoaded(channel.id);
 		return;
 	}
 
