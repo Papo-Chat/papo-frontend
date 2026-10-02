@@ -220,11 +220,13 @@
 								type="file"
 								accept="image/*"
 								onchange={onIconSelect}
+								aria-describedby="sv-icon-limit"
 							/>
 							<button class="icon-reset" onclick={resetIcon} aria-label="Remover ícone">
 								<Icon name="x" variant="light" size={14} />
 							</button>
 						</div>
+						<span id="sv-icon-limit" class="hint">Máximo: 512 × 512 px.</span>
 						{#if iconBlob}
 							<div class="icon-preview">
 								<img
