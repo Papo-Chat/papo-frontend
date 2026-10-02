@@ -362,6 +362,13 @@ export const auth = {
 			authFailure: 'ignore'
 		});
 	},
+	consumePasswordReset(token: string, password: string): Promise<{ response: string }> {
+		return request<{ response: string }>('/auth/password_reset', {
+			method: 'POST',
+			body: { token, password },
+			authFailure: 'ignore'
+		});
+	},
 	whoami(): Promise<WhoamiResponse> {
 		return request<WhoamiResponse>('/auth/whoami');
 	},
@@ -455,10 +462,9 @@ export const users = {
 			body: req
 		});
 	},
-	resetPassword(id: string, password?: string): Promise<{ response: string }> {
-		return request<{ response: string }>(`/users/${encodeURIComponent(id)}/reset`, {
-			method: 'POST',
-			body: password ? { password } : undefined
+	resetPassword(id: string): Promise<{ reset_url: string; expires_at: string }> {
+		return request<{ reset_url: string; expires_at: string }>(`/users/${encodeURIComponent(id)}/reset`, {
+			method: 'POST'
 		});
 	},
 	notifications(id: string, q?: { since?: string; last_id?: string }): Promise<NotificationList> {
