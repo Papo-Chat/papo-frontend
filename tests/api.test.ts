@@ -129,6 +129,40 @@ describe('200 / raw responses', () => {
 	});
 });
 
+describe('server update contract', () => {
+	it('uses PATCH /server for partial updates and omits untouched fields', async () => {
+		const { calls } = installFetch({ status: 200, body: {} });
+		await server.update({ name: 'Renamed server' });
+
+		expect(calls).toHaveLength(1);
+		expect(new URL(calls[0].url).pathname).toBe('/server');
+		expect(calls[0].init.method).toBe('PATCH');
+		expect(JSON.parse(String(calls[0].init.body))).toEqual({ name: 'Renamed server' });
+	});
+
+	it('uses PUT /server only for full replacement requests', async () => {
+		const { calls } = installFetch({ status: 200, body: {} });
+		await server.replace({
+			name: 'Replacement',
+			icon_blob: '',
+			icon_format: '',
+			password: '',
+			public: true
+		});
+
+		expect(calls).toHaveLength(1);
+		expect(new URL(calls[0].url).pathname).toBe('/server');
+		expect(calls[0].init.method).toBe('PUT');
+		expect(JSON.parse(String(calls[0].init.body))).toEqual({
+			name: 'Replacement',
+			icon_blob: '',
+			icon_format: '',
+			password: '',
+			public: true
+		});
+	});
+});
+
 describe('404 handling', () => {
 	it('server.get() maps 404 → null (F7)', async () => {
 		installFetch({ status: 404, body: problem(404, 'Server not created') });
