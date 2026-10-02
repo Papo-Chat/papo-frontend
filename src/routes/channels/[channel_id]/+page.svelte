@@ -92,15 +92,14 @@
 		}
 	});
 
-	// Carrega histórico e mensagens fixadas quando o canal muda.
+	// Carrega histórico quando a rota muda. Use o param da rota como única
+	// dependência: o objeto channel é atualizado pelos stores e não pode
+	// retriggerar a própria request de mensagens.
 	$effect(() => {
-		const id = channel?.id;
-
+		const id = page.params.channel_id;
 		if (!id) return;
 
 		untrack(() => {
-			// Reconciliamos com o REST a cada abertura. O cache existente continua
-			// visível durante a request, mas nunca bloqueia a recuperação do histórico.
 			void messagesStore.setLatest(id);
 			messagesStore.loadPinned(id);
 			channelsStore.setOpen(id);
