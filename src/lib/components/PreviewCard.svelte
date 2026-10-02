@@ -97,13 +97,17 @@
 <style>
 	.preview-card {
 		width: 100%;
-		max-width: 500px;
+		max-width: min(500px, 100%);
+		min-width: 0;
 		padding: 10px;
 		box-sizing: border-box;
 		overflow: hidden;
 	}
 	.preview-card .preview-title {
 		display: block;
+		max-width: 100%;
+		overflow-wrap: anywhere;
+		word-break: break-word;
 		padding: 2px 0 2px;
 		background: transparent;
 		border-bottom: none;
