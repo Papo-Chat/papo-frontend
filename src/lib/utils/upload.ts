@@ -8,7 +8,7 @@
 //   formats  : GIF, JPEG/JPG, PNG, WEBP
 //   avatar   : ≤2MB, ≤512px
 //   icon     : ≤2MB, ≤512px
-//   banner   : ≤2MB, ≤2048px
+//   banner   : ≤2MB, ≤1024px
 //   emoji    : ≤256KB, ≤512px
 //   attachments: ≤10 files, ≤100MB total (multipart POST /messages, F13)
 //
@@ -36,7 +36,7 @@ export const RESIZE_DIM: Record<UploadKind, number> = {
 	avatar: 512,
 	icon: 512,
 	emoji: 128,
-	banner: 2048
+	banner: 1024
 };
 
 // Attachment budget (multipart POST /messages).
