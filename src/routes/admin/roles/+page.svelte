@@ -201,7 +201,7 @@
 		flex: 1;
 		min-width: 180px;
 	}
-	.color-pick { display:flex; gap:6px; align-items:center; }
+	.color-pick { display:flex; gap:6px; align-items:center; min-width:0; max-width:100%; }
 	.color-input { width:38px; height:34px; padding:2px; border:0; background:transparent; cursor:pointer; }
 	.color-hex { width:92px !important; min-width:92px !important; }
 	.swatch {
@@ -241,6 +241,14 @@
 	.role-feedback.error {
 		background: rgba(220, 40, 40, 0.1);
 		color: #c43a46;
+	}
+
+	@media (max-width:560px) {
+		.roles-actions { width:100%; flex-wrap:wrap; }
+		.roles-actions .filter-input { width:100%; flex:1 1 100%; }
+		.new-role { align-items:stretch; }
+		.new-role .admin-input { min-width:0; flex:1 1 100%; }
+		.color-pick { flex:1 1 auto; }
 	}
 
 	.admin-btn.ghost.small {
