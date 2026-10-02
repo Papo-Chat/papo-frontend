@@ -86,6 +86,8 @@
 	}
 </script>
 
+<svelte:window onkeydown={handleTopicKeydown} />
+
 <header class="topbar">
 	<button class="chat-icon" onclick={openSidebar} aria-label="Abrir canais" title="Abrir canais">
 		<Icon name="list" variant="light" />
@@ -184,7 +186,6 @@
 </header>
 
 {#if topicOpen}
-	<svelte:window onkeydown={handleTopicKeydown} />
 	<div
 		class="topic-backdrop"
 		role="presentation"
