@@ -13,6 +13,7 @@
 	import { meId } from '$lib/store/session.svelte';
 	import { hash } from '$lib/utils/avatars';
 	import Avatar from './Avatar.svelte';
+	import FormattedMessage from './FormattedMessage.svelte';
 
 	let {
 		user,
@@ -196,7 +197,7 @@
 			<div class="profile-divider" />
 
 			{#if profile?.description}
-				<p class="profile-bio">{profile.description}</p>
+				<div class="profile-bio"><FormattedMessage content={profile.description} /></div>
 			{:else}
 				<p class="profile-bio profile-bio-empty">Sem descrição.</p>
 			{/if}
