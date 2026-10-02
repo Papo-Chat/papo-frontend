@@ -217,14 +217,6 @@
 				<span>Zoom</span>
 				<input type="range" min="1" max="3" step="0.01" bind:value={zoom} />
 			</label>
-			<label>
-				<span>Horizontal</span>
-				<input type="range" min="-100" max="100" step="1" bind:value={offsetX} />
-			</label>
-			<label>
-				<span>Vertical</span>
-				<input type="range" min="-100" max="100" step="1" bind:value={offsetY} />
-			</label>
 		</div>
 
 		{#if error}<p class="crop-error" role="alert">{error}</p>{/if}
@@ -253,13 +245,13 @@
 	}
 
 	.crop-modal {
-		width: min(620px, 100%);
+		width: min(520px, 100%);
 		max-height: calc(100dvh - 40px);
 		overflow-y: auto;
 		box-sizing: border-box;
-		padding: 20px;
+		padding: 18px;
 		display: grid;
-		gap: 14px;
+		gap: 12px;
 		color: var(--text-primary, var(--text));
 		background:
 			radial-gradient(circle at 18% -12%, rgba(255, 255, 255, 0.2), transparent 38%),
@@ -326,7 +318,7 @@
 	}
 
 	.crop-preview.avatar-mode {
-		width: min(400px, 72vw, 54dvh);
+		width: min(340px, 68vw, 50dvh);
 		aspect-ratio: 1;
 		border-radius: 50%;
 	}
@@ -363,7 +355,7 @@
 
 	.crop-controls label {
 		display: grid;
-		grid-template-columns: 88px minmax(0, 1fr);
+		grid-template-columns: 52px minmax(0, 1fr);
 		gap: 10px;
 		align-items: center;
 		font-size: 12px;
@@ -459,12 +451,12 @@
 		}
 
 		.crop-preview.avatar-mode {
-			width: min(78vw, 48dvh, 330px);
+			width: min(74vw, 44dvh, 300px);
 		}
 
 		.crop-controls label {
-			grid-template-columns: 1fr;
-			gap: 5px;
+			grid-template-columns: 52px minmax(0, 1fr);
+			gap: 8px;
 		}
 
 		.crop-actions {
