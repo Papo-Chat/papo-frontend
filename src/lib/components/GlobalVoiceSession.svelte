@@ -139,13 +139,17 @@
 		}
 	}
 
-	onMount(() => {
+	$effect(() => {
+		if (!showGlobalSession) return;
 		const frame = requestAnimationFrame(positionPanel);
+		return () => cancelAnimationFrame(frame);
+	});
+
+	onMount(() => {
 		const onResize = () => positionPanel();
 		window.addEventListener('resize', onResize);
 
 		return () => {
-			cancelAnimationFrame(frame);
 			window.removeEventListener('resize', onResize);
 		};
 	});
