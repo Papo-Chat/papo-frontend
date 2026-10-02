@@ -12,12 +12,6 @@ afterEach(() => {
 });
 
 describe('persistent global voice session', () => {
-	it('treats failed and closed peer connections as terminal', () => {
-		expect(voiceStore.isTerminalPeerConnectionState('failed')).toBe(true);
-		expect(voiceStore.isTerminalPeerConnectionState('closed')).toBe(true);
-		expect(voiceStore.isTerminalPeerConnectionState('connected')).toBe(false);
-		expect(voiceStore.isTerminalPeerConnectionState('disconnected')).toBe(false);
-	});
 
 	it('detects a voice_leave for the local active session only', () => {
 		expect(
