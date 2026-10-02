@@ -54,6 +54,13 @@
 	// O detalhe completo só é buscado quando o card chega perto do viewport.
 	// Isso também impede que dezenas de vídeos iniciem preload fora da tela.
 	const videoUrl = $derived(safeXVideoUrl(resolved?.video_url));
+	let failedVideoUrl = $state('');
+
+	function handleVideoError(): void {
+		if (videoUrl) {
+			failedVideoUrl = videoUrl;
+		}
+	}
 
 	// Embed de vídeo: apenas se casar exatamente com o contrato do backend
 	// (YouTube, ID válido). Frontend revalida antes de renderizar o iframe
@@ -98,7 +105,7 @@
 					allowfullscreen
 				></iframe>
 			{/if}
-		{:else if videoUrl}
+		{:else if videoUrl && failedVideoUrl !== videoUrl}
 			<video
 				class="preview-video"
 				src={videoUrl}
@@ -106,6 +113,7 @@
 				controls
 				playsinline
 				preload="metadata"
+				onerror={handleVideoError}
 			></video>
 		{:else if imageUrl}
 			<img class="preview-image" src={imageUrl} alt="" loading="lazy" />
