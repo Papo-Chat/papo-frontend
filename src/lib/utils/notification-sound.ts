@@ -51,7 +51,7 @@ function getMediaPlayer(): HTMLAudioElement | null {
 	if (!mediaPlayer) {
 		mediaPlayer = new Audio();
 		mediaPlayer.preload = 'auto';
-		mediaPlayer.playsInline = true;
+		mediaPlayer.setAttribute('playsinline', '');
 	}
 
 	return mediaPlayer;
