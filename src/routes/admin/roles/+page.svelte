@@ -14,7 +14,6 @@
 	let error = $state<string | null>(null);
 	let feedbackTimer: ReturnType<typeof setTimeout> | null = null;
 
-	const palette = ['#e7a80b', '#30d158', '#0a84ff', '#9b5de5', '#ff5d63', '#5ac8fa'];
 
 	const visibleRoles = $derived(
 		rolesStore.state.list.filter(
@@ -33,7 +32,7 @@
 	function openCreate(): void {
 		creating = true;
 		name = '';
-		color = palette[0];
+		color = '#9b5de5';
 	}
 
 	function closeCreate(): void {
@@ -104,14 +103,8 @@
 				aria-label="Nome do Role"
 			/>
 			<div class="color-pick">
-				{#each palette as c (c)}
-					<button
-						class="swatch {color === c ? 'active' : ''}"
-						style:background-color={c}
-						aria-label={`Cor ${c}`}
-						onclick={() => (color = c)}
-					></button>
-				{/each}
+				<input class="color-input" type="color" bind:value={color} aria-label="Cor do Role" />
+				<input class="admin-input color-hex" bind:value={color} maxlength="7" aria-label="Cor hexadecimal" />
 			</div>
 			<button class="admin-btn" onclick={create} disabled={saving || !name.trim()}>
 				{saving ? 'Criando…' : 'Criar'}
@@ -208,10 +201,9 @@
 		flex: 1;
 		min-width: 180px;
 	}
-	.color-pick {
-		display: flex;
-		gap: 6px;
-	}
+	.color-pick { display:flex; gap:6px; align-items:center; }
+	.color-input { width:38px; height:34px; padding:2px; border:0; background:transparent; cursor:pointer; }
+	.color-hex { width:92px !important; min-width:92px !important; }
 	.swatch {
 		width: 22px;
 		height: 22px;
