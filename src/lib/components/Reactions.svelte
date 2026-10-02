@@ -261,7 +261,7 @@
 			onpointerenter={(e) => {
 				if (e.pointerType === 'mouse') {
 					openEmoji = r.unicode ?? r.emoji_id ?? '';
-					void ensureUsers(emoji);
+					void ensureUsers(openEmoji);
 				}
 			}}
 			onpointerleave={(e) => {
