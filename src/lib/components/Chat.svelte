@@ -796,7 +796,8 @@
 		min-width: 0;
 		min-height: 100%;
 		box-sizing: border-box;
-		overflow-x: hidden;
+		overflow-x: clip;
+		overflow-y: visible;
 		display: flex;
 		flex-direction: column;
 		justify-content: flex-end;
