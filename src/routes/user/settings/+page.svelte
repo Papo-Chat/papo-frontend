@@ -9,7 +9,7 @@
 		setNotificationSound,
 		type NotificationSoundInfo
 	} from '$lib/utils/notification-sound';
-	import type { NotificationSettings, UserConfig } from '$lib/types';
+	import type { Channel, NotificationSettings, UserConfig } from '$lib/types';
 	import Icon from '$lib/components/Icon.svelte';
 
 	let config: UserConfig | null = $state(null);
@@ -27,10 +27,14 @@
 	let soundSaving = $state(false);
 	let soundInput: HTMLInputElement | null = null;
 
+	function isNotCategoryChannel(channel: Channel | undefined): channel is Channel {
+		return channel !== undefined && channel.type !== 'category';
+	}
+
 	const channels = $derived(
 		channelsStore.state.ordered
 			.map((id) => channelsStore.state.byId.get(id))
-			.filter((c) => !!c && c.type !== 'category')
+			.filter(isNotCategoryChannel)
 	);
 
 	$effect(() => {
