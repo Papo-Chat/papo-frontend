@@ -455,9 +455,10 @@ export const users = {
 			body: req
 		});
 	},
-	resetPassword(id: string): Promise<{ response: string }> {
+	resetPassword(id: string, password?: string): Promise<{ response: string }> {
 		return request<{ response: string }>(`/users/${encodeURIComponent(id)}/reset`, {
-			method: 'POST'
+			method: 'POST',
+			body: password ? { password } : undefined
 		});
 	},
 	notifications(id: string, q?: { since?: string; last_id?: string }): Promise<NotificationList> {
