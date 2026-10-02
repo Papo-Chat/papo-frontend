@@ -75,3 +75,23 @@ export function allEmojis(): EmojiOption[] {
 	}));
 	return [...unicode, ...custom];
 }
+
+
+export function emojiText(option: EmojiOption): string {
+	return option.kind === 'unicode' ? option.char : `:${option.name}:`;
+}
+
+export function insertEmojiAtSelection(
+	text: string,
+	start: number,
+	end: number,
+	option: EmojiOption
+): { text: string; cursor: number } {
+	const value = emojiText(option);
+	const from = Math.max(0, Math.min(start, text.length));
+	const to = Math.max(from, Math.min(end, text.length));
+	return {
+		text: text.slice(0, from) + value + text.slice(to),
+		cursor: from + value.length
+	};
+}
