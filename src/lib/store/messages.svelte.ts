@@ -682,6 +682,7 @@ export function mergePreview(
 			description: preview.description,
 			provider_name: preview.provider_name,
 			embed_url: preview.embed_url,
+			video_url: preview.video_url ?? null,
 			image_mime_type: preview.image_mime_type,
 			image_size_bytes: preview.image_size_bytes,
 			fetched_at: preview.fetched_at
