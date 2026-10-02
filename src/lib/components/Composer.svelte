@@ -1,3 +1,7 @@
+<script module lang="ts">
+	const channelDrafts = new Map<string, string>();
+</script>
+
 <script lang="ts">
 	import type { MessageWithAttachment } from '$lib/types';
 	import type { EmojiOption } from '$lib/utils/emojis';
@@ -37,6 +41,7 @@
 	const MAX_LINES = 5;
 
 	let text = $state('');
+	let draftChannelId = $state<string | null>(null);
 	let error: string | null = $state(null);
 	let sending = $state(false);
 	let desktopEmojiOpen = $state(false);
@@ -137,6 +142,7 @@
 		}
 
 		text = text.slice(0, mentionStart) + readable + text.slice(cursor);
+		if (channelId) channelDrafts.set(channelId, text);
 		const next = mentionStart + readable.length;
 		closeMentions();
 
@@ -313,6 +319,16 @@
 				: 'hidden';
 	}
 
+	$effect(() => {
+		const nextChannel = channelId ?? null;
+		if (nextChannel === draftChannelId) return;
+		if (draftChannelId) channelDrafts.set(draftChannelId, text);
+		draftChannelId = nextChannel;
+		text = nextChannel ? (channelDrafts.get(nextChannel) ?? '') : '';
+		closeMentions();
+		resetInputHeight();
+	});
+
 	function resetInputHeight(): void {
 		queueMicrotask(() => {
 			if (!inputEl) return;
@@ -349,6 +365,7 @@
 		)
 			.then(() => {
 				text = '';
+				if (channelId) channelDrafts.delete(channelId);
 				files = [];
 				selectedMentions.clear();
 				desktopEmojiOpen = false;
@@ -373,6 +390,7 @@
 		const el = e.target as HTMLTextAreaElement;
 
 		text = el.value;
+		if (channelId) channelDrafts.set(channelId, text);
 
 		resizeInput();
 		refreshMentions();
@@ -433,6 +451,7 @@
 			text.slice(0, start) +
 			char +
 			text.slice(end);
+		if (channelId) channelDrafts.set(channelId, text);
 
 		queueMicrotask(() => {
 			if (!inputEl) return;
