@@ -7,6 +7,7 @@
 	import type { RoleSummary, UserSummary } from '$lib/types';
 	import { mediaUrl } from '$lib/utils/media';
 	import * as usersStore from '$lib/store/users.svelte';
+	import * as emojisStore from '$lib/store/emojis.svelte';
 	import * as dmsStore from '$lib/store/dms.svelte';
 	import * as blocksStore from '$lib/store/blocks.svelte';
 	import * as channelsStore from '$lib/store/channels.svelte';
@@ -46,6 +47,16 @@
 			void usersStore.ensureProfile(id).finally(() => {
 				loadingProfile = null;
 			});
+		}
+	});
+
+	$effect(() => {
+		if (
+			profile?.description?.includes(':') &&
+			!emojisStore.state.fullyLoaded &&
+			!emojisStore.state.loading
+		) {
+			void emojisStore.loadAll().catch(() => {});
 		}
 	});
 
