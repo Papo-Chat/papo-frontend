@@ -163,7 +163,7 @@
 			let positionedAtUnread = false;
 
 			if (readId) {
-				const readIndex = messages.findIndex((m) => m.id === readId);
+				const readIndex = messages.findIndex((m: MessageWithAttachment) => m.id === readId);
 				const unreadInWindow =
 					readIndex >= 0 ? Math.max(0, messages.length - readIndex - 1) : 0;
 				const hasUnreadAfter =
@@ -351,7 +351,7 @@
 			showReturnRecent = false;
 			return;
 		}
-		const index = messages.findIndex((message) => message.id === firstVisibleId);
+		const index = messages.findIndex((message: MessageWithAttachment) => message.id === firstVisibleId);
 		showReturnRecent = index >= 0 && messages.length - index - 1 > 100;
 	}
 
@@ -504,7 +504,7 @@
 		}
 
 		const previousLastId = lastMessageId;
-		const previousIndex = messages.findIndex((m) => m.id === previousLastId);
+		const previousIndex = messages.findIndex((m: MessageWithAttachment) => m.id === previousLastId);
 
 		// A historical checkpoint shifts the 300-message window backwards and
 		// can remove the former newest message. That is not a new message and
