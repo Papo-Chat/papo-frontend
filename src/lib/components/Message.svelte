@@ -376,6 +376,10 @@
 <style>
 	.message {
 		display: flex;
+		width: 100%;
+		max-width: 100%;
+		min-width: 0;
+		box-sizing: border-box;
 		gap: 8px;
 		padding: 4px 8px;
 		border-radius: 10px;
@@ -428,14 +432,17 @@
 
 	.content {
 		flex: 1;
+		width: 100%;
+		max-width: 100%;
 		min-width: 0;
+		overflow-x: hidden;
 	}
 
 	.bubble.giphy-bubble {
 		display: inline-flex;
 		align-self: flex-start;
 		width: fit-content;
-		max-width: calc(100vw - 96px);
+		max-width: 100%;
 		box-sizing: border-box;
 		padding: 8px;
 	}
