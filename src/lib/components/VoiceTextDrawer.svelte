@@ -15,7 +15,6 @@
 		hasMoreNewer = false,
 		hasMoreOlder = false,
 		highlightMessageId = null,
-		joinNotice = null,
 		replyTo = null,
 		disabled = false,
 		onOpenChange,
@@ -35,7 +34,6 @@
 		hasMoreNewer?: boolean;
 		hasMoreOlder?: boolean;
 		highlightMessageId?: string | null;
-		joinNotice?: { id: number; name: string } | null;
 		replyTo?: MessageWithAttachment | null;
 		disabled?: boolean;
 		onOpenChange?: (open: boolean) => void;
@@ -114,7 +112,6 @@
 					{hasMoreNewer}
 					{hasMoreOlder}
 					{highlightMessageId}
-					{joinNotice}
 					{onReply}
 					{onJumpToLatest}
 					{onJumpToLastRead}
