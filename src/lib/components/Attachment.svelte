@@ -218,7 +218,7 @@
 {:else if attachment.mime_type.startsWith('video/') || attachment.mime_type.startsWith('application/octet-stream')}
 	<!-- Vídeo: player inline. Binários genéricos seguem para o download abaixo. -->
 	<div class="attachment-media">
-		<video src={fullUrl} controls class:pinned-attachment={pinned}></video>
+		<video src={fullUrl} controls preload="metadata" class:pinned-attachment={pinned}></video>
 	</div>
 {:else}
 	<!-- Arquivo: chip de download. -->
