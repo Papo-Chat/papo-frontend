@@ -106,7 +106,8 @@ describe('automatic away status', () => {
 		expect(session.state.status).toBe('away');
 
 		window.dispatchEvent(new Event('pointermove'));
-		await vi.runAllTicks();
+		await Promise.resolve();
+		await Promise.resolve();
 
 		expect(mocks.updateStatus).toHaveBeenLastCalledWith('me', { status: null });
 		expect(session.state.status).toBeNull();
