@@ -186,7 +186,7 @@
 	function refreshEmojiAutocomplete(): void {
 		const cursor = inputEl?.selectionStart ?? text.length;
 		const before = text.slice(0, cursor);
-		const match = before.match(/(?:^|\\s):([^\\s:()]*)$/);
+		const match = before.match(/(?:^|\s):([^\s:()]*)$/);
 		if (!match) {
 			closeEmojiAutocomplete();
 			return;
