@@ -64,14 +64,16 @@
 
 	$effect(() => {
 		const id = page.params.dm_id;
-		if (!id || id === lastHistoryDmId) return;
-		lastHistoryDmId = id;
+		if (!id) return;
 
 		untrack(() => {
 			dmsStore.setOpen(id);
 			channelsStore.setOpen(null);
-			void messagesStore.setLatest(id);
-			void messagesStore.loadPinned(id);
+			if (id !== lastHistoryDmId) {
+				lastHistoryDmId = id;
+				void messagesStore.setLatest(id);
+				void messagesStore.loadPinned(id);
+			}
 		});
 
 		return () => {
