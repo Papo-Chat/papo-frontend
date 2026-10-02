@@ -4,7 +4,8 @@
 
 <script lang="ts">
 	import type { MessageWithAttachment } from '$lib/types';
-	import type { EmojiOption } from '$lib/utils/emojis';
+	import { allEmojis, emojiText, type EmojiOption } from '$lib/utils/emojis';
+	import { formatToMime } from '$lib/utils/media';
 	import { send as wsSend } from '../ws';
 	import { throttle } from '$lib/utils/throttle';
 	import * as usersStore from '$lib/store/users.svelte';
@@ -64,6 +65,11 @@
 	let mentionStart = $state(-1);
 	let mentionQuery = $state('');
 	let mentionIndex = $state(0);
+	let emojiAutocompleteOpen = $state(false);
+	let emojiAutocompleteStart = $state(-1);
+	let emojiAutocompleteQuery = $state('');
+	let emojiAutocompleteIndex = $state(0);
+	const emojiCatalog = $derived(allEmojis());
 
 	const myRoleIds = $derived(new Set(sessionState.roles.map((r) => r.id)));
 	const myRoles = $derived(rolesStore.state.list.filter((r) => myRoleIds.has(r.id)));
@@ -154,6 +160,65 @@
 			resizeInput();
 			notifyTyping();
 		});
+	}
+
+
+	function emojiAutocompleteOptions(): EmojiOption[] {
+		if (!emojiAutocompleteOpen) return [];
+		const query = emojiAutocompleteQuery.toLowerCase();
+		return emojiCatalog
+			.filter((option) => {
+				const name = option.kind === 'unicode' ? option.label : option.name;
+				return name.toLowerCase().startsWith(query);
+			})
+			.slice(0, 8);
+	}
+
+	const emojiAutocompleteItems = $derived(emojiAutocompleteOptions());
+
+	function closeEmojiAutocomplete(): void {
+		emojiAutocompleteOpen = false;
+		emojiAutocompleteStart = -1;
+		emojiAutocompleteQuery = '';
+		emojiAutocompleteIndex = 0;
+	}
+
+	function refreshEmojiAutocomplete(): void {
+		const cursor = inputEl?.selectionStart ?? text.length;
+		const before = text.slice(0, cursor);
+		const match = before.match(/(?:^|\\s):([^\\s:()]*)$/);
+		if (!match) {
+			closeEmojiAutocomplete();
+			return;
+		}
+		emojiAutocompleteStart = before.length - match[1].length - 1;
+		emojiAutocompleteQuery = match[1];
+		emojiAutocompleteOpen = true;
+		emojiAutocompleteIndex = 0;
+	}
+
+	function insertEmojiAutocomplete(option: EmojiOption): void {
+		if (emojiAutocompleteStart < 0) return;
+		const cursor = inputEl?.selectionStart ?? text.length;
+		const value = emojiText(option);
+		text = text.slice(0, emojiAutocompleteStart) + value + text.slice(cursor);
+		if (channelId) channelDrafts.set(channelId, text);
+		const next = emojiAutocompleteStart + value.length;
+		closeEmojiAutocomplete();
+
+		queueMicrotask(() => {
+			if (!inputEl) return;
+			inputEl.selectionStart = next;
+			inputEl.selectionEnd = next;
+			inputEl.focus();
+			resizeInput();
+			notifyTyping();
+		});
+	}
+
+	function emojiAutocompleteImage(option: Extract<EmojiOption, { kind: 'custom' }>): string {
+		if (!option.image_blob) return '';
+		return `data:${formatToMime(option.format)};base64,${option.image_blob}`;
 	}
 
 	// ── gravação de áudio (microfone) ──
@@ -326,6 +391,7 @@
 		draftChannelId = nextChannel;
 		text = nextChannel ? (channelDrafts.get(nextChannel) ?? '') : '';
 		closeMentions();
+		closeEmojiAutocomplete();
 		resetInputHeight();
 	});
 
@@ -372,6 +438,7 @@
 				mobileEmojiOpen = false;
 				mobileActionsOpen = false;
 				closeMentions();
+				closeEmojiAutocomplete();
 
 				resetInputHeight();
 			})
@@ -394,11 +461,61 @@
 
 		resizeInput();
 		refreshMentions();
+		refreshEmojiAutocomplete();
 		notifyTyping();
 	}
 
 	function onKeydown(e: KeyboardEvent): void {
-		if(mentionOpen&&mentionItems.length){if(e.key==='ArrowDown'){e.preventDefault();mentionIndex=(mentionIndex+1)%mentionItems.length;return;}if(e.key==='ArrowUp'){e.preventDefault();mentionIndex=(mentionIndex-1+mentionItems.length)%mentionItems.length;return;}if((e.key==='Enter'||e.key==='Tab')&&!e.isComposing){e.preventDefault();insertMention(mentionItems[mentionIndex]??mentionItems[0]);return;}if(e.key==='Escape'){e.preventDefault();closeMentions();return;}}
+		if (mentionOpen && mentionItems.length) {
+			if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				mentionIndex = (mentionIndex + 1) % mentionItems.length;
+				return;
+			}
+			if (e.key === 'ArrowUp') {
+				e.preventDefault();
+				mentionIndex = (mentionIndex - 1 + mentionItems.length) % mentionItems.length;
+				return;
+			}
+			if ((e.key === 'Enter' || e.key === 'Tab') && !e.isComposing) {
+				e.preventDefault();
+				insertMention(mentionItems[mentionIndex] ?? mentionItems[0]);
+				return;
+			}
+			if (e.key === 'Escape') {
+				e.preventDefault();
+				closeMentions();
+				return;
+			}
+		}
+
+		if (emojiAutocompleteOpen && emojiAutocompleteItems.length) {
+			if (e.key === 'ArrowDown') {
+				e.preventDefault();
+				emojiAutocompleteIndex =
+					(emojiAutocompleteIndex + 1) % emojiAutocompleteItems.length;
+				return;
+			}
+			if (e.key === 'ArrowUp') {
+				e.preventDefault();
+				emojiAutocompleteIndex =
+					(emojiAutocompleteIndex - 1 + emojiAutocompleteItems.length) %
+					emojiAutocompleteItems.length;
+				return;
+			}
+			if ((e.key === 'Enter' || e.key === 'Tab') && !e.isComposing) {
+				e.preventDefault();
+				insertEmojiAutocomplete(
+					emojiAutocompleteItems[emojiAutocompleteIndex] ?? emojiAutocompleteItems[0]
+				);
+				return;
+			}
+			if (e.key === 'Escape') {
+				e.preventDefault();
+				closeEmojiAutocomplete();
+				return;
+			}
+		}
 		// Enter envia.
 		// Shift + Enter é deixado para o textarea criar uma nova linha.
 		if (
@@ -963,6 +1080,39 @@
 								<span class="mention-option-copy">
 									<strong>@everyone</strong>
 									<small>Mencionar todos</small>
+								</span>
+							{/if}
+						</button>
+					{/each}
+				</div>
+			{/if}
+			{#if emojiAutocompleteOpen && emojiAutocompleteItems.length}
+				<div class="mention-menu" role="listbox" aria-label="Sugestões de emoji">
+					{#each emojiAutocompleteItems as option, index (option.kind === 'unicode' ? option.char : option.id)}
+						<button
+							type="button"
+							class:active={index === emojiAutocompleteIndex}
+							aria-selected={index === emojiAutocompleteIndex}
+							onmousedown={(e) => e.preventDefault()}
+							onclick={() => insertEmojiAutocomplete(option)}
+						>
+							{#if option.kind === 'unicode'}
+								<span class="emoji-autocomplete-icon">{option.char}</span>
+								<span class="mention-option-copy">
+									<strong>:{option.label}:</strong>
+									<small>Emoji</small>
+								</span>
+							{:else}
+								<span class="emoji-autocomplete-icon custom">
+									{#if option.image_blob}
+										<img src={emojiAutocompleteImage(option)} alt="" />
+									{:else}
+										:
+									{/if}
+								</span>
+								<span class="mention-option-copy">
+									<strong>:{option.name}:</strong>
+									<small>Emoji personalizado</small>
 								</span>
 							{/if}
 						</button>
@@ -1669,6 +1819,23 @@
 	.mention-menu button.active {
 		border-color: rgba(99, 174, 220, 0.2);
 		background: rgba(102, 193, 243, 0.16);
+	}
+
+	.emoji-autocomplete-icon {
+		display: grid;
+		width: 24px;
+		height: 24px;
+		flex: 0 0 24px;
+		place-items: center;
+		font-size: 20px;
+		line-height: 1;
+	}
+
+	.emoji-autocomplete-icon.custom img {
+		display: block;
+		width: 22px;
+		height: 22px;
+		object-fit: contain;
 	}
 
 	.mention-option-copy {
