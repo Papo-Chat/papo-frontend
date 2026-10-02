@@ -286,11 +286,12 @@ describe('multipart upload credentials', () => {
 		vi.stubGlobal('XMLHttpRequest', FakeXMLHttpRequest);
 
 		await messages.send(
-			{ channel_id: 'channel-1', content: 'hello', files: [] },
+			{ channel_id: 'channel-1', content: 'hello', reply_to: null, files: [] },
 			() => {}
 		);
 
 		expect(instance).not.toBeNull();
-		expect(instance?.withCredentials).toBe(true);
+		const request = instance as FakeXMLHttpRequest | null;
+		expect(request?.withCredentials).toBe(true);
 	});
 });
