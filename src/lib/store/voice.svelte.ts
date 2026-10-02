@@ -315,17 +315,6 @@ export function join(channelId: string, userId?: string): void {
 				onRemoteTrack(conn, event);
 			};
 
-			const handlePeerState = () => {
-				if (peer !== conn || !isCurrentJoin(generation, channelId)) return;
-				if (
-					isTerminalPeerConnectionState(conn.connectionState) ||
-					conn.iceConnectionState === 'failed'
-				) {
-					cleanupLocalVoiceSession({ error: 'A conexão com a sala de voz foi perdida.' });
-				}
-			};
-			conn.onconnectionstatechange = handlePeerState;
-			conn.oniceconnectionstatechange = handlePeerState;
 
 			const audioTrack = stream.getAudioTracks().at(0);
 
@@ -522,12 +511,6 @@ export function isJoined(channelId: string): boolean {
 	return state.channelId === channelId;
 }
 
-export function isTerminalPeerConnectionState(
-	connectionState: RTCPeerConnectionState
-): boolean {
-	return connectionState === 'failed' || connectionState === 'closed';
-}
-
 export function shouldShowGlobalSession(pathname: string): boolean {
 	return (
 		state.connected &&
@@ -615,13 +598,7 @@ export function onVoiceJoined(ev: WsVoiceJoined): void {
 
 	state.connected = true;
 	state.channelId = ev.channel_id;
-	const ownState = currentUserId
-		? ev.members.find((member) => member.user_id === currentUserId)
-		: null;
-	if (ownState) {
-		micMuted = ownState.muted;
-		state.localMuted = ownState.muted;
-	}
+
 	state.lastError = null;
 
 	joinResolve?.();
@@ -773,10 +750,6 @@ export function onVoiceStateUpdate(ev: WsVoiceStateUpdate): void {
 		screen_sharing: ev.screen_sharing
 	});
 
-	if (ev.user_id === currentUserId && ev.channel_id === currentChannelId) {
-		micMuted = ev.muted;
-		state.localMuted = ev.muted;
-	}
 
 	if (currentChannelId !== ev.channel_id) {
 		return;
