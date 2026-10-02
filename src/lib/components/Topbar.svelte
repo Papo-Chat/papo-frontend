@@ -34,7 +34,7 @@
 	const me = $derived(meId());
 	const isOwner = $derived(!!me && serverState.server?.owner_id === me);
 	const myRoleIds = $derived(new Set(sessionState.roles.map((r) => r.id)));
-	const myRoles = $derived(rolesStore.uiState.list.filter((r) => myRoleIds.has(r.id)));
+	const myRoles = $derived(rolesStore.state.list.filter((r) => myRoleIds.has(r.id)));
 	const ctx = $derived({ roles: myRoles, isOwner });
 	const canManageChannel = $derived(can('manage_channels', ctx));
 
@@ -159,8 +159,8 @@
 			title="Notificações"
 		>
 			<Icon name="bell" variant="light" />
-			{#if notificationsStore.uiState.unreadCount > 0}
-				<span class="unread-badge">{notificationsStore.uiState.unreadCount}</span>
+			{#if notificationsStore.state.unreadCount > 0}
+				<span class="unread-badge">{notificationsStore.state.unreadCount}</span>
 			{/if}
 		</button>
 		<button
