@@ -4,7 +4,7 @@
     import * as usersStore from '$lib/store/users.svelte';
     import * as emojisStore from '$lib/store/emojis.svelte';
     import { fileToBase64 } from '$lib/utils/upload';
-    import type { EmojiOption } from '$lib/utils/emojis';
+    import { insertEmojiAtSelection, type EmojiOption } from '$lib/utils/emojis';
     import { blobToUrl, mimeToFormat, mediaUrl } from '$lib/utils/media';
     import type { UserProfile, UserSummary } from '$lib/types';
     import Icon from '$lib/components/Icon.svelte';
@@ -103,14 +103,14 @@
     }
 
     function onPickDescriptionEmoji(emoji: EmojiOption): void {
-        const value = emoji.kind === 'unicode' ? emoji.char : `:${emoji.name}:`;
         const start = descriptionEl?.selectionStart ?? description.length;
         const end = descriptionEl?.selectionEnd ?? description.length;
-        description = description.slice(0, start) + value + description.slice(end);
+        const inserted = insertEmojiAtSelection(description, start, end, emoji);
+        description = inserted.text;
 
         queueMicrotask(() => {
             if (!descriptionEl) return;
-            const cursor = start + value.length;
+            const cursor = inserted.cursor;
             descriptionEl.selectionStart = cursor;
             descriptionEl.selectionEnd = cursor;
             descriptionEl.focus();
