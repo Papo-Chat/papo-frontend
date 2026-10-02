@@ -24,6 +24,7 @@ const apiPrefixes = [
 	'/users',
 	'/server',
 	'/channels',
+	'/dms',
 	'/messages',
 	'/roles',
 	'/emojis',

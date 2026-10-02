@@ -9,6 +9,7 @@
 	const nav = [
 		{ to: '/user/settings', label: 'Configurações', icon: 'gear' },
 		{ to: '/user/settings/profile', label: 'Perfil', icon: 'user' },
+		{ to: '/user/settings/blocked', label: 'Bloqueados', icon: 'user-minus' },
 		{ to: '/user/settings/aero', label: 'Aero', icon: 'wind' }
 	];
 </script>

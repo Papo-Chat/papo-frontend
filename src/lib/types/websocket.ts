@@ -1,4 +1,4 @@
-import type { LinkPreviewWithImage, MessageAttachment, VoiceState } from './models';
+import type { DirectConversation, LinkPreviewWithImage, MessageAttachment, VoiceState } from './models';
 
 // ── shared ─────────────────────────────────────────────
 
@@ -103,6 +103,12 @@ export interface WsTyping {
 export interface WsAvatarUpdate {
 	type: 'avatar_update';
 	user_id: string;
+}
+
+// dm_update — private rail state for the authenticated user.
+export interface WsDmUpdate {
+	type: 'dm_update';
+	dm: DirectConversation;
 }
 
 // presence_update
@@ -281,6 +287,7 @@ export type WsOutbound =
 	| WsChannelDelete
 	| WsTyping
 	| WsAvatarUpdate
+	| WsDmUpdate
 	| WsPresenceUpdate
 	| WsPresenceSync
 	| WsHeartbeatAck

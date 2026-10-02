@@ -26,6 +26,8 @@ import type {
 	CreateServerRequest,
 	DropConnectionRequest,
 	DropConnectionResponse,
+	DirectConversation,
+	DirectConversationList,
 	LinkPreviewWithImage,
 	LoginRequest,
 	LoginResponse,
@@ -69,6 +71,29 @@ import type {
 
 // ── ApiError (RFC 7807) ─────────────────────────────────
 
+function apiErrorText(value: unknown): string | null {
+	if (typeof value === 'string') {
+		const text = value.trim();
+		return text || null;
+	}
+	if (value == null || typeof value !== 'object') {
+		return null;
+	}
+
+	const record = value as Record<string, unknown>;
+	for (const key of ['detail', 'title', 'message', 'error']) {
+		const text = apiErrorText(record[key]);
+		if (text) return text;
+	}
+
+	try {
+		const json = JSON.stringify(value);
+		return json && json !== '{}' ? json : null;
+	} catch {
+		return null;
+	}
+}
+
 export class ApiError extends Error {
 	type: string;
 	title: string;
@@ -77,16 +102,16 @@ export class ApiError extends Error {
 	instance: string | null;
 	requestId: string | null;
 
-	constructor(data: unknown, requestId: string | null) {
+	constructor(data: unknown, requestId: string | null, httpStatus = 0) {
 		const d =
 			typeof data === 'string' ? { detail: data } : ((data ?? {}) as Record<string, unknown>);
-		const msg = String(d.detail ?? d.title ?? String(d));
+		const msg = apiErrorText(d) ?? 'Erro na requisição';
 		super(msg);
 		this.name = 'ApiError';
 		this.type = typeof d.type === 'string' ? d.type : 'about:blank';
 		this.title = typeof d.title === 'string' ? d.title : 'Error';
-		this.status = typeof d.status === 'number' ? d.status : 0;
-		this.detail = typeof d.detail === 'string' ? d.detail : String(d.detail ?? '');
+		this.status = typeof d.status === 'number' ? d.status : httpStatus;
+		this.detail = apiErrorText(d.detail) ?? apiErrorText(d.message) ?? msg;
 		this.instance = d.instance == null ? null : String(d.instance);
 		this.requestId = requestId;
 	}
@@ -213,7 +238,7 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 					if (xhr.status === 401 && authFailure !== 'ignore' && unauthorizedHook) {
 						unauthorizedHook();
 					}
-					reject(new ApiError(data, requestId));
+					reject(new ApiError(data, requestId, xhr.status));
 					return;
 				}
 				resolve(JSON.parse(xhr.responseText) as T);
@@ -259,7 +284,7 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 		if (res.status === 401 && authFailure !== 'ignore' && unauthorizedHook) {
 			unauthorizedHook();
 		}
-		throw new ApiError(data, requestId);
+		throw new ApiError(data, requestId, res.status);
 	}
 
 	if (raw) {
@@ -468,6 +493,35 @@ export const users = {
 			`/users/${encodeURIComponent(userId)}/roles/${encodeURIComponent(roleId)}`,
 			{ method: 'DELETE' }
 		);
+	},
+	blocks(): Promise<{ users: UserSummary[] }> {
+		return request<{ users: UserSummary[] }>('/users/blocks');
+	},
+	block(userId: string): Promise<void> {
+		return request<void>(`/users/${encodeURIComponent(userId)}/block`, { method: 'POST' });
+	},
+	unblock(userId: string): Promise<void> {
+		return request<void>(`/users/${encodeURIComponent(userId)}/block`, { method: 'DELETE' });
+	}
+};
+
+// ── direct messages ────────────────────────────────────
+
+export const dms = {
+	list(): Promise<DirectConversationList> {
+		return request<DirectConversationList>('/dms');
+	},
+	open(userId: string): Promise<DirectConversation> {
+		return request<DirectConversation>('/dms', {
+			method: 'POST',
+			body: { user_id: userId }
+		});
+	},
+	get(id: string): Promise<DirectConversation> {
+		return request<DirectConversation>(`/dms/${encodeURIComponent(id)}`);
+	},
+	hide(id: string): Promise<void> {
+		return request<void>(`/dms/${encodeURIComponent(id)}`, { method: 'DELETE' });
 	}
 };
 
@@ -757,6 +811,7 @@ export const api = {
 	health,
 	auth,
 	users,
+	dms,
 	server,
 	channels,
 	messages,

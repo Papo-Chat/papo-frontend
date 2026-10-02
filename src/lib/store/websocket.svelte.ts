@@ -17,6 +17,7 @@ import * as usersStore from '../store/users.svelte';
 import * as rolesStore from '../store/roles.svelte';
 import * as channelsStore from '../store/channels.svelte';
 import * as messagesStore from '../store/messages.svelte';
+import * as dmsStore from '../store/dms.svelte';
 import * as notificationsStore from '../store/notifications.svelte';
 import * as emojisStore from '../store/emojis.svelte';
 import * as voiceStore from '../store/voice.svelte';
@@ -90,9 +91,14 @@ function resync(): void {
 		return;
 	}
 	channelsStore.load();
+	void dmsStore.load().catch(() => {});
 	const open = channelsStore.state.openChannelId;
 	if (open) {
 		messagesStore.load(open);
+	}
+	const openDm = dmsStore.state.openDmId;
+	if (openDm) {
+		messagesStore.load(openDm);
 	}
 	notificationsStore.load();
 	rolesStore.load();
@@ -194,6 +200,9 @@ export function dispatchEvent(event: WsOutbound): void {
 		case 'message':
 			messagesStore.applyEvent(messagesStore.state, event);
 			channelsStore.handleMessage(event);
+			break;
+		case 'dm_update':
+			dmsStore.handleUpdate(event);
 			break;
 		case 'message_edit':
 		case 'message_pin':

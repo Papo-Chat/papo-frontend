@@ -4,6 +4,7 @@
 	import { meId, state as sessionState } from '$lib/store/session.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
 	import * as channelsStore from '$lib/store/channels.svelte';
+	import * as dmsStore from '$lib/store/dms.svelte';
 	import * as messagesStore from '$lib/store/messages.svelte';
 	import * as notificationsStore from '$lib/store/notifications.svelte';
 	import * as rolesStore from '$lib/store/roles.svelte';
@@ -30,6 +31,7 @@
 	const isGiphyMessage = $derived(!!message.content && isGiphyMarker(message.content) !== null);
 	const author = $derived(usersStore.state.byId.get(message.author_id ?? ''));
 	const channel = $derived(channelsStore.state.byId.get(message.channel_id));
+	const isDirectMessage = $derived(!!dmsStore.state.byId.get(message.channel_id));
 	const isOwner = $derived(!!me && serverState.server?.owner_id === me);
   	const isMobile = () =>
     	window.matchMedia('(pointer: coarse)').matches;
@@ -49,8 +51,8 @@
 	const isAuthor = $derived(message.author_id === me);
 	const canEdit = $derived(isAuthor);
 	const canDelete = $derived(isAuthor || (access?.del ?? false));
-	const canPin = $derived(can('pin_message', ctx));
-	const canReply = $derived(access?.send ?? false);
+	const canPin = $derived(isDirectMessage || can('pin_message', ctx));
+	const canReply = $derived(isDirectMessage || (access?.send ?? false));
 
 	// ── fixado (pinned list do canal) ────────────────────────────────
 

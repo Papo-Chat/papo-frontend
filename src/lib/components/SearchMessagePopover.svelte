@@ -17,12 +17,16 @@
         open = $bindable(false),
         searchQuery = $bindable(''),
         onOpenChange,
-        onResultClick
+        onResultClick,
+        scopeChannelId = null,
+        scopeLabel = null
     } = $props<{
         open?: boolean;
         searchQuery?: string;
         onOpenChange?: (open: boolean) => void;
         onResultClick?: (result: SearchResult) => void;
+        scopeChannelId?: string | null;
+        scopeLabel?: string | null;
     }>();
 
     let el: HTMLElement | null = null;
@@ -92,6 +96,7 @@
             filters.dateEnd,
             filters.order,
             filters.containsAttachment,
+            scopeChannelId ?? '',
             filters.channelId,
             filters.mention,
             filters.hasLink ? 'link' : ''
@@ -115,7 +120,8 @@
         if (filters.dateEnd) {
             req.date_end = filters.dateEnd;
         }
-        if (filters.channelId) req.channel_id = filters.channelId;
+        if (scopeChannelId) req.channel_id = scopeChannelId;
+        else if (filters.channelId) req.channel_id = filters.channelId;
         if (filters.mention) req.mention = filters.mention;
         if (filters.hasLink) req.has = 'link';
         if (filters.order !== 'desc') {
@@ -298,7 +304,7 @@
                 <Icon name="magnifying-glass" variant="light" />
                 <div class="search-title-copy">
                     <strong>Pesquisar</strong>
-                    <span>Mensagens em todos os canais</span>
+                    <span>{scopeLabel ?? 'Mensagens em todos os canais'}</span>
                 </div>
             </div>
 
@@ -371,17 +377,19 @@
                         />
                     </label>
 
-                    <label class="search-control search-control-wide">
-                        <span>Canal</span>
-                        <select class="admin-select" bind:value={filters.channelId} aria-label="Canal">
-                            <option class="admin-option" value="">Todos os canais</option>
-                            {#each channelOptions as channel (channel?.id)}
-                                {#if channel}
-                                    <option class="admin-option" value={channel.id}>#{channel.name}</option>
-                                {/if}
-                            {/each}
-                        </select>
-                    </label>
+                    {#if !scopeChannelId}
+                        <label class="search-control search-control-wide">
+                            <span>Canal</span>
+                            <select class="admin-select" bind:value={filters.channelId} aria-label="Canal">
+                                <option class="admin-option" value="">Todos os canais</option>
+                                {#each channelOptions as channel (channel?.id)}
+                                    {#if channel}
+                                        <option class="admin-option" value={channel.id}>#{channel.name}</option>
+                                    {/if}
+                                {/each}
+                            </select>
+                        </label>
+                    {/if}
 
                     <label class="search-control search-control-wide">
                         <span>Menciona</span>
@@ -471,7 +479,7 @@
                                     <div class="search-result-main">
                                         <div class="meta search-result-meta">
                                             <span class="name">{a?.nickname || a?.username || m.author_username}</span>
-                                            {#if m.channel_name}
+                                            {#if m.channel_name && !scopeChannelId}
                                                 <span class="channel-name">{m.channel_name}</span>
                                             {/if}
                                             <span class="time">{formatTime(m.created_at)}</span>
