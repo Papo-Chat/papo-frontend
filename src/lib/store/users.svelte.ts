@@ -66,6 +66,7 @@ export const state = $state({
         cursorStart: null as KeysetCursor | null,
         cursorEnd: null as KeysetCursor | null,
         loading: false,
+        loaded: false,
         // Guards against concurrent list navigation.
         loadGeneration: 0
     }
@@ -202,6 +203,22 @@ function publishUserWindow(items: UserSummary[], hasPrev: boolean, hasNext: bool
     evictSummaries();
 }
 
+function appendJoinedUserToVisibleWindow(user: UserSummary): void {
+    if (!state.list.loaded || state.list.hasMoreNext) return;
+    if (state.list.items.some((item) => item.id === user.id)) return;
+
+    let items = [...state.list.items, user].sort((a, b) => {
+        const created = a.created_at.localeCompare(b.created_at);
+        return created !== 0 ? created : a.id.localeCompare(b.id);
+    });
+    let hasPrev = state.list.hasMorePrevious;
+    if (items.length > USER_LIST_MAX) {
+        items = items.slice(items.length - USER_LIST_MAX);
+        hasPrev = true;
+    }
+    publishUserWindow(items, hasPrev, false);
+}
+
 function ingestSummaries(summaries: UserSummary[]): void {
     syncSummaries(summaries);
 }
@@ -286,6 +303,7 @@ export async function loadList(): Promise<void> {
         if (state.list.loadGeneration !== gen) return;
         ingestSummaries(res.users);
         publishUserWindow(res.users, false, res.has_more);
+        state.list.loaded = true;
     } finally {
         if (state.list.loadGeneration === gen) state.list.loading = false;
     }
@@ -686,7 +704,14 @@ export function setTyping(channelId: string, userId: string, typing: boolean): v
 
 export function handleUserJoin(userId: string): void {
     state.joinNotice = { id: (joinNoticeSerial += 1), userId };
-    void ensureSummary(userId).catch(() => {});
+
+    void Promise.allSettled([ensureSummary(userId), ensureProfile(userId)]).then(([summaryResult]) => {
+        const summary =
+            summaryResult.status === 'fulfilled'
+                ? summaryResult.value
+                : state.byId.get(userId) ?? null;
+        if (summary) appendJoinedUserToVisibleWindow(summary);
+    });
 }
 // presence_sync is the authoritative snapshot on (re)connect: replace the
 // whole presence map (users absent from the snapshot are no longer online).
@@ -805,6 +830,7 @@ export function reset(): void {
         cursorStart: null,
         cursorEnd: null,
         loading: false,
+        loaded: false,
         loadGeneration: nextGeneration
     };
 }
