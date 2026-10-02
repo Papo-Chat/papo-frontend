@@ -260,8 +260,9 @@
 			class="reaction-group"
 			onpointerenter={(e) => {
 				if (e.pointerType === 'mouse') {
-					openEmoji = r.unicode ?? r.emoji_id ?? '';
-					void ensureUsers(openEmoji);
+					const emoji = r.unicode ?? r.emoji_id ?? '';
+					openEmoji = emoji;
+					void ensureUsers(emoji);
 				}
 			}}
 			onpointerleave={(e) => {
