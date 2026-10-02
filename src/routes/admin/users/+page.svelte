@@ -23,9 +23,10 @@
 	let busyUsers = $state(new Set<string>());
 	let feedbackTimer: ReturnType<typeof setTimeout> | null = null;
 	let resetTarget: UserSummary | null = $state(null);
-	let resetPassword = $state('');
-	let resetConfirm = $state('');
+	let resetLink = $state('');
+	let resetExpiresAt = $state('');
 	let resetBusy = $state(false);
+	let resetCopied = $state(false);
 
 	function setFeedback(success: string, error: string | null = null): void {
 		actionSuccess = error ? '' : success;
@@ -294,20 +295,30 @@
 			setUserBusy(userId, false);
 		}
 	}
-	async function submitPasswordReset(): Promise<void> {
-		if (!resetTarget || resetBusy || resetPassword !== resetConfirm) return;
+	async function createPasswordResetLink(user: UserSummary): Promise<void> {
+		if (resetBusy) return;
+		resetTarget = user;
+		resetLink = '';
+		resetExpiresAt = '';
+		resetCopied = false;
 		resetBusy = true;
 		try {
-			await api.users.resetPassword(resetTarget.id, resetPassword);
-			setFeedback(`Senha de ${resetTarget.nickname || resetTarget.username} redefinida.`);
-			resetTarget = null;
-			resetPassword = '';
-			resetConfirm = '';
+			const result = await api.users.resetPassword(user.id);
+			resetLink = result.reset_url;
+			resetExpiresAt = result.expires_at;
 		} catch (err) {
-			setFeedback('', err instanceof Error ? err.message : 'Erro ao redefinir senha.');
+			setFeedback('', err instanceof Error ? err.message : 'Erro ao gerar link de reset.');
+			resetTarget = null;
 		} finally {
 			resetBusy = false;
 		}
+	}
+
+	async function copyResetLink(): Promise<void> {
+		if (!resetLink) return;
+		await navigator.clipboard.writeText(resetLink);
+		resetCopied = true;
+		setTimeout(() => (resetCopied = false), 1600);
 	}
 
 	function statusDotClass(id: string): string {
@@ -405,16 +416,12 @@
 								{/each}
 							</div>
 
-{#if isOwner && u.id !== me}
+{#if canManageServer && u.id !== me}
 							<button
 								class="admin-btn ghost small"
 								type="button"
-								disabled={busyUsers.has(u.id)}
-								onclick={() => {
-									resetTarget = u;
-									resetPassword = '';
-									resetConfirm = '';
-								}}
+								disabled={busyUsers.has(u.id) || resetBusy}
+								onclick={() => void createPasswordResetLink(u)}
 							>
 								<Icon name="key" variant="light" size={14} />
 								Resetar senha
@@ -444,16 +451,25 @@
 
 {#if resetTarget}
 	<div class="reset-backdrop" role="presentation">
-		<div class="reset-modal" role="dialog" aria-modal="true" aria-label="Resetar senha">
+		<div class="reset-modal" role="dialog" aria-modal="true" aria-label="Link para resetar senha">
 			<h3>Resetar senha de {resetTarget.nickname || resetTarget.username}</h3>
-			<input class="admin-input" type="password" placeholder="Nova senha" bind:value={resetPassword} autocomplete="new-password" />
-			<input class="admin-input" type="password" placeholder="Confirmar senha" bind:value={resetConfirm} autocomplete="new-password" />
+			<p class="reset-help">Envie este link ao usuário. Ele funciona uma vez e expira em 24 horas.</p>
+			{#if resetBusy}
+				<div class="loading-hint">Gerando link…</div>
+			{:else if resetLink}
+				<div class="reset-link-row">
+					<input class="admin-input reset-link" readonly value={resetLink} aria-label="Link de troca de senha" />
+					<button class="admin-btn" type="button" onclick={copyResetLink}>
+						<Icon name="copy" variant="light" size={14} />
+						{resetCopied ? 'Copiado' : 'Copiar'}
+					</button>
+				</div>
+				{#if resetExpiresAt}
+					<span class="reset-expiry">Expira em {new Date(resetExpiresAt).toLocaleString()}</span>
+				{/if}
+			{/if}
 			<div class="reset-actions">
-				<button class="admin-btn ghost" type="button" onclick={() => (resetTarget = null)} disabled={resetBusy}>Cancelar</button>
-				<button class="admin-btn" type="button" onclick={submitPasswordReset}
-					disabled={resetBusy || resetPassword.length < 8 || resetPassword !== resetConfirm}>
-					{resetBusy ? 'Resetando…' : 'Resetar senha'}
-				</button>
+				<button class="admin-btn ghost" type="button" onclick={() => (resetTarget = null)} disabled={resetBusy}>Fechar</button>
 			</div>
 		</div>
 	</div>
@@ -463,6 +479,10 @@
 	.reset-backdrop { position:fixed; inset:0; z-index:2500; display:grid; place-items:center; padding:20px; background:rgba(0,0,0,.55); }
 	.reset-modal { width:min(440px,100%); display:grid; gap:12px; padding:18px; border-radius:14px; background:var(--surface,#fff); box-shadow:0 20px 60px rgba(0,0,0,.3); }
 	.reset-modal h3 { margin:0; font-size:16px; }
+	.reset-help { margin:0; font-size:13px; color:var(--muted); line-height:1.45; }
+	.reset-link-row { display:flex; gap:8px; align-items:center; }
+	.reset-link { min-width:0; flex:1; font-family:ui-monospace, monospace; font-size:11px; }
+	.reset-expiry { font-size:11px; color:var(--muted-soft); }
 	.reset-actions { display:flex; justify-content:flex-end; gap:8px; }
 
 	.users-page {
