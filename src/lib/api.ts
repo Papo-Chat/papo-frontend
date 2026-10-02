@@ -462,6 +462,11 @@ export const users = {
 			body: req
 		});
 	},
+	preparePasswordChange(id: string): Promise<{ response: string }> {
+		return request<{ response: string }>(`/users/${encodeURIComponent(id)}/reset`, {
+			method: 'POST'
+		});
+	},
 	resetPassword(id: string): Promise<{ reset_url: string; expires_at: string }> {
 		return request<{ reset_url: string; expires_at: string }>(`/users/${encodeURIComponent(id)}/reset`, {
 			method: 'POST'
