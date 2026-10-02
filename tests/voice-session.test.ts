@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as voiceStore from '../src/lib/store/voice.svelte';
 
@@ -58,3 +59,27 @@ describe('persistent global voice session', () => {
 		expect(voiceStore.shouldShowGlobalSession('/dm/dm-1')).toBe(false);
 	});
 });
+
+describe('voice ICE signaling', () => {
+	const source = readFileSync(
+		new URL('../src/lib/store/voice.svelte.ts', import.meta.url),
+		'utf8'
+	);
+
+	it('uses trickle ICE instead of waiting for gathering to complete', () => {
+		expect(source).toContain('conn.onicecandidate =');
+		expect(source).toContain("type: 'voice_ice_candidate'");
+		expect(source).not.toContain('waitForIceGatheringComplete');
+	});
+
+	it('treats ICE candidate errors as non-fatal', () => {
+		const handler = source.match(
+			/conn\.onicecandidateerror = \(event\) => \{([\s\S]*?)\n\t\};/
+		)?.[1];
+
+		expect(handler).toContain('console.warn');
+		expect(handler).not.toContain('leave(');
+		expect(handler).not.toContain('dropLocalVoiceSession');
+	});
+});
+
