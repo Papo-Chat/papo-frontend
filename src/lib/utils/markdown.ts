@@ -13,6 +13,7 @@ import type { Emoji } from '$lib/types';
 import type { Tokens } from 'marked';
 
 type EmojiNameMap = Map<string, Emoji>;
+const BLANK_LINE_MARKER = 'PAPOMESSAGEBLANKLINETOKEN';
 export interface MessageMarkdownOptions { mentions?: ReadonlyMap<string, string>; highlightEveryone?: boolean; }
 type TextToken = { kind: 'text'; value: string };
 type EmojiToken = { kind: 'emoji'; name: string; emoji: Emoji };
@@ -100,6 +101,22 @@ function normalizeFencedCodeBlocks(content: string): string {
 	});
 }
 
+function preserveBlankLines(content: string): string {
+	return content
+		.split(/(```[\s\S]*?```)/g)
+		.map((segment, index) => {
+			if (index % 2 === 1) return segment;
+			return segment.replace(/\n{2,}/g, (run) => {
+				const markers = Array.from(
+					{ length: run.length - 1 },
+					() => BLANK_LINE_MARKER
+				).join('\n\n');
+				return `\n\n${markers}\n\n`;
+			});
+		})
+		.join('');
+}
+
 // Safe navigation schemes for message links (same reasoning as
 // markdown renderers that block javascript:/vbscript:).
 const SAFE_LINK_SCHEMES = ['http', 'https', 'mailto'];
@@ -127,6 +144,12 @@ function makeRenderer(
 	const r = new marked.Renderer({});
 	// No support for raw HTML: discard all block and inline tags.
 	r.html = () => '';
+	r.paragraph = function (token: Tokens.Paragraph): string {
+		if (token.text === BLANK_LINE_MARKER) {
+			return '<div class="message-blank-line" aria-hidden="true"></div>\n';
+		}
+		return `<p>${this.parser.parseInline(token.tokens)}</p>\n`;
+	};
 	// Block dangerous link schemes (javascript:, vbscript:, data:, file:…).
 	// The rendered HTML is injected via innerHTML, so a <a href> with a
 	// non-HTTP scheme would execute code in the page on click.
@@ -199,10 +222,11 @@ export function renderMessageMarkdown(
 		return '';
 	}
 	const normalizedContent = normalizeFencedCodeBlocks(content);
+	const contentWithBlankLines = preserveBlankLines(normalizedContent);
 	// hasText is calculated on the normalized content so fenced code follows
 	// the same parsing path regardless of how tightly the user typed the fence.
 	const hasText = tokenize(normalizedContent, nameMap).hasText;
-	return marked.parse(normalizedContent, {
+	return marked.parse(contentWithBlankLines, {
 		async: false,
 		gfm: true,
 		breaks: true,
