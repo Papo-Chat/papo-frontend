@@ -74,8 +74,6 @@ export const state = $state({
 	activeSpeaker: null as string | null,
 	// Whether we are currently connected to a voice room.
 	connected: false,
-	// Estado local da sessão, independente do componente/rota atualmente montado.
-	localMuted: true,
 	// Canal do room atual, reativo: o `currentChannelId` (módulo, não
 	// rastreado) é usado só internamente; o UI precisa da versão reativa.
 	channelId: null as string | null,
@@ -215,8 +213,6 @@ export function join(channelId: string, userId?: string): void {
 
 	currentChannelId = channelId;
 	currentUserId = userId ?? null;
-	micMuted = true;
-	state.localMuted = true;
 	mediaSubscriptionsReady = false;
 	state.lastError = null;
 
@@ -314,7 +310,6 @@ export function join(channelId: string, userId?: string): void {
 
 				onRemoteTrack(conn, event);
 			};
-
 
 			const audioTrack = stream.getAudioTracks().at(0);
 
@@ -440,53 +435,16 @@ function sendOffer(): Promise<void> {
 	return run;
 }
 
-function cleanupLocalVoiceSession(options: {
-	clearChannelMembers?: boolean;
-	error?: string | null;
-} = {}): void {
-	voiceGeneration += 1;
-	cancelJoinWait();
-	serverJoinSent = false;
-
-	cleanupAudioMixer();
-	const oldPeer = peer;
-	peer = null;
-	oldPeer?.close();
-
-	if (mediaStream) {
-		mediaStream.getTracks().forEach((track) => track.stop());
-		mediaStream = null;
-	}
-
-	signalQueue = Promise.resolve();
-	offerChain = Promise.resolve();
-	mediaActionChain = Promise.resolve();
-	mediaSubscriptionsReady = false;
-	clearPendingAnswer(new Error(options.error ?? 'voice ended'));
-	cleanupVideoMedia();
-
-	state.peer = null;
-	state.members = [];
-	state.activeSpeakers = [];
-	state.activeSpeaker = null;
-	state.connected = false;
-	state.channelId = null;
-	state.localMuted = true;
-	if (options.clearChannelMembers) state.channelMembers.clear();
-
-	currentChannelId = null;
-	currentUserId = null;
-	state.lastError = options.error ?? null;
-
-	cleanupRemoteAudio();
-}
-
 export function leave(channelId: string | null): void {
 	if (channelId !== null && currentChannelId !== null && channelId !== currentChannelId) {
 		return;
 	}
 
+	voiceGeneration += 1;
+	cancelJoinWait();
+
 	const cid = currentChannelId;
+
 	if (cid && serverJoinSent) {
 		wsSend({
 			type: 'voice_leave',
@@ -494,7 +452,41 @@ export function leave(channelId: string | null): void {
 		} as WsInbound);
 	}
 
-	cleanupLocalVoiceSession();
+	serverJoinSent = false;
+
+	cleanupAudioMixer();
+	peer?.close();
+
+	if (mediaStream) {
+		mediaStream.getTracks().forEach((track) => track.stop());
+
+		mediaStream = null;
+	}
+
+	signalQueue = Promise.resolve();
+	offerChain = Promise.resolve();
+	mediaActionChain = Promise.resolve();
+	mediaSubscriptionsReady = false;
+	clearPendingAnswer(new Error('voice left'));
+	cleanupVideoMedia();
+
+	peer = null;
+	state.peer = null;
+	state.members = [];
+	state.activeSpeakers = [];
+	state.activeSpeaker = null;
+	state.connected = false;
+	state.channelId = null;
+
+	// Não limpar channelMembers aqui.
+	// O roster representa o estado global dos canais de voz,
+	// não apenas o canal em que este usuário está conectado.
+
+	currentChannelId = null;
+	currentUserId = null;
+	state.lastError = null;
+
+	cleanupRemoteAudio();
 }
 
 // Evict the room when the channel is deleted.
@@ -550,6 +542,42 @@ function removeUserFromRoster(channelId: string, userId: string): void {
 	state.channelMembers.set(channelId, next);
 }
 
+
+function dropLocalVoiceSession(error: string): void {
+	voiceGeneration += 1;
+	cancelJoinWait();
+	serverJoinSent = false;
+
+	cleanupAudioMixer();
+	peer?.close();
+
+	if (mediaStream) {
+		mediaStream.getTracks().forEach((track) => track.stop());
+		mediaStream = null;
+	}
+
+	signalQueue = Promise.resolve();
+	offerChain = Promise.resolve();
+	mediaActionChain = Promise.resolve();
+	mediaSubscriptionsReady = false;
+	clearPendingAnswer(new Error(error));
+	cleanupVideoMedia();
+
+	peer = null;
+	state.peer = null;
+	state.members = [];
+	state.activeSpeakers = [];
+	state.activeSpeaker = null;
+	state.connected = false;
+	state.channelId = null;
+
+	currentChannelId = null;
+	currentUserId = null;
+	state.lastError = error;
+
+	cleanupRemoteAudio();
+}
+
 export function onPresenceSync(members: PresenceMember[]): void {
 	const next = new SvelteMap<string, VoiceState[]>();
 
@@ -577,7 +605,40 @@ export function onPresenceSync(members: PresenceMember[]): void {
 // Called by the websocket store when the WS closes (P0.1). The call belongs
 // to the old connection; tear down the peer and local state. No auto-rejoin.
 export function onSocketClose(): void {
-	cleanupLocalVoiceSession({ clearChannelMembers: true });
+	voiceGeneration += 1;
+	cancelJoinWait();
+
+	serverJoinSent = false;
+
+	cleanupAudioMixer();
+	peer?.close();
+
+	if (mediaStream) {
+		mediaStream.getTracks().forEach((track) => track.stop());
+
+		mediaStream = null;
+	}
+
+	signalQueue = Promise.resolve();
+	offerChain = Promise.resolve();
+	mediaActionChain = Promise.resolve();
+	mediaSubscriptionsReady = false;
+	clearPendingAnswer(new Error('socket closed'));
+	cleanupVideoMedia();
+
+	peer = null;
+	state.peer = null;
+	state.members = [];
+	state.activeSpeakers = [];
+	state.activeSpeaker = null;
+	state.connected = false;
+	state.channelId = null;
+	state.channelMembers.clear();
+
+	currentChannelId = null;
+	currentUserId = null;
+
+	cleanupRemoteAudio();
 }
 
 // ── signalling handlers (called by the websocket store) ───
@@ -598,7 +659,6 @@ export function onVoiceJoined(ev: WsVoiceJoined): void {
 
 	state.connected = true;
 	state.channelId = ev.channel_id;
-
 	state.lastError = null;
 
 	joinResolve?.();
@@ -750,7 +810,6 @@ export function onVoiceStateUpdate(ev: WsVoiceStateUpdate): void {
 		screen_sharing: ev.screen_sharing
 	});
 
-
 	if (currentChannelId !== ev.channel_id) {
 		return;
 	}
@@ -837,7 +896,7 @@ export function onVoiceLeave(ev: WsVoiceLeave): void {
 		return;
 	}
 	if (isLocalVoiceLeave(ev, currentChannelId, currentUserId)) {
-		cleanupLocalVoiceSession({ error: 'Você não está mais conectado à sala de voz.' });
+		dropLocalVoiceSession('Você não está mais conectado à sala de voz.');
 		return;
 	}
 	state.members = state.members.filter((m) => m.user_id !== ev.user_id);
@@ -859,25 +918,6 @@ export function mute(muted: boolean): void {
 	}
 
 	micMuted = muted;
-	state.localMuted = muted;
-
-	if (cid && currentUserId) {
-		state.members = state.members.map((member) =>
-			member.user_id === currentUserId ? { ...member, muted } : member
-		);
-		const roster = state.channelMembers.get(cid);
-		if (roster) {
-			state.channelMembers.set(
-				cid,
-				roster.map((member) =>
-					member.user_id === currentUserId ? { ...member, muted } : member
-				)
-			);
-		}
-		if (muted && state.activeSpeaker === currentUserId) {
-			state.activeSpeaker = null;
-		}
-	}
 
 	if (micGain) {
 		// Mute afeta apenas o microfone. Áudio capturado junto com a tela
