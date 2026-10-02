@@ -4,6 +4,7 @@
 	import * as voiceStore from '$lib/store/voice.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
 	import type { Channel, RoleSummary } from '$lib/types';
+	import { isVoiceMemberSpeaking } from '$lib/utils/voice-ui';
 	import Avatar from './Avatar.svelte';
 	import Icon from './Icon.svelte';
 
@@ -16,8 +17,8 @@
 		voiceStore.state.channelMembers.get(channel.id) ?? []
 	);
 
-	const activeSpeaker = $derived(
-		joined ? voiceStore.state.activeSpeaker : null
+	const activeSpeakers = $derived(
+		joined ? voiceStore.state.activeSpeakers : []
 	);
 
 	const remoteMedia = $derived(
@@ -282,7 +283,7 @@
 				{#each members as m (m.user_id)}
 					{@const u = displayFor(m.user_id)}
 					{@const isSpeaking =
-						m.user_id === activeSpeaker && !m.muted}
+						isVoiceMemberSpeaking(m.user_id, m.muted, activeSpeakers)}
 					{@const roleColor =
 						u?.roles.find(
 							(r: RoleSummary) => r.color
