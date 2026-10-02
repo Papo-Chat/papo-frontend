@@ -27,6 +27,19 @@ describe('initial message history recovery', () => {
 		});
 	});
 
+
+	it('refreshes the currently open DM history', async () => {
+		channelsStore.state.openChannelId = null;
+		dmsStore.state.openDmId = 'dm1';
+		const setLatest = vi.spyOn(messagesStore, 'setLatest').mockResolvedValue(undefined);
+
+		websocketStore.ensureOpenMessageHistory();
+
+		await vi.waitFor(() => {
+			expect(setLatest).toHaveBeenCalledWith('dm1');
+		});
+	});
+
 	it('retries open history when presence_sync confirms the fresh websocket session', async () => {
 		const setLatest = vi.spyOn(messagesStore, 'setLatest').mockResolvedValue(undefined);
 		const event = {
