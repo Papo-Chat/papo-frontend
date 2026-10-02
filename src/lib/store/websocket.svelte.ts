@@ -43,6 +43,8 @@ let shouldReconnect = false;
 // True after the first successful onopen; reset only on a manual close.
 // A reconnect (drop → reconnect) therefore sees it still set and resyncs.
 let hasConnected = false;
+let lastPresenceActivitySentAt = 0;
+const PRESENCE_ACTIVITY_THROTTLE_MS = 15_000;
 
 // Minimum order (P0.2): PUBLIC_WS_URL if defined, else same-origin /ws.
 function wsUrl(): string {
@@ -108,6 +110,15 @@ function resync(): void {
 	void emojisStore.loadAll().catch(() => {});
 }
 
+export function reportPresenceActivity(force = false): void {
+	if (!state.connected) return;
+	const now = Date.now();
+	if (!force && now-lastPresenceActivitySentAt < PRESENCE_ACTIVITY_THROTTLE_MS) return;
+	if (wsSend({ type: 'presence_activity' } as WsInbound)) {
+		lastPresenceActivitySentAt = now;
+	}
+}
+
 export function connect(): void {
 	// Idempotent: already OPEN or CONNECTING → no-op.
 	if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
@@ -129,7 +140,9 @@ export function connect(): void {
 		state.connected = true;
 		state.reconnecting = false;
 		state.reconnectAttempts = 0;
+		lastPresenceActivitySentAt = 0;
 		startPing(socket, gen);
+		reportPresenceActivity(true);
 		if (wasConnected) {
 			resync();
 		}
@@ -189,6 +202,7 @@ export function disconnect(): void {
 	setInstance(null);
 	// Reset so a fresh login's first onopen does not resync.
 	hasConnected = false;
+	lastPresenceActivitySentAt = 0;
 	state.connected = false;
 	voiceStore.onSocketClose();
 	old?.close();
