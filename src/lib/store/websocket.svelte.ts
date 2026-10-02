@@ -91,20 +91,12 @@ function startPing(socket: WebSocket, gen: number): void {
 export function ensureOpenMessageHistory(): void {
 	const openChannel = channelsStore.state.openChannelId;
 	if (openChannel) {
-		void messagesStore.ensureLoaded(openChannel).then(() => {
-			if (!messagesStore.getChannel(openChannel)?.loaded) {
-				messagesStore.load(openChannel);
-			}
-		});
+		void messagesStore.setLatest(openChannel);
 	}
 
 	const openDm = dmsStore.state.openDmId;
 	if (openDm) {
-		void messagesStore.ensureLoaded(openDm).then(() => {
-			if (!messagesStore.getChannel(openDm)?.loaded) {
-				messagesStore.load(openDm);
-			}
-		});
+		void messagesStore.setLatest(openDm);
 	}
 }
 
