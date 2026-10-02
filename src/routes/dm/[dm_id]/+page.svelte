@@ -32,6 +32,7 @@
 	let searchQuery = $state('');
 	let searchOpen = $state(false);
 	let highlightMessageId: string | null = $state(null);
+	let lastHistoryDmId: string | null = null;
 
 	const typingIds = $derived(
 		dm ? usersStore.typingUsers(dm.id).filter((id) => id !== meId()) : []
@@ -63,7 +64,8 @@
 
 	$effect(() => {
 		const id = page.params.dm_id;
-		if (!id) return;
+		if (!id || id === lastHistoryDmId) return;
+		lastHistoryDmId = id;
 
 		untrack(() => {
 			dmsStore.setOpen(id);
