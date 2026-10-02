@@ -419,7 +419,7 @@
 <style>
 	.password-rules { display:flex; flex-wrap:wrap; gap:6px 12px; margin-top:-4px; font-size:12px; color:var(--muted-soft); }
 	.password-rules span.ok { color:#24a46d; }
-	.password-actions { display:flex; align-items:center; gap:10px; }
+	.password-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 
 	.settings-page { padding:4px 0 8px; display:grid; gap:14px; }
 	.cb-text { display:flex; flex-direction:column; gap:2px; }
@@ -448,6 +448,7 @@
 	:global([data-theme='dark']) .sound-setting { border-color:rgba(180,220,245,.12); }
 	:global(html[data-ui-flat]) .sound-setting { background:transparent; }
 	@media(max-width:700px) {
+		.password-actions .admin-btn { width:100%; justify-content:center; }
 		.channel-notification-card .admin-card-head { align-items:flex-start; flex-direction:column; }
 		.notification-bulk { width:100%; margin-left:0; flex-wrap:wrap; }
 		.notification-bulk .admin-select { flex:1; min-width:150px; }
