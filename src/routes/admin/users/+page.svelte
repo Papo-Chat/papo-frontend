@@ -478,14 +478,21 @@
 {/if}
 
 <style>
-	.reset-backdrop { position:fixed; inset:0; z-index:2500; display:grid; place-items:center; padding:20px; background:rgba(0,0,0,.55); }
-	.reset-modal { width:min(440px,100%); display:grid; gap:12px; padding:18px; border-radius:14px; background:var(--surface,#fff); box-shadow:0 20px 60px rgba(0,0,0,.3); }
+	.reset-backdrop { position:fixed; inset:0; z-index:2500; display:grid; place-items:center; padding:20px; box-sizing:border-box; background:rgba(0,0,0,.62); }
+	.reset-modal { width:min(440px,100%); max-width:100%; box-sizing:border-box; display:grid; gap:12px; padding:18px; border:1px solid var(--border); border-radius:14px; color:var(--text-primary); background:var(--surface); box-shadow:0 20px 60px rgba(0,0,0,.3); }
 	.reset-modal h3 { margin:0; font-size:16px; }
 	.reset-help { margin:0; font-size:13px; color:var(--muted); line-height:1.45; }
 	.reset-link-row { display:flex; gap:8px; align-items:center; }
 	.reset-link { min-width:0; flex:1; font-family:ui-monospace, monospace; font-size:11px; }
 	.reset-expiry { font-size:11px; color:var(--muted-soft); }
 	.reset-actions { display:flex; justify-content:flex-end; gap:8px; }
+	:global(html[data-theme='dark']) .reset-modal { background:#102735; border-color:rgba(174,221,249,.14); color:#eef8ff; }
+	@media (max-width:560px) {
+		.reset-backdrop { padding:8px; }
+		.reset-modal { width:calc(100vw - 16px); padding:14px; }
+		.reset-link-row { align-items:stretch; flex-direction:column; }
+		.reset-link-row .admin-btn { width:100%; }
+	}
 
 	.users-page {
 		padding: 4px 0 8px;
