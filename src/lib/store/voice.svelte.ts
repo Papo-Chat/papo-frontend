@@ -74,6 +74,8 @@ export const state = $state({
 	activeSpeaker: null as string | null,
 	// Whether we are currently connected to a voice room.
 	connected: false,
+	// Estado local da sessão, independente do componente/rota atualmente montado.
+	localMuted: true,
 	// Canal do room atual, reativo: o `currentChannelId` (módulo, não
 	// rastreado) é usado só internamente; o UI precisa da versão reativa.
 	channelId: null as string | null,
@@ -213,6 +215,8 @@ export function join(channelId: string, userId?: string): void {
 
 	currentChannelId = channelId;
 	currentUserId = userId ?? null;
+	micMuted = true;
+	state.localMuted = true;
 	mediaSubscriptionsReady = false;
 	state.lastError = null;
 
@@ -477,6 +481,7 @@ export function leave(channelId: string | null): void {
 	state.activeSpeaker = null;
 	state.connected = false;
 	state.channelId = null;
+	state.localMuted = true;
 
 	// Não limpar channelMembers aqui.
 	// O roster representa o estado global dos canais de voz,
@@ -589,6 +594,7 @@ export function onSocketClose(): void {
 	state.activeSpeaker = null;
 	state.connected = false;
 	state.channelId = null;
+	state.localMuted = true;
 	state.channelMembers.clear();
 
 	currentChannelId = null;
@@ -615,6 +621,13 @@ export function onVoiceJoined(ev: WsVoiceJoined): void {
 
 	state.connected = true;
 	state.channelId = ev.channel_id;
+	const ownState = currentUserId
+		? ev.members.find((member) => member.user_id === currentUserId)
+		: null;
+	if (ownState) {
+		micMuted = ownState.muted;
+		state.localMuted = ownState.muted;
+	}
 	state.lastError = null;
 
 	joinResolve?.();
@@ -766,6 +779,11 @@ export function onVoiceStateUpdate(ev: WsVoiceStateUpdate): void {
 		screen_sharing: ev.screen_sharing
 	});
 
+	if (ev.user_id === currentUserId && ev.channel_id === currentChannelId) {
+		micMuted = ev.muted;
+		state.localMuted = ev.muted;
+	}
+
 	if (currentChannelId !== ev.channel_id) {
 		return;
 	}
@@ -862,6 +880,25 @@ export function mute(muted: boolean): void {
 	}
 
 	micMuted = muted;
+	state.localMuted = muted;
+
+	if (cid && currentUserId) {
+		state.members = state.members.map((member) =>
+			member.user_id === currentUserId ? { ...member, muted } : member
+		);
+		const roster = state.channelMembers.get(cid);
+		if (roster) {
+			state.channelMembers.set(
+				cid,
+				roster.map((member) =>
+					member.user_id === currentUserId ? { ...member, muted } : member
+				)
+			);
+		}
+		if (muted && state.activeSpeaker === currentUserId) {
+			state.activeSpeaker = null;
+		}
+	}
 
 	if (micGain) {
 		// Mute afeta apenas o microfone. Áudio capturado junto com a tela
