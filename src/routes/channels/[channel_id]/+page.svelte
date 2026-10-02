@@ -8,6 +8,7 @@
 	import * as usersStore from '$lib/store/users.svelte';
 
 	import { typingUsers } from '$lib/store/users.svelte';
+	import { meId } from '$lib/store/session.svelte';
 	import { state as uiState, setScrollTarget } from '$lib/store/ui.svelte';
 
 	import type { MessageWithAttachment, SearchResult } from '$lib/types';
@@ -51,7 +52,7 @@
 
 	// Indicador de digitando.
 	const typingIds = $derived(
-		channel?.id ? typingUsers(channel.id) : []
+		channel?.id ? typingUsers(channel.id).filter((id) => id !== meId()) : []
 	);
 
 	const typingNames = $derived(
