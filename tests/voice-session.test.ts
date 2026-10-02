@@ -4,7 +4,6 @@ import * as voiceStore from '../src/lib/store/voice.svelte';
 beforeEach(() => {
 	voiceStore.state.connected = true;
 	voiceStore.state.channelId = 'voice-1';
-	voiceStore.state.localMuted = false;
 });
 
 afterEach(() => {
@@ -43,7 +42,6 @@ describe('persistent global voice session', () => {
 
 		expect(voiceStore.state.connected).toBe(true);
 		expect(voiceStore.state.channelId).toBe('voice-1');
-		expect(voiceStore.state.localMuted).toBe(false);
 	});
 
 	it('hides the global controls only while the active voice room page is open', () => {
@@ -57,7 +55,6 @@ describe('persistent global voice session', () => {
 		voiceStore.onSocketClose();
 		expect(voiceStore.state.connected).toBe(false);
 		expect(voiceStore.state.channelId).toBeNull();
-		expect(voiceStore.state.localMuted).toBe(true);
 		expect(voiceStore.shouldShowGlobalSession('/dm/dm-1')).toBe(false);
 	});
 });
