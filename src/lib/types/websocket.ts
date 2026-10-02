@@ -318,6 +318,11 @@ export interface WsTypingInbound {
 	channel_id: string;
 }
 
+// presence_activity — real user interaction, distinct from keepalive.
+export interface WsPresenceActivity {
+	type: 'presence_activity';
+}
+
 // heartbeat
 export interface WsHeartbeat {
 	type: 'heartbeat';
@@ -402,6 +407,7 @@ export interface WsScreenShareStop {
 
 export type WsInbound =
 	| WsTypingInbound
+	| WsPresenceActivity
 	| WsHeartbeat
 	| WsVoiceJoin
 	| WsVoiceLeaveInbound
