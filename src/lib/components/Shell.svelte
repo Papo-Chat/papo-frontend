@@ -57,7 +57,7 @@
 				{/if}
 			</div>
 			<div>
-				<span class="admin-brand-name">{server.name}</span>
+				<span class="admin-brand-name">{server?.name ?? 'Novo servidor'}</span>
 				<span class="admin-brand-sub">{brandSub}</span>
 			</div>
 		</div>
