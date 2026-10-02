@@ -1,7 +1,7 @@
 // Vitest on core logic: channel/role permission helpers (pure, testable).
 
 import { describe, it, expect } from 'vitest';
-import { myRolePermissions, channelAccess, can } from '../src/lib/utils/permissions';
+import { myRolePermissions, channelAccess, can, hasAnyChannelPermission } from '../src/lib/utils/permissions';
 import type {
 	Channel,
 	ChannelPermissionEntry,
@@ -190,5 +190,26 @@ describe('can', () => {
 			isOwner: false
 		};
 		expect(can('ban_members', ctx)).toBe(true);
+	});
+});
+
+
+describe('hasAnyChannelPermission', () => {
+	it('returns false when every channel permission is disabled', () => {
+		expect(hasAnyChannelPermission({
+			read_channel: false,
+			send_messages: false,
+			delete_messages: false,
+			connect_voice: false
+		})).toBe(false);
+	});
+
+	it('returns true when at least one channel permission remains enabled', () => {
+		expect(hasAnyChannelPermission({
+			read_channel: false,
+			send_messages: true,
+			delete_messages: false,
+			connect_voice: false
+		})).toBe(true);
 	});
 });
