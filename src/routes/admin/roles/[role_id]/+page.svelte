@@ -2,6 +2,7 @@
 	// Role edit + permissions. Data: rolesStore.
 	import { page } from '$app/state';
 	import * as rolesStore from '$lib/store/roles.svelte';
+	import * as usersStore from '$lib/store/users.svelte';
 	import type { Role, RolePermissions } from '$lib/types';
 	import Icon from '$lib/components/Icon.svelte';
 
@@ -25,7 +26,6 @@
 	let error = $state<string | null>(null);
 	let savedTimer: ReturnType<typeof setTimeout> | null = null;
 
-	const palette = ['#e7a80b', '#30d158', '#0a84ff', '#9b5de5', '#ff5d63', '#5ac8fa'];
 
 	$effect(() => {
 		if (role) {
@@ -53,6 +53,10 @@
 		error = null;
 		try {
 			await rolesStore.update(roleId, { name: n, color, permissions: { ...perms } });
+			const affected = [...usersStore.state.byId.values()]
+				.filter((user) => user.roles.some((r) => r.id === roleId))
+				.map((user) => user.id);
+			if (affected.length) await usersStore.refreshSummaries(affected);
 			saved = true;
 			if (savedTimer) clearTimeout(savedTimer);
 			savedTimer = setTimeout(() => (saved = false), 1800);
@@ -88,14 +92,8 @@
 					<div class="admin-field">
 						<label>Cor</label>
 						<div class="color-pick">
-							{#each palette as c (c)}
-								<button
-									class="swatch {color === c ? 'active' : ''}"
-									style="background:{c}"
-									aria-label={`Cor ${c}`}
-									onclick={() => (color = c)}
-								></button>
-							{/each}
+							<input class="color-input" type="color" bind:value={color} aria-label="Cor do Role" />
+							<input class="admin-input color-hex" bind:value={color} maxlength="7" aria-label="Cor hexadecimal" />
 						</div>
 					</div>
 					<div class="admin-stat">
@@ -178,10 +176,9 @@
 		gap: 10px;
 		margin-top: 14px;
 	}
-	.color-pick {
-		display: flex;
-		gap: 6px;
-	}
+	.color-pick { display:flex; gap:6px; align-items:center; }
+	.color-input { width:38px; height:34px; padding:2px; border:0; background:transparent; cursor:pointer; }
+	.color-hex { width:100px; }
 	.color-pick .swatch {
 		border: 2px solid rgba(255, 255, 255, 0.5);
 	}
