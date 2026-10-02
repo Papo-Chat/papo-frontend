@@ -6,6 +6,7 @@
 	import { openProfile } from '$lib/store/ui.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
 	import { parseChannelName } from '$lib/utils/channel-icon';
+	import { isVoiceMemberSpeaking } from '$lib/utils/voice-ui';
 	import Avatar from './Avatar.svelte';
 	import Icon from './Icon.svelte';
 
@@ -73,8 +74,11 @@
 					{@const name = user?.nickname || user?.username || 'Usuário'}
 					{@const roleColor =
 						user?.roles.find((r: RoleSummary) => r.color)?.color ?? null}
+					{@const isSpeaking =
+						voiceState.channelId === channel.id &&
+						isVoiceMemberSpeaking(m.user_id, m.muted, voiceState.activeSpeakers)}
 
-					<li class="voice-member">
+					<li class="voice-member" class:speaking={isSpeaking}>
 						<button
 							class="voice-member-profile"
 							aria-label={`Ver perfil de ${name}`}
@@ -245,6 +249,10 @@
 		transition:
 			transform 120ms ease,
 			filter 120ms ease,
+	}
+
+	.voice-member.speaking .voice-avatar {
+		box-shadow: 0 0 0 2px #24c982;
 	}
 
 	.voice-member-profile:hover:not(:disabled) .voice-avatar {
