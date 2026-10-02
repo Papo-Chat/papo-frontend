@@ -453,6 +453,7 @@ export function patchPinned(state: MessagesState, messageId: string, isPinned: b
 }
 
 const previewRequests = new SvelteMap<string, Promise<LinkPreviewWithImage>>();
+const removeRequests = new Map<string, Promise<void>>();
 
 export function ensurePreview(previewId: string): Promise<LinkPreviewWithImage> {
 	const cached = previewCache.get(previewId);
@@ -681,6 +682,7 @@ export function mergePreview(
 			description: preview.description,
 			provider_name: preview.provider_name,
 			embed_url: preview.embed_url,
+			video_url: preview.video_url ?? null,
 			image_mime_type: preview.image_mime_type,
 			image_size_bytes: preview.image_size_bytes,
 			fetched_at: preview.fetched_at
@@ -953,19 +955,8 @@ async function _fetchPage(
 			return;
 		}
 
-		// Imagens de preview (image_data) não vêm no REST (só metadados); o
-		// previewCache fica vazio em carga inicial (F5). Resolve via
-		// GET /link-previews/:id para renderizar. ensurePreview é idempotente
-		// (cache + dedup in-flight), então é seguro chamar por preview id.
-		const previewIds = new Set<string>();
-		for (const m of messages) {
-			for (const p of m.previews) {
-				previewIds.add(p.id);
-			}
-		}
-		for (const id of previewIds) {
-			ensurePreview(id);
-		}
+		// Preview image_data is intentionally loaded by PreviewCard only when the
+		// card approaches the viewport. Channel switches stay metadata-only here.
 
 		const newByd = new SvelteMap<string, MessageWithAttachment>();
 
@@ -1187,6 +1178,16 @@ export function setLatest(channelId: string): Promise<void> {
 // direction: if the target is newer than the window's newest message, jump to
 // the newest first, then page towards older from the top. Otherwise page
 // towards older from `cursorOlder`.
+async function waitForChannelIdle(channelId: string): Promise<void> {
+	while (state.channels.get(channelId)?.loading) {
+		await new Promise<void>((resolve) => setTimeout(resolve, 20));
+	}
+}
+
+function cursorKey(cursor: { since: string; last_id: string } | null): string {
+	return cursor ? `${cursor.since}:${cursor.last_id}` : '';
+}
+
 export async function gotoMessage(
 	channelId: string,
 	messageId: string,
@@ -1214,22 +1215,27 @@ export async function gotoMessage(
 
 	if (targetIsNewer) {
 		while (true) {
+			await waitForChannelIdle(channelId);
 			const current = state.channels.get(channelId);
 			if (!current || !current.hasMoreNewer || !current.cursorNewer) return false;
+			const before = cursorKey(current.cursorNewer);
 			await loadMoreNewer(channelId);
 			const next = state.channels.get(channelId);
 			if (next?.byId.has(messageId)) return true;
-			if (!next?.hasMoreNewer) return false;
+			if (!next?.hasMoreNewer || cursorKey(next.cursorNewer) === before) return false;
+			await new Promise<void>((resolve) => setTimeout(resolve, 0));
 		}
 	}
 
 	// Page towards older until the message appears or the history is exhausted.
 	while (true) {
+		await waitForChannelIdle(channelId);
 		const c = state.channels.get(channelId);
 		if (!c || !c.hasMoreOlder || !c.cursorOlder) {
 			return false;
 		}
 		const cursor = c.cursorOlder;
+		const before = cursorKey(cursor);
 		// Navigating up → historical window.
 		state.channels.set(channelId, { ...c, windowMode: 'historical' });
 		try {
@@ -1245,6 +1251,8 @@ export async function gotoMessage(
 		if (c2 && c2.byId.has(messageId)) {
 			return true;
 		}
+		if (!c2?.hasMoreOlder || cursorKey(c2.cursorOlder) === before) return false;
+		await new Promise<void>((resolve) => setTimeout(resolve, 0));
 	}
 }
 
@@ -1269,7 +1277,10 @@ export function edit(messageId: string, content: string): Promise<MessageWithAtt
 	});
 }
 
-export async function remove(messageId: string): Promise<void> {
+export function remove(messageId: string): Promise<void> {
+	const existing = removeRequests.get(messageId);
+	if (existing) return existing;
+
 	let channelId: string | null = null;
 	for (const [id, channel] of state.channels) {
 		if (channel.byId.has(messageId)) {
@@ -1278,10 +1289,21 @@ export async function remove(messageId: string): Promise<void> {
 		}
 	}
 
-	await api.messages.remove(messageId);
-	if (channelId) {
-		removeMessage(state, channelId, messageId);
-	}
+	const request = api.messages
+		.remove(messageId)
+		.then(() => {
+			if (channelId) {
+				removeMessage(state, channelId, messageId);
+			}
+		})
+		.finally(() => {
+			if (removeRequests.get(messageId) === request) {
+				removeRequests.delete(messageId);
+			}
+		});
+
+	removeRequests.set(messageId, request);
+	return request;
 }
 
 export function pin(
@@ -1587,6 +1609,7 @@ export function reset(): void {
 	storeEpoch += 1;
 
 	previewRequests.clear();
+	removeRequests.clear();
 	freshGuards.clear();
 	_freshInflight.clear();
 	state.channels.clear();

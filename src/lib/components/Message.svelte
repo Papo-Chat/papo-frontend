@@ -70,6 +70,13 @@
 	const mentionsMe = $derived(
 		!!me && (message.content ?? '').includes(`@mention(<@${me}>)`)
 	);
+	const replyPreviewText = $derived(
+		msgReply?.content
+			? (isGiphyMarker(msgReply.content) ? 'GIF' : msgReply.content.replace(/\s+/g, ' ').trim())
+			: msgReply?.attachments.length
+				? 'Anexo'
+				: ''
+	);
 	const repliesToMe = $derived(
 		!!me && !!message.reply_to && msgReply?.author_id === me
 	);
@@ -84,6 +91,7 @@
 	let isEditing = $state(false);
 	let editText = $state('');
 	let showDeleteConfirm = $state(false);
+	let deleting = $state(false);
 	let deleteButton: HTMLButtonElement | null = null;
 
 	async function startDelete(): Promise<void> {
@@ -146,12 +154,17 @@
 		showActions = false;
 	}
 
-	function doDelete(): void {
-		void messagesStore.remove(message.id).then(() => {
+	async function doDelete(): Promise<void> {
+		if (deleting) return;
+		deleting = true;
+		try {
+			await messagesStore.remove(message.id);
 			notificationsStore.removeByMessage(message.id);
-		});
-		showDeleteConfirm = false;
-		showActions = false;
+			showDeleteConfirm = false;
+			showActions = false;
+		} finally {
+			deleting = false;
+		}
 	}
 
 	function cancelDelete(): void {
@@ -229,14 +242,8 @@
 						<Avatar user={replyAuthor} userId={msgReply?.author_id ?? null} size={18} />
 						{replyAuthor.nickname || replyAuthor.username}
 
-						{#if msgReply}
-							{#if msgReply.content}
-								<span class="reply-preview-text">
-									<FormattedMessage content={msgReply.content} />
-								</span>
-							{:else if msgReply.attachments.length}
-								<span class="reply-preview-attachment"><i>Anexo</i></span>
-							{/if}
+						{#if replyPreviewText}
+							<span class="reply-preview-text">{replyPreviewText}</span>
 						{/if}
 					</button>
 				{:else}
@@ -353,11 +360,12 @@
 						bind:this={deleteButton}
 						class="confirm-btn danger"
 						type="button"
+						disabled={deleting}
 						onclick={doDelete}
 					>
-						Excluir
+						{deleting ? 'Excluindo…' : 'Excluir'}
 					</button>
-					<button class="confirm-btn" type="button" onclick={cancelDelete}> Cancelar </button>
+					<button class="confirm-btn" type="button" onclick={cancelDelete} disabled={deleting}> Cancelar </button>
 				</div>
 			{:else}
 				{#if message.reactions.length || canReply}
@@ -375,6 +383,10 @@
 <style>
 	.message {
 		display: flex;
+		width: 100%;
+		max-width: 100%;
+		min-width: 0;
+		box-sizing: border-box;
 		gap: 8px;
 		padding: 4px 8px;
 		border-radius: 10px;
@@ -427,14 +439,18 @@
 
 	.content {
 		flex: 1;
+		width: 100%;
+		max-width: 100%;
 		min-width: 0;
+		overflow-x: clip;
+		overflow-y: visible;
 	}
 
 	.bubble.giphy-bubble {
 		display: inline-flex;
 		align-self: flex-start;
 		width: fit-content;
-		max-width: calc(100vw - 96px);
+		max-width: 100%;
 		box-sizing: border-box;
 		padding: 8px;
 	}
@@ -534,23 +550,6 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
-	}
-	.reply-preview-text :global(.msg-text) {
-		display: inline;
-		white-space: nowrap;
-	}
-	.reply-preview-text :global(.msg-text p) {
-		display: inline;
-		margin: 0;
-	}
-	.reply-preview-text :global(.inline-emoji),
-	.reply-preview-text :global(.full-emoji) {
-		width: 1.25em;
-		height: 1.25em;
-		vertical-align: -0.2em;
-	}
-	.reply-preview-attachment {
-		color: var(--muted-soft);
 	}
 	.act-btn {
 		display: flex;

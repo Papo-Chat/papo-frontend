@@ -163,7 +163,7 @@ function makeRenderer(
 		if (!isSafeHref(href)) {
 			return linkText;
 		}
-		let anchor = `<a href="${encodeURI(href)}"`;
+		let anchor = `<a href="${encodeURI(href)}" target="_blank" rel="noopener noreferrer"`;
 		if (title) {
 			anchor += ` title="${encodeURI(title)}"`;
 		}

@@ -10,6 +10,7 @@
     import Icon from '$lib/components/Icon.svelte';
     import Avatar from '$lib/components/Avatar.svelte';
     import EmojiPicker from '$lib/components/EmojiPicker.svelte';
+    import ImageCropper from '$lib/components/ImageCropper.svelte';
 
     let profile: UserProfile | null = $state(null);
     let nickname = $state('');
@@ -30,6 +31,7 @@
     let savedTimer: ReturnType<typeof setTimeout> | null = null;
     let error = $state<string | null>(null);
     let seeded = $state(false);
+    let cropRequest: { file: File; kind: 'avatar' | 'banner' } | null = $state(null);
 
     // Previews: o upload pendente (avatarImg/bannerImg) ganha prioridade; senão,
     // usa o valor já persistido no perfil. O acesso aos $state nulos é feito
@@ -117,31 +119,70 @@
         });
     }
 
-    async function onAvatarSelect(e: Event): Promise<void> {
-        avatarError = '';
-        const input = e.target as HTMLInputElement;
-        const file = input.files?.[0];
-        if (!file) return;
+    async function useOriginalGif(file: File, kind: 'avatar' | 'banner'): Promise<void> {
         try {
-            avatarImg = await fileToBase64(file, 'avatar');
-            removeAvatar = false;
+            const converted = await fileToBase64(file, kind);
+            if (kind === 'avatar') {
+                avatarImg = converted;
+                avatarError = '';
+                removeAvatar = false;
+            } else {
+                bannerImg = converted;
+                bannerError = '';
+                removeBanner = false;
+            }
         } catch (err) {
-            avatarError = (err as Error).message;
-            avatarImg = null;
+            if (kind === 'avatar') avatarError = (err as Error).message;
+            else bannerError = (err as Error).message;
         }
     }
 
-    async function onBannerSelect(e: Event): Promise<void> {
+    function onAvatarSelect(e: Event): void {
+        avatarError = '';
+        const input = e.target as HTMLInputElement;
+        const file = input.files?.[0];
+        input.value = '';
+        if (!file) return;
+
+        // Canvas/cropper achata GIF animado no primeiro frame. Para GIF,
+        // preservamos o arquivo original; imagens estáticas continuam no cropper.
+        if (file.type === 'image/gif') {
+            void useOriginalGif(file, 'avatar');
+            return;
+        }
+        cropRequest = { file, kind: 'avatar' };
+    }
+
+    function onBannerSelect(e: Event): void {
         bannerError = '';
         const input = e.target as HTMLInputElement;
         const file = input.files?.[0];
+        input.value = '';
         if (!file) return;
+
+        if (file.type === 'image/gif') {
+            void useOriginalGif(file, 'banner');
+            return;
+        }
+        cropRequest = { file, kind: 'banner' };
+    }
+
+    async function applyCrop(file: File): Promise<void> {
+        if (!cropRequest) return;
+        const kind = cropRequest.kind;
+        cropRequest = null;
         try {
-            bannerImg = await fileToBase64(file, 'banner');
-            removeBanner = false;
+            const converted = await fileToBase64(file, kind);
+            if (kind === 'avatar') {
+                avatarImg = converted;
+                removeAvatar = false;
+            } else {
+                bannerImg = converted;
+                removeBanner = false;
+            }
         } catch (err) {
-            bannerError = (err as Error).message;
-            bannerImg = null;
+            if (kind === 'avatar') avatarError = (err as Error).message;
+            else bannerError = (err as Error).message;
         }
     }
 
@@ -287,6 +328,7 @@
                     class="admin-input"
                     bind:value={nickname}
                     placeholder="Como você quer ser chamado"
+                    maxlength="32"
                 />
             </div>
             <div class="admin-field">
@@ -336,7 +378,7 @@
                     aria-label="Escolher avatar"
                     aria-describedby="pf-avatar-limit"
                 />
-                <span id="pf-avatar-limit" class="field-hint">Máximo: 512 × 512 px.</span>
+                <span id="pf-avatar-limit" class="field-hint">Máximo: 512 × 512 px. GIF mantém animação e não passa pelo recorte.</span>
                 {#if avatarError}
                     <span class="field-error">{avatarError}</span>
                 {/if}
@@ -351,7 +393,7 @@
                     aria-label="Escolher capa"
                     aria-describedby="pf-banner-limit"
                 />
-                <span id="pf-banner-limit" class="field-hint">Máximo: 2048 × 2048 px.</span>
+                <span id="pf-banner-limit" class="field-hint">Máximo: 2048 × 2048 px. GIF mantém animação e não passa pelo recorte.</span>
                 {#if bannerError}
                     <span class="field-error">{bannerError}</span>
                 {/if}
@@ -372,6 +414,15 @@
         </div>
     </div>
 </div>
+
+{#if cropRequest}
+    <ImageCropper
+        file={cropRequest.file}
+        kind={cropRequest.kind}
+        onCancel={() => (cropRequest = null)}
+        onConfirm={applyCrop}
+    />
+{/if}
 
 <style>
     .profile-edit-page {

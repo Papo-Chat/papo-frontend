@@ -43,6 +43,7 @@ let shouldReconnect = false;
 // True after the first successful onopen; reset only on a manual close.
 // A reconnect (drop → reconnect) therefore sees it still set and resyncs.
 let hasConnected = false;
+let lastHistorySyncGeneration = -1;
 let lastPresenceActivitySentAt = 0;
 const PRESENCE_ACTIVITY_THROTTLE_MS = 15_000;
 
@@ -88,24 +89,28 @@ function startPing(socket: WebSocket, gen: number): void {
 // Minimal REST reconciliation after a reconnect (P1.10). Only run when a
 // session is active. The fresh WS's `presence_sync` is the online source of
 // truth; no full history reload.
-export function ensureOpenMessageHistory(): void {
+export function ensureOpenMessageHistory(force = false): void {
 	const openChannel = channelsStore.state.openChannelId;
 	if (openChannel) {
-		void messagesStore.ensureLoaded(openChannel).then(() => {
-			if (!messagesStore.getChannel(openChannel)?.loaded) {
-				messagesStore.load(openChannel);
-			}
-		});
+		const current = messagesStore.getChannel(openChannel);
+		if (force || !current?.loaded) {
+			void messagesStore.setLatest(openChannel);
+		}
 	}
 
 	const openDm = dmsStore.state.openDmId;
 	if (openDm) {
-		void messagesStore.ensureLoaded(openDm).then(() => {
-			if (!messagesStore.getChannel(openDm)?.loaded) {
-				messagesStore.load(openDm);
-			}
-		});
+		const current = messagesStore.getChannel(openDm);
+		if (force || !current?.loaded) {
+			void messagesStore.setLatest(openDm);
+		}
 	}
+}
+
+function ensureOpenMessageHistoryOncePerSocket(force = false): void {
+	if (lastHistorySyncGeneration === generation) return;
+	lastHistorySyncGeneration = generation;
+	ensureOpenMessageHistory(force);
 }
 
 function resync(): void {
@@ -114,7 +119,7 @@ function resync(): void {
 	}
 	channelsStore.load();
 	void dmsStore.load().catch(() => {});
-	ensureOpenMessageHistory();
+	ensureOpenMessageHistoryOncePerSocket(true);
 	notificationsStore.load();
 	rolesStore.load();
 	if (usersStore.state.list.items.length === 0) {
@@ -215,6 +220,7 @@ export function disconnect(): void {
 	setInstance(null);
 	// Reset so a fresh login's first onopen does not resync.
 	hasConnected = false;
+	lastHistorySyncGeneration = -1;
 	lastPresenceActivitySentAt = 0;
 	state.connected = false;
 	voiceStore.onSocketClose();
@@ -292,10 +298,10 @@ export function dispatchEvent(event: WsOutbound): void {
 		case 'presence_sync':
 			usersStore.handlePresenceSync(event.members);
 			voiceStore.onPresenceSync(event.members);
-			// presence_sync is the first authoritative "you are fully joined"
-			// signal after a fresh connection. If the initial route bootstrap raced
-			// membership propagation, retry the open history here.
-			ensureOpenMessageHistory();
+			// Retry history at most once for this websocket generation. Some
+			// servers emit presence_sync more than once; each event must not turn
+			// into another /messages request.
+			ensureOpenMessageHistoryOncePerSocket(false);
 			break;
 		case 'user_join':
 			usersStore.handleUserJoin(event.user_id);

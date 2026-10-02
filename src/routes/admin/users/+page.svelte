@@ -22,6 +22,11 @@
 	let actionError = $state<string | null>(null);
 	let busyUsers = $state(new Set<string>());
 	let feedbackTimer: ReturnType<typeof setTimeout> | null = null;
+	let resetTarget: UserSummary | null = $state(null);
+	let resetLink = $state('');
+	let resetExpiresAt = $state('');
+	let resetBusy = $state(false);
+	let resetCopied = $state(false);
 
 	function setFeedback(success: string, error: string | null = null): void {
 		actionSuccess = error ? '' : success;
@@ -290,6 +295,32 @@
 			setUserBusy(userId, false);
 		}
 	}
+	async function createPasswordResetLink(user: UserSummary): Promise<void> {
+		if (resetBusy) return;
+		resetTarget = user;
+		resetLink = '';
+		resetExpiresAt = '';
+		resetCopied = false;
+		resetBusy = true;
+		try {
+			const result = await api.users.resetPassword(user.id);
+			resetLink = result.reset_url;
+			resetExpiresAt = result.expires_at;
+		} catch (err) {
+			setFeedback('', err instanceof Error ? err.message : 'Erro ao gerar link de reset.');
+			resetTarget = null;
+		} finally {
+			resetBusy = false;
+		}
+	}
+
+	async function copyResetLink(): Promise<void> {
+		if (!resetLink) return;
+		await navigator.clipboard.writeText(resetLink);
+		resetCopied = true;
+		setTimeout(() => (resetCopied = false), 1600);
+	}
+
 	function statusDotClass(id: string): string {
 		const s = usersStore.effectiveStatus(id);
 		if (s === 'online') return '';
@@ -386,19 +417,32 @@
 							</div>
 
 {#if canManageServer}
-							<button
-								class="admin-btn ghost small"
-								class:unban={isBanned(u.id)}
-								aria-label={isBanned(u.id)
-									? `Desbanir ${u.nickname || u.username}`
-									: `Banir ${u.nickname || u.username}`}
-								disabled={busyUsers.has(u.id)}
-								onclick={() => void toggleBan(u)}
-							>
-								<Icon name={isBanned(u.id) ? 'arrow-counter-clockwise' : 'x-circle'} variant="light" size={14} />
-								{isBanned(u.id) ? 'Desbanir' : 'Banir'}
-							</button>
-							{/if}
+							<div class="user-actions">
+								{#if u.id !== me}
+									<button
+										class="admin-btn ghost small"
+										type="button"
+										disabled={busyUsers.has(u.id) || resetBusy}
+										onclick={() => void createPasswordResetLink(u)}
+									>
+										<Icon name="key" variant="light" size={14} />
+										Resetar senha
+									</button>
+								{/if}
+								<button
+									class="admin-btn ghost small"
+									class:unban={isBanned(u.id)}
+									aria-label={isBanned(u.id)
+										? `Desbanir ${u.nickname || u.username}`
+										: `Banir ${u.nickname || u.username}`}
+									disabled={busyUsers.has(u.id)}
+									onclick={() => void toggleBan(u)}
+								>
+									<Icon name={isBanned(u.id) ? 'arrow-counter-clockwise' : 'x-circle'} variant="light" size={14} />
+									{isBanned(u.id) ? 'Desbanir' : 'Banir'}
+								</button>
+							</div>
+						{/if}
 						</div>
 				{/each}
 
@@ -407,7 +451,49 @@
 	</div>
 </div>
 
+{#if resetTarget}
+	<div class="reset-backdrop" role="presentation">
+		<div class="reset-modal" role="dialog" aria-modal="true" aria-label="Link para resetar senha">
+			<h3>Resetar senha de {resetTarget.nickname || resetTarget.username}</h3>
+			<p class="reset-help">Envie este link ao usuário. Ele funciona uma vez e expira em 24 horas.</p>
+			{#if resetBusy}
+				<div class="loading-hint">Gerando link…</div>
+			{:else if resetLink}
+				<div class="reset-link-row">
+					<input class="admin-input reset-link" readonly value={resetLink} aria-label="Link de troca de senha" />
+					<button class="admin-btn" type="button" onclick={copyResetLink}>
+						<Icon name="copy" variant="light" size={14} />
+						{resetCopied ? 'Copiado' : 'Copiar'}
+					</button>
+				</div>
+				{#if resetExpiresAt}
+					<span class="reset-expiry">Expira em {new Date(resetExpiresAt).toLocaleString()}</span>
+				{/if}
+			{/if}
+			<div class="reset-actions">
+				<button class="admin-btn ghost" type="button" onclick={() => (resetTarget = null)} disabled={resetBusy}>Fechar</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
 <style>
+	.reset-backdrop { position:fixed; inset:0; z-index:2500; display:grid; place-items:center; padding:20px; box-sizing:border-box; background:rgba(0,0,0,.62); }
+	.reset-modal { width:min(440px,100%); max-width:100%; box-sizing:border-box; display:grid; gap:12px; padding:18px; border:1px solid var(--border); border-radius:14px; color:var(--text-primary); background:var(--surface); box-shadow:0 20px 60px rgba(0,0,0,.3); }
+	.reset-modal h3 { margin:0; font-size:16px; }
+	.reset-help { margin:0; font-size:13px; color:var(--muted); line-height:1.45; }
+	.reset-link-row { display:flex; gap:8px; align-items:center; }
+	.reset-link { min-width:0; flex:1; font-family:ui-monospace, monospace; font-size:11px; }
+	.reset-expiry { font-size:11px; color:var(--muted-soft); }
+	.reset-actions { display:flex; justify-content:flex-end; gap:8px; }
+	:global(html[data-theme='dark']) .reset-modal { background:#102735; border-color:rgba(174,221,249,.14); color:#eef8ff; }
+	@media (max-width:560px) {
+		.reset-backdrop { padding:8px; }
+		.reset-modal { width:calc(100vw - 16px); padding:14px; }
+		.reset-link-row { align-items:stretch; flex-direction:column; }
+		.reset-link-row .admin-btn { width:100%; }
+	}
+
 	.users-page {
 		padding: 4px 0 8px;
 		display: flex;
@@ -492,9 +578,12 @@
 	}
 	.users-list {
 		flex: 1;
+		min-width: 0;
+		max-width: 100%;
 		min-height: 0;
 		max-height: none;
 		overflow-y: auto;
+		overflow-x: clip;
 		scroll-behavior: smooth;
 		scrollbar-width: thin;
 		scrollbar-color: rgba(72, 130, 170, 0.28) transparent;
@@ -510,8 +599,10 @@
 	}
 	.user-row {
 		display: grid;
-		grid-template-columns: auto 1fr auto auto 1fr auto;
+		grid-template-columns: auto minmax(100px, 1fr) auto minmax(120px, 180px) minmax(0, 1fr) auto;
 		align-items: center;
+		min-width: 0;
+		max-width: 100%;
 		gap: 12px;
 		padding: 9px 6px;
 		border-radius: 12px;
@@ -536,7 +627,14 @@
 		font-size: 12px;
 		color: var(--muted-soft);
 	}
+	.role-select {
+		min-width: 0;
+		max-width: 100%;
+	}
 	.user-role-select {
+		width: 100%;
+		max-width: 180px;
+		min-width: 0;
 		height: 34px;
 		border-radius: 9px;
 		padding: 0 8px;
@@ -553,8 +651,18 @@
 	}
 	.role-chips {
 		display: flex;
+		min-width: 0;
+		max-width: 100%;
 		flex-wrap: wrap;
 		gap: 6px;
+	}
+	.user-actions {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 6px;
+		min-width: 0;
+		white-space: nowrap;
 	}
 	.chip {
 		position: relative;
@@ -619,15 +727,49 @@
 		font-size: 13px;
 		color: var(--muted);
 	}
-	@media (max-width: 760px) {
+	@media (max-width: 980px) {
 		.user-row {
-			grid-template-columns: auto 1fr;
+			grid-template-columns: auto minmax(0, 1fr) auto;
 			row-gap: 10px;
 		}
 		.user-row .role-select,
 		.user-row .role-chips,
-		.user-row .admin-btn.ghost {
+		.user-row .user-actions {
 			grid-column: 1 / -1;
+		}
+		.user-role-select {
+			max-width: 100%;
+		}
+		.user-actions {
+			justify-content: flex-start;
+			flex-wrap: wrap;
+		}
+	}
+
+	@media (max-width: 560px) {
+		.users-head-actions {
+			width: 100%;
+			min-width: 0;
+			flex-wrap: wrap;
+		}
+		.users-head-actions .filter-input {
+			width: 100%;
+			flex: 1 1 100%;
+		}
+		.user-row {
+			grid-template-columns: auto minmax(0, 1fr);
+			padding-inline: 2px;
+		}
+		.user-row > .status-dot {
+			grid-column: 2;
+			grid-row: 2;
+			justify-self: start;
+		}
+		.user-actions {
+			width: 100%;
+		}
+		.user-actions .admin-btn {
+			flex: 1 1 auto;
 		}
 	}
 </style>

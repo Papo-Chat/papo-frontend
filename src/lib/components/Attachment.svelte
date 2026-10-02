@@ -218,7 +218,7 @@
 {:else if attachment.mime_type.startsWith('video/') || attachment.mime_type.startsWith('application/octet-stream')}
 	<!-- Vídeo: player inline. Binários genéricos seguem para o download abaixo. -->
 	<div class="attachment-media">
-		<video src={fullUrl} controls class:pinned-attachment={pinned}></video>
+		<video src={fullUrl} controls preload="metadata" class:pinned-attachment={pinned}></video>
 	</div>
 {:else}
 	<!-- Arquivo: chip de download. -->
@@ -244,6 +244,8 @@
 <style>
 	.attachment-image {
 		display: block;
+		width: fit-content;
+		min-width: 0;
 		padding: 0;
 		border: none;
 		background: none;
@@ -265,17 +267,23 @@
 		display: block;
 		width: auto;
 		max-width: 100%;
+		height: auto;
 		max-height: 360px;
 		border-radius: 10px;
 	}
 	.attachment-media {
 		display: block;
+		width: 100%;
+		min-width: 0;
 		max-width: 100%;
+		box-sizing: border-box;
 		margin: 2px 0;
 	}
 	.attachment-media video {
+		display: block;
 		width: 100%;
-		max-width: 480px;
+		max-width: min(480px, 100%);
+		height: auto;
 		border-radius: 10px;
 	}
 

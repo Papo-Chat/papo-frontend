@@ -213,6 +213,7 @@ export interface LinkPreview {
 	description: string | null;
 	provider_name: string | null;
 	embed_url: string | null;
+	video_url?: string | null;
 	image_mime_type: string | null;
 	image_size_bytes: number | null;
 	fetched_at: string;

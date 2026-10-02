@@ -1,10 +1,31 @@
 <script lang="ts">
 	import type { LinkPreview } from '$lib/types';
-	import { getPreview } from '$lib/store/messages.svelte';
-	import { blobToUrl, mimeToFormat } from '$lib/utils/media';
+	import { getPreview, ensurePreview } from '$lib/store/messages.svelte';
+	import { onMount } from 'svelte';
+	import { blobToUrl, linkPreviewVideoUrl, mimeToFormat } from '$lib/utils/media';
 	import { truncate } from '$lib/utils/text';
 
 	let { preview } = $props<{ preview: LinkPreview }>();
+	let cardEl: HTMLElement | null = null;
+
+	onMount(() => {
+		if (!cardEl) return;
+		const load = () => void ensurePreview(preview.id).catch(() => {});
+		if (!('IntersectionObserver' in window)) {
+			load();
+			return;
+		}
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (!entries.some((entry) => entry.isIntersecting)) return;
+				observer.disconnect();
+				load();
+			},
+			{ rootMargin: '320px' }
+		);
+		observer.observe(cardEl);
+		return () => observer.disconnect();
+	});
 
 	// Preview completo (com image_data) vem do cache do store de mensagens.
 	const resolved = $derived(getPreview(preview.id));
@@ -16,6 +37,32 @@
 	);
 
 	const title = $derived(preview.title ?? truncate(preview.url, 60));
+
+	function safeXVideoUrl(raw: string | null | undefined): string {
+		if (!raw) return '';
+		try {
+			const url = new URL(raw);
+			if (url.protocol !== 'https:') return '';
+			const host = url.hostname.toLowerCase();
+			if (host !== 'video.twimg.com' && !host.endsWith('.video.twimg.com')) return '';
+			return url.href;
+		} catch {
+			return '';
+		}
+	}
+
+	// O detalhe completo só é buscado quando o card chega perto do viewport.
+	// O video_url remoto serve apenas para validar que existe mídia de X; o
+	// player usa o relay autenticado do backend para não hotlinkar video.twimg.com.
+	const hasXVideo = $derived(Boolean(safeXVideoUrl(resolved?.video_url)));
+	const videoUrl = $derived(hasXVideo ? linkPreviewVideoUrl(preview.id) : '');
+	let failedVideoUrl = $state('');
+
+	function handleVideoError(): void {
+		if (videoUrl) {
+			failedVideoUrl = videoUrl;
+		}
+	}
 
 	// Embed de vídeo: apenas se casar exatamente com o contrato do backend
 	// (YouTube, ID válido). Frontend revalida antes de renderizar o iframe
@@ -31,8 +78,8 @@
 	}
 </script>
 
-<div class="preview-card">
-	<a class="preview-title" href={preview.url} target="_blank" rel="noopener">
+<div class="preview-card" bind:this={cardEl}>
+	<a class="preview-title" href={preview.url} target="_blank" rel="noopener noreferrer">
 		{title}
 	</a>
 
@@ -60,6 +107,16 @@
 					allowfullscreen
 				></iframe>
 			{/if}
+		{:else if videoUrl && failedVideoUrl !== videoUrl}
+			<video
+				class="preview-video"
+				src={videoUrl}
+				poster={imageUrl || undefined}
+				controls
+				playsinline
+				preload="metadata"
+				onerror={handleVideoError}
+			></video>
 		{:else if imageUrl}
 			<img class="preview-image" src={imageUrl} alt="" loading="lazy" />
 		{/if}
@@ -76,13 +133,17 @@
 <style>
 	.preview-card {
 		width: 100%;
-		max-width: 500px;
+		max-width: min(500px, 100%);
+		min-width: 0;
 		padding: 10px;
 		box-sizing: border-box;
 		overflow: hidden;
 	}
 	.preview-card .preview-title {
 		display: block;
+		max-width: 100%;
+		overflow-wrap: anywhere;
+		word-break: break-word;
 		padding: 2px 0 2px;
 		background: transparent;
 		border-bottom: none;
@@ -104,6 +165,18 @@
 		padding: 8px 0 0;
 		box-sizing: border-box;
 		overflow: hidden;
+	}
+
+	.preview-video {
+		display: block;
+		width: 100%;
+		max-width: 100%;
+		max-height: min(70dvh, 620px);
+		aspect-ratio: 16 / 9;
+		object-fit: contain;
+		background: #000;
+		border-radius: 10px;
+		margin-bottom: 8px;
 	}
 
 	.preview-image {

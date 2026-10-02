@@ -255,7 +255,28 @@
 	}
 
 	.voice-text-chat :global(.message .content) {
+		width: 100%;
 		max-width: calc(100% - 50px);
+		min-width: 0;
+		box-sizing: border-box;
+	}
+
+	.voice-text-chat :global(.chat-wrapper),
+	.voice-text-chat :global(.chat),
+	.voice-text-chat :global(.chat-content),
+	.voice-text-chat :global(.message),
+	.voice-text-chat :global(.message-enter),
+	.voice-text-chat :global(.preview-card),
+	.voice-text-chat :global(.attachment-image),
+	.voice-text-chat :global(.attachment-media) {
+		min-width: 0;
+		max-width: 100%;
+		box-sizing: border-box;
+	}
+
+	.voice-text-chat :global(.chat-content) {
+		overflow-x: clip;
+		overflow-y: visible;
 	}
 
 	.voice-text-composer {

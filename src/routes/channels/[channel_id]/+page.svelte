@@ -8,6 +8,7 @@
 	import * as usersStore from '$lib/store/users.svelte';
 
 	import { typingUsers } from '$lib/store/users.svelte';
+	import { meId } from '$lib/store/session.svelte';
 	import { state as uiState, setScrollTarget } from '$lib/store/ui.svelte';
 
 	import type { MessageWithAttachment, SearchResult } from '$lib/types';
@@ -44,6 +45,7 @@
 
 	let highlightMessageId: string | null = $state(null);
 	let lastVoiceChannelId: string | null = null;
+	let lastHistoryChannelId: string | null = null;
 
 	const loading = $derived(!!ch && ch.loading);
 	const hasMoreNewer = $derived(!!ch && ch.hasMoreNewer);
@@ -51,7 +53,7 @@
 
 	// Indicador de digitando.
 	const typingIds = $derived(
-		channel?.id ? typingUsers(channel.id) : []
+		channel?.id ? typingUsers(channel.id).filter((id) => id !== meId()) : []
 	);
 
 	const typingNames = $derived(
@@ -91,14 +93,16 @@
 		}
 	});
 
-	// Carrega histórico e mensagens fixadas quando o canal muda.
+	// Carrega histórico quando a rota muda. Use o param da rota como única
+	// dependência: o objeto channel é atualizado pelos stores e não pode
+	// retriggerar a própria request de mensagens.
 	$effect(() => {
-		const id = channel?.id;
-
-		if (!id) return;
+		const id = page.params.channel_id;
+		if (!id || id === lastHistoryChannelId) return;
+		lastHistoryChannelId = id;
 
 		untrack(() => {
-			messagesStore.ensureLoaded(id);
+			void messagesStore.setLatest(id);
 			messagesStore.loadPinned(id);
 			channelsStore.setOpen(id);
 		});

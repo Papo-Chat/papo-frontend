@@ -38,6 +38,12 @@ export function mediaUrl(sha: string): string {
 	return `${apiBase()}/media/${encodeURIComponent(sha)}`;
 }
 
+// GET /link-previews/:preview_id/video — relay autenticado do vídeo externo.
+// Usado para evitar hotlink direto no CDN do X.
+export function linkPreviewVideoUrl(previewId: string): string {
+	return `${apiBase()}/link-previews/${encodeURIComponent(previewId)}/video`;
+}
+
 // GET /attachments/:file_id — full attachment download.
 export function attachmentUrl(id: string): string {
 	return `${apiBase()}/attachments/${encodeURIComponent(id)}`;

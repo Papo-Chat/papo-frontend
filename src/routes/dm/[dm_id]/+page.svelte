@@ -32,6 +32,7 @@
 	let searchQuery = $state('');
 	let searchOpen = $state(false);
 	let highlightMessageId: string | null = $state(null);
+	let lastHistoryDmId: string | null = null;
 
 	const typingIds = $derived(
 		dm ? usersStore.typingUsers(dm.id).filter((id) => id !== meId()) : []
@@ -62,14 +63,17 @@
 	}
 
 	$effect(() => {
-		const id = dm?.id;
+		const id = page.params.dm_id;
 		if (!id) return;
 
 		untrack(() => {
 			dmsStore.setOpen(id);
 			channelsStore.setOpen(null);
-			void messagesStore.ensureLoaded(id);
-			void messagesStore.loadPinned(id);
+			if (id !== lastHistoryDmId) {
+				lastHistoryDmId = id;
+				void messagesStore.setLatest(id);
+				void messagesStore.loadPinned(id);
+			}
 		});
 
 		return () => {

@@ -18,26 +18,42 @@ afterEach(() => {
 
 describe('initial message history recovery', () => {
 	it('ensures the currently open channel history', async () => {
-		const ensureLoaded = vi.spyOn(messagesStore, 'ensureLoaded').mockResolvedValue(undefined);
+		const setLatest = vi.spyOn(messagesStore, 'setLatest').mockResolvedValue(undefined);
 
 		websocketStore.ensureOpenMessageHistory();
 
 		await vi.waitFor(() => {
-			expect(ensureLoaded).toHaveBeenCalledWith('ch1');
+			expect(setLatest).toHaveBeenCalledWith('ch1');
 		});
 	});
 
-	it('retries open history when presence_sync confirms the fresh websocket session', async () => {
-		const ensureLoaded = vi.spyOn(messagesStore, 'ensureLoaded').mockResolvedValue(undefined);
+
+	it('refreshes the currently open DM history', async () => {
+		channelsStore.state.openChannelId = null;
+		dmsStore.state.openDmId = 'dm1';
+		const setLatest = vi.spyOn(messagesStore, 'setLatest').mockResolvedValue(undefined);
+
+		websocketStore.ensureOpenMessageHistory();
+
+		await vi.waitFor(() => {
+			expect(setLatest).toHaveBeenCalledWith('dm1');
+		});
+	});
+
+	it('retries open history only once when presence_sync repeats', async () => {
+		const setLatest = vi.spyOn(messagesStore, 'setLatest').mockResolvedValue(undefined);
 		const event = {
 			type: 'presence_sync',
 			members: []
 		} satisfies WsPresenceSync;
 
 		websocketStore.dispatchEvent(event);
+		websocketStore.dispatchEvent(event);
+		websocketStore.dispatchEvent(event);
 
 		await vi.waitFor(() => {
-			expect(ensureLoaded).toHaveBeenCalledWith('ch1');
+			expect(setLatest).toHaveBeenCalledTimes(1);
+			expect(setLatest).toHaveBeenCalledWith('ch1');
 		});
 	});
 });
