@@ -83,7 +83,8 @@
 
 <style>
 	.password-change-page {
-		min-height: 100vh;
+		min-height: 100dvh;
+		color: var(--text-primary);
 		display: grid;
 		place-items: center;
 		padding: 20px;
@@ -91,6 +92,7 @@
 	}
 	.password-card {
 		width: min(420px, 100%);
+		max-width: 100%;
 		display: grid;
 		gap: 14px;
 		padding: 24px;
@@ -122,4 +124,13 @@
 		font-size: 12px;
 	}
 	.submit-password { width: 100%; justify-content: center; }
+	:global(html[data-theme='dark']) .password-card {
+		background:#102735;
+		border-color:rgba(174,221,249,.14);
+		box-shadow:0 24px 70px rgba(0,0,0,.42);
+	}
+	@media (max-width:520px) {
+		.password-change-page { padding:10px; }
+		.password-card { padding:18px 14px; border-radius:16px; }
+	}
 </style>
