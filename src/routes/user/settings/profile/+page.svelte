@@ -10,6 +10,7 @@
     import Icon from '$lib/components/Icon.svelte';
     import Avatar from '$lib/components/Avatar.svelte';
     import EmojiPicker from '$lib/components/EmojiPicker.svelte';
+    import ImageCropper from '$lib/components/ImageCropper.svelte';
 
     let profile: UserProfile | null = $state(null);
     let nickname = $state('');
@@ -30,6 +31,7 @@
     let savedTimer: ReturnType<typeof setTimeout> | null = null;
     let error = $state<string | null>(null);
     let seeded = $state(false);
+    let cropRequest: { file: File; kind: 'avatar' | 'banner' } | null = $state(null);
 
     // Previews: o upload pendente (avatarImg/bannerImg) ganha prioridade; senão,
     // usa o valor já persistido no perfil. O acesso aos $state nulos é feito
@@ -117,31 +119,38 @@
         });
     }
 
-    async function onAvatarSelect(e: Event): Promise<void> {
+    function onAvatarSelect(e: Event): void {
         avatarError = '';
         const input = e.target as HTMLInputElement;
         const file = input.files?.[0];
-        if (!file) return;
-        try {
-            avatarImg = await fileToBase64(file, 'avatar');
-            removeAvatar = false;
-        } catch (err) {
-            avatarError = (err as Error).message;
-            avatarImg = null;
-        }
+        input.value = '';
+        if (file) cropRequest = { file, kind: 'avatar' };
     }
 
-    async function onBannerSelect(e: Event): Promise<void> {
+    function onBannerSelect(e: Event): void {
         bannerError = '';
         const input = e.target as HTMLInputElement;
         const file = input.files?.[0];
-        if (!file) return;
+        input.value = '';
+        if (file) cropRequest = { file, kind: 'banner' };
+    }
+
+    async function applyCrop(file: File): Promise<void> {
+        if (!cropRequest) return;
+        const kind = cropRequest.kind;
+        cropRequest = null;
         try {
-            bannerImg = await fileToBase64(file, 'banner');
-            removeBanner = false;
+            const converted = await fileToBase64(file, kind);
+            if (kind === 'avatar') {
+                avatarImg = converted;
+                removeAvatar = false;
+            } else {
+                bannerImg = converted;
+                removeBanner = false;
+            }
         } catch (err) {
-            bannerError = (err as Error).message;
-            bannerImg = null;
+            if (kind === 'avatar') avatarError = (err as Error).message;
+            else bannerError = (err as Error).message;
         }
     }
 
@@ -151,6 +160,10 @@
             return;
         }
         error = null;
+        if (nickname.trim().length > 0 && nickname.trim().length < 3) {
+            error = 'O nickname deve ter no mínimo 3 caracteres.';
+            return;
+        }
         saved = false;
         saving = true;
         showSaving = false;
@@ -287,6 +300,7 @@
                     class="admin-input"
                     bind:value={nickname}
                     placeholder="Como você quer ser chamado"
+                    minlength="3"
                 />
             </div>
             <div class="admin-field">
@@ -372,6 +386,15 @@
         </div>
     </div>
 </div>
+
+{#if cropRequest}
+    <ImageCropper
+        file={cropRequest.file}
+        kind={cropRequest.kind}
+        onCancel={() => (cropRequest = null)}
+        onConfirm={applyCrop}
+    />
+{/if}
 
 <style>
     .profile-edit-page {
