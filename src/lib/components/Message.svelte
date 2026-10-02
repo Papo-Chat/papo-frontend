@@ -91,6 +91,7 @@
 	let isEditing = $state(false);
 	let editText = $state('');
 	let showDeleteConfirm = $state(false);
+	let deleting = $state(false);
 	let deleteButton: HTMLButtonElement | null = null;
 
 	async function startDelete(): Promise<void> {
@@ -153,12 +154,17 @@
 		showActions = false;
 	}
 
-	function doDelete(): void {
-		void messagesStore.remove(message.id).then(() => {
+	async function doDelete(): Promise<void> {
+		if (deleting) return;
+		deleting = true;
+		try {
+			await messagesStore.remove(message.id);
 			notificationsStore.removeByMessage(message.id);
-		});
-		showDeleteConfirm = false;
-		showActions = false;
+			showDeleteConfirm = false;
+			showActions = false;
+		} finally {
+			deleting = false;
+		}
 	}
 
 	function cancelDelete(): void {
@@ -354,11 +360,12 @@
 						bind:this={deleteButton}
 						class="confirm-btn danger"
 						type="button"
+						disabled={deleting}
 						onclick={doDelete}
 					>
-						Excluir
+						{deleting ? 'Excluindo…' : 'Excluir'}
 					</button>
-					<button class="confirm-btn" type="button" onclick={cancelDelete}> Cancelar </button>
+					<button class="confirm-btn" type="button" onclick={cancelDelete} disabled={deleting}> Cancelar </button>
 				</div>
 			{:else}
 				{#if message.reactions.length || canReply}
