@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import * as channelsStore from '$lib/store/channels.svelte';
 	import * as voiceStore from '$lib/store/voice.svelte';
 	import { parseChannelName } from '$lib/utils/channel-icon';
@@ -13,6 +14,10 @@
 	);
 	const cameraOn = $derived(voiceStore.state.localCameraStream !== null);
 	const screenOn = $derived(voiceStore.state.localScreenStream !== null);
+	const onActiveVoiceRoom = $derived(
+		voiceStore.state.channelId !== null &&
+			page.url.pathname === `/channels/${voiceStore.state.channelId}`
+	);
 
 	function returnToVoice(): void {
 		const id = voiceStore.state.channelId;
@@ -42,7 +47,7 @@
 	}
 </script>
 
-{#if voiceStore.state.connected && voiceStore.state.channelId}
+{#if voiceStore.state.connected && voiceStore.state.channelId && !onActiveVoiceRoom}
 	<aside class="global-voice-session" aria-label="Sessão de voz ativa">
 		<button class="voice-room-link" type="button" onclick={returnToVoice}>
 			<span class="voice-live-dot" aria-hidden="true"></span>
