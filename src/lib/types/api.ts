@@ -154,12 +154,20 @@ export interface CreateServerRequest {
 	public: boolean;
 }
 
-export interface UpdateServerRequest {
+export interface ReplaceServerRequest {
 	name: string;
 	icon_blob: string;
 	icon_format: string;
-	password: string | null;
-	public: boolean | null;
+	password: string;
+	public: boolean;
+}
+
+export interface PatchServerRequest {
+	name?: string;
+	icon_blob?: string;
+	icon_format?: string;
+	password?: string;
+	public?: boolean;
 }
 
 // ── channels ───────────────────────────────────────────

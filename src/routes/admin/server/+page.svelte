@@ -54,13 +54,15 @@
 	});
 
 	const isPrivate = $derived(!public_);
+	const requiresPassword = $derived(isPrivate && (creating || server?.public === true));
 	const passwordErrors = $derived(
 		isPrivate && password ? isValidPassword(password).errors : []
 	);
 	const canSave = $derived(
 		name.trim().length > 0 &&
 		name.length <= 32 &&
-		(!isPrivate || (password && isValidPassword(password).ok))
+		(!isPrivate ||
+			((!requiresPassword && !password) || (password && isValidPassword(password).ok)))
 	);
 
 	function onIconSelect(e: Event): void {
@@ -93,14 +95,19 @@
 			name: name.trim(),
 			icon_blob: iconBlob,
 			icon_format: iconFormat,
-			public: public_,
-			password: isPrivate ? password : null
+			public: public_
 		};
 		try {
 			const wasCreating = creating;
 			const next = wasCreating
-				? await serverStore.create(req)
-				: await serverStore.update(req);
+				? await serverStore.create({
+						...req,
+						password: isPrivate ? password : null
+					})
+				: await serverStore.update({
+						...req,
+						...(isPrivate && password ? { password } : {})
+					});
 
 			name = next.name;
 			public_ = next.public;
@@ -199,7 +206,9 @@
 								placeholder="Senha do servidor"
 							/>
 							<span class="hint">
-								Mín. 8 caracteres, 1 maiúscula + 1 especial
+								{requiresPassword
+									? 'Mín. 8 caracteres, 1 maiúscula + 1 especial'
+									: 'Deixe em branco para manter a senha atual; nova senha: mín. 8 caracteres, 1 maiúscula + 1 especial'}
 							</span>
 							{#if passwordErrors.length}
 								{#each passwordErrors as err (err)}

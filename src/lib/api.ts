@@ -51,7 +51,8 @@ import type {
 	UpdateAvatarRequest,
 	UpdateBannerRequest,
 	UpdateRoleRequest,
-	UpdateServerRequest,
+	PatchServerRequest,
+	ReplaceServerRequest,
 	UpdateUserRequest,
 	UpdateStatusRequest,
 	UserConfig,
@@ -543,8 +544,11 @@ export const server = {
 	create(req: CreateServerRequest): Promise<Server> {
 		return request<Server>('/server', { method: 'POST', body: req });
 	},
-	update(req: UpdateServerRequest): Promise<Server> {
+	replace(req: ReplaceServerRequest): Promise<Server> {
 		return request<Server>('/server', { method: 'PUT', body: req });
+	},
+	update(req: PatchServerRequest): Promise<Server> {
+		return request<Server>('/server', { method: 'PATCH', body: req });
 	}
 };
 

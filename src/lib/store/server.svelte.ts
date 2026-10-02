@@ -5,12 +5,12 @@
 // - `load()` → GET /server. A 404 (server not yet created) resolves to `null`;
 //   the caller decides how to react (redirect to the create flow).
 // - `create()` → POST /server (409 when already created).
-// - `update()` → PUT /server.
+// - `update()` → PATCH /server (partial update).
 // - `reset()` — called by the session store on logout / 401 / account switch.
 
 import { api } from '../api';
 import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
-import type { CreateServerRequest, Server, UpdateServerRequest } from '../types';
+import type { CreateServerRequest, PatchServerRequest, Server } from '../types';
 
 export const state = $state({
 	server: null as Server | null,
@@ -54,8 +54,8 @@ export async function create(req: CreateServerRequest): Promise<Server> {
 	return server;
 }
 
-// PUT /server.
-export async function update(req: UpdateServerRequest): Promise<Server> {
+// PATCH /server. Omitted fields are preserved by the backend.
+export async function update(req: PatchServerRequest): Promise<Server> {
 	const epoch = currentSessionEpoch();
 	const server = await api.server.update(req);
 	if (!isCurrentSessionEpoch(epoch)) {
