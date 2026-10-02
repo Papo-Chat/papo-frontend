@@ -18,17 +18,17 @@ afterEach(() => {
 
 describe('initial message history recovery', () => {
 	it('ensures the currently open channel history', async () => {
-		const ensureLoaded = vi.spyOn(messagesStore, 'ensureLoaded').mockResolvedValue(undefined);
+		const setLatest = vi.spyOn(messagesStore, 'setLatest').mockResolvedValue(undefined);
 
 		websocketStore.ensureOpenMessageHistory();
 
 		await vi.waitFor(() => {
-			expect(ensureLoaded).toHaveBeenCalledWith('ch1');
+			expect(setLatest).toHaveBeenCalledWith('ch1');
 		});
 	});
 
 	it('retries open history when presence_sync confirms the fresh websocket session', async () => {
-		const ensureLoaded = vi.spyOn(messagesStore, 'ensureLoaded').mockResolvedValue(undefined);
+		const setLatest = vi.spyOn(messagesStore, 'setLatest').mockResolvedValue(undefined);
 		const event = {
 			type: 'presence_sync',
 			members: []
@@ -37,7 +37,7 @@ describe('initial message history recovery', () => {
 		websocketStore.dispatchEvent(event);
 
 		await vi.waitFor(() => {
-			expect(ensureLoaded).toHaveBeenCalledWith('ch1');
+			expect(setLatest).toHaveBeenCalledWith('ch1');
 		});
 	});
 });
