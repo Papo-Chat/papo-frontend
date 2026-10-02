@@ -53,7 +53,7 @@
 </script>
 
 <div class="preview-card" bind:this={cardEl}>
-	<a class="preview-title" href={preview.url} target="_blank" rel="noopener">
+	<a class="preview-title" href={preview.url} target="_blank" rel="noopener noreferrer">
 		{title}
 	</a>
 
