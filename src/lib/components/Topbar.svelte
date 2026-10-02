@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import type { Channel, SearchResult } from '$lib/types';
-	import { state } from '$lib/store/ui.svelte';
+	import { state as uiState } from '$lib/store/ui.svelte';
 	import * as notificationsStore from '$lib/store/notifications.svelte';
 	import { meId, state as sessionState } from '$lib/store/session.svelte';
 	import { state as serverState } from '$lib/store/server.svelte';
@@ -34,35 +34,35 @@
 	const me = $derived(meId());
 	const isOwner = $derived(!!me && serverState.server?.owner_id === me);
 	const myRoleIds = $derived(new Set(sessionState.roles.map((r) => r.id)));
-	const myRoles = $derived(rolesStore.state.list.filter((r) => myRoleIds.has(r.id)));
+	const myRoles = $derived(rolesStore.uiState.list.filter((r) => myRoleIds.has(r.id)));
 	const ctx = $derived({ roles: myRoles, isOwner });
 	const canManageChannel = $derived(can('manage_channels', ctx));
 
 	function openSidebar(): void {
-		state.voiceChatDrawerOpen = false;
-		state.channelsDrawerOpen = true;
+		uiState.voiceChatDrawerOpen = false;
+		uiState.channelsDrawerOpen = true;
 	}
 
 	function openMembers(): void {
-		state.voiceChatDrawerOpen = false;
-		state.membersDrawerOpen = true;
+		uiState.voiceChatDrawerOpen = false;
+		uiState.membersDrawerOpen = true;
 	}
 
 	function toggleVoiceChat(): void {
-		const next = !state.voiceChatDrawerOpen;
+		const next = !uiState.voiceChatDrawerOpen;
 		if (next) {
-			state.channelsDrawerOpen = false;
-			state.membersDrawerOpen = false;
+			uiState.channelsDrawerOpen = false;
+			uiState.membersDrawerOpen = false;
 		}
-		state.voiceChatDrawerOpen = next;
+		uiState.voiceChatDrawerOpen = next;
 	}
 
 	function openNotifications(): void {
-		state.notificationsPopoverOpen = true;
+		uiState.notificationsPopoverOpen = true;
 	}
 
 	function openPins(): void {
-		state.pinsPopoverOpen = true;
+		uiState.pinsPopoverOpen = true;
 	}
 
 	function toggleSearch(): void {
@@ -123,11 +123,11 @@
 		{#if channel.type === 'voice'}
 			<button
 				class="pill circle header-icon-btn voice-chat-btn"
-				class:active={state.voiceChatDrawerOpen}
+				class:active={uiState.voiceChatDrawerOpen}
 				onclick={toggleVoiceChat}
-				aria-label={state.voiceChatDrawerOpen ? 'Fechar chat de texto' : 'Abrir chat de texto'}
-				title={state.voiceChatDrawerOpen ? 'Fechar chat de texto' : 'Abrir chat de texto'}
-				aria-pressed={state.voiceChatDrawerOpen}
+				aria-label={uiState.voiceChatDrawerOpen ? 'Fechar chat de texto' : 'Abrir chat de texto'}
+				title={uiState.voiceChatDrawerOpen ? 'Fechar chat de texto' : 'Abrir chat de texto'}
+				aria-pressed={uiState.voiceChatDrawerOpen}
 			>
 				<Icon name="chat-circle-text" variant="light" />
 				<span class="voice-chat-label">Chat</span>
@@ -159,8 +159,8 @@
 			title="Notificações"
 		>
 			<Icon name="bell" variant="light" />
-			{#if notificationsStore.state.unreadCount > 0}
-				<span class="unread-badge">{notificationsStore.state.unreadCount}</span>
+			{#if notificationsStore.uiState.unreadCount > 0}
+				<span class="unread-badge">{notificationsStore.uiState.unreadCount}</span>
 			{/if}
 		</button>
 		<button
