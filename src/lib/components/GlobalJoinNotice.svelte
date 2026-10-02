@@ -8,13 +8,15 @@
 		const notice = usersStore.state.joinNotice;
 		if (!notice) return;
 
+		const user = usersStore.state.byId.get(notice.userId);
+		if (!user) return;
+
 		const consumed = usersStore.consumeJoinNotice(notice.id);
 		if (!consumed) return;
 
-		const user = usersStore.state.byId.get(consumed.userId);
 		current = {
 			id: consumed.id,
-			name: user?.nickname || user?.username || 'Novo membro'
+			name: user.nickname || user.username
 		};
 
 		if (hideTimer) clearTimeout(hideTimer);
