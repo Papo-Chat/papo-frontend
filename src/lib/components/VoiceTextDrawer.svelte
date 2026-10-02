@@ -274,9 +274,9 @@
 		box-sizing: border-box;
 	}
 
-	.voice-text-chat :global(.chat),
 	.voice-text-chat :global(.chat-content) {
-		overflow-x: hidden;
+		overflow-x: clip;
+		overflow-y: visible;
 	}
 
 	.voice-text-composer {
