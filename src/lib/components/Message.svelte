@@ -435,7 +435,8 @@
 		width: 100%;
 		max-width: 100%;
 		min-width: 0;
-		overflow-x: hidden;
+		overflow-x: clip;
+		overflow-y: visible;
 	}
 
 	.bubble.giphy-bubble {
