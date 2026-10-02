@@ -99,7 +99,9 @@
 		if (!id) return;
 
 		untrack(() => {
-			messagesStore.ensureLoaded(id);
+			// Reconciliamos com o REST a cada abertura. O cache existente continua
+			// visível durante a request, mas nunca bloqueia a recuperação do histórico.
+			void messagesStore.setLatest(id);
 			messagesStore.loadPinned(id);
 			channelsStore.setOpen(id);
 		});
