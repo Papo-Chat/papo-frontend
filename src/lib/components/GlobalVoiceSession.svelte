@@ -157,8 +157,8 @@
 		class="global-voice-session"
 		class:ready
 		aria-label="Sessão de voz ativa"
-		style: left={`${position.x}px`}
-		style: top={`${position.y}px`}
+		style:left={`${position.x}px`}
+		style:top={`${position.y}px`}
 	>
 		<button
 			class="voice-drag-handle"
