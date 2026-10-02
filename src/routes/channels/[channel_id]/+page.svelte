@@ -48,7 +48,6 @@
 	const loading = $derived(!!ch && ch.loading);
 	const hasMoreNewer = $derived(!!ch && ch.hasMoreNewer);
 	const hasMoreOlder = $derived(!!ch && ch.hasMoreOlder);
-	const joinNotice=$derived(usersStore.state.joinNotice?{id:usersStore.state.joinNotice.id,name:usersStore.state.byId.get(usersStore.state.joinNotice.userId)?.nickname||usersStore.state.byId.get(usersStore.state.joinNotice.userId)?.username||'Novo membro'}:null);
 
 	// Indicador de digitando.
 	const typingIds = $derived(
@@ -228,7 +227,6 @@
 				{hasMoreNewer}
 				{hasMoreOlder}
 				{highlightMessageId}
-				{joinNotice}
 				{replyTo}
 				disabled={!messagesStore.getChannel(channel.id)}
 				{onReply}
@@ -257,7 +255,6 @@
 			{hasMoreNewer}
 			{hasMoreOlder}
 			{highlightMessageId}
-			{joinNotice}
 			{onReply}
 			onJumpToLatest={() => messagesStore.setLatest(channel.id)}
 			onJumpToLastRead={() =>
