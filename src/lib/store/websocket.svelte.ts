@@ -88,7 +88,7 @@ function startPing(socket: WebSocket, gen: number): void {
 // Minimal REST reconciliation after a reconnect (P1.10). Only run when a
 // session is active. The fresh WS's `presence_sync` is the online source of
 // truth; no full history reload.
-function ensureOpenMessageHistory(): void {
+export function ensureOpenMessageHistory(): void {
 	const openChannel = channelsStore.state.openChannelId;
 	if (openChannel) {
 		void messagesStore.ensureLoaded(openChannel).then(() => {
