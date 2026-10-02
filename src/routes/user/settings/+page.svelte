@@ -198,6 +198,7 @@
 		}
 		passwordSaving = true;
 		try {
+			await api.users.preparePasswordChange(sessionState.userId);
 			await api.users.changePassword(sessionState.userId, { password: newPassword });
 			newPassword = '';
 			confirmPassword = '';
@@ -218,34 +219,6 @@
 </script>
 
 <div class="settings-page">
-	<div class="admin-card">
-		<div class="admin-card-head">
-			<Icon name="lock-key" variant="duotone" size={16} />
-			Segurança
-		</div>
-		<div class="admin-card-body">
-			<div class="admin-field">
-				<label for="set-new-password">Nova senha</label>
-				<input id="set-new-password" class="admin-input" type="password" bind:value={newPassword} autocomplete="new-password" />
-			</div>
-			<div class="password-rules">
-				<span class:ok={newPassword.length >= minPasswordLength}>✓ {minPasswordLength}+ caracteres</span>
-				<span class:ok={/[A-Z]/.test(newPassword)}>✓ 1 letra maiúscula</span>
-				<span class:ok={/[^A-Za-z0-9]/.test(newPassword)}>✓ 1 caractere especial</span>
-			</div>
-			<div class="admin-field">
-				<label for="set-confirm-password">Confirmar nova senha</label>
-				<input id="set-confirm-password" class="admin-input" type="password" bind:value={confirmPassword} autocomplete="new-password" />
-			</div>
-			<div class="password-actions">
-				<button class="admin-btn" type="button" onclick={changePassword}
-					disabled={passwordSaving || !passwordCheck.ok || newPassword !== confirmPassword}>
-					{passwordSaving ? 'Alterando…' : 'Alterar senha'}
-				</button>
-				{#if passwordSaved}<span class="channel-saved">Senha alterada.</span>{/if}
-			</div>
-		</div>
-	</div>
 	{#if error}
 		<div class="settings-error" role="alert">
 			<Icon name="warning-circle" variant="light" />
@@ -401,6 +374,35 @@
 				</label>
 			</div>
 		</div>
+
+	<div class="admin-card">
+		<div class="admin-card-head">
+			<Icon name="lock-key" variant="duotone" size={16} />
+			Segurança
+		</div>
+		<div class="admin-card-body">
+			<div class="admin-field">
+				<label for="set-new-password">Nova senha</label>
+				<input id="set-new-password" class="admin-input" type="password" bind:value={newPassword} autocomplete="new-password" />
+			</div>
+			<div class="password-rules">
+				<span class:ok={newPassword.length >= minPasswordLength}>✓ {minPasswordLength}+ caracteres</span>
+				<span class:ok={/[A-Z]/.test(newPassword)}>✓ 1 letra maiúscula</span>
+				<span class:ok={/[^A-Za-z0-9]/.test(newPassword)}>✓ 1 caractere especial</span>
+			</div>
+			<div class="admin-field">
+				<label for="set-confirm-password">Confirmar nova senha</label>
+				<input id="set-confirm-password" class="admin-input" type="password" bind:value={confirmPassword} autocomplete="new-password" />
+			</div>
+			<div class="password-actions">
+				<button class="admin-btn" type="button" onclick={changePassword}
+					disabled={passwordSaving || !passwordCheck.ok || newPassword !== confirmPassword}>
+					{passwordSaving ? 'Alterando…' : 'Alterar senha'}
+				</button>
+				{#if passwordSaved}<span class="channel-saved">Senha alterada.</span>{/if}
+			</div>
+		</div>
+	</div>
 
 		<div class="settings-actions">
 			<button class="admin-btn" onclick={save} disabled={saving}>
