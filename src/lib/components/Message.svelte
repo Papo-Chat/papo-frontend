@@ -70,6 +70,13 @@
 	const mentionsMe = $derived(
 		!!me && (message.content ?? '').includes(`@mention(<@${me}>)`)
 	);
+	const replyPreviewText = $derived(
+		msgReply?.content
+			? (isGiphyMarker(msgReply.content) ? 'GIF' : msgReply.content.replace(/\s+/g, ' ').trim())
+			: msgReply?.attachments.length
+				? 'Anexo'
+				: ''
+	);
 	const repliesToMe = $derived(
 		!!me && !!message.reply_to && msgReply?.author_id === me
 	);
@@ -229,14 +236,8 @@
 						<Avatar user={replyAuthor} userId={msgReply?.author_id ?? null} size={18} />
 						{replyAuthor.nickname || replyAuthor.username}
 
-						{#if msgReply}
-							{#if msgReply.content}
-								<span class="reply-preview-text">
-									<FormattedMessage content={msgReply.content} />
-								</span>
-							{:else if msgReply.attachments.length}
-								<span class="reply-preview-attachment"><i>Anexo</i></span>
-							{/if}
+						{#if replyPreviewText}
+							<span class="reply-preview-text">{replyPreviewText}</span>
 						{/if}
 					</button>
 				{:else}
@@ -534,23 +535,6 @@
 		overflow: hidden;
 		white-space: nowrap;
 		text-overflow: ellipsis;
-	}
-	.reply-preview-text :global(.msg-text) {
-		display: inline;
-		white-space: nowrap;
-	}
-	.reply-preview-text :global(.msg-text p) {
-		display: inline;
-		margin: 0;
-	}
-	.reply-preview-text :global(.inline-emoji),
-	.reply-preview-text :global(.full-emoji) {
-		width: 1.25em;
-		height: 1.25em;
-		vertical-align: -0.2em;
-	}
-	.reply-preview-attachment {
-		color: var(--muted-soft);
 	}
 	.act-btn {
 		display: flex;
