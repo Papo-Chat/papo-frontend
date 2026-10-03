@@ -93,16 +93,15 @@
 		}
 	});
 
-	// Carrega histórico quando a rota muda. Use o param da rota como única
-	// dependência: o objeto channel é atualizado pelos stores e não pode
-	// retriggerar a própria request de mensagens.
+	// Keep page-local channel state in sync when the route changes. The parent
+	// layout already starts the latest-history request, so do not trigger the
+	// same fresh fetch again here.
 	$effect(() => {
 		const id = page.params.channel_id;
 		if (!id || id === lastHistoryChannelId) return;
 		lastHistoryChannelId = id;
 
 		untrack(() => {
-			void messagesStore.setLatest(id);
 			messagesStore.loadPinned(id);
 			channelsStore.setOpen(id);
 		});
