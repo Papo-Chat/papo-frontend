@@ -17,6 +17,7 @@ import type { ChannelMessagesState, MessagesState } from './messages.types';
 import type {
 	LinkPreview,
 	LinkPreviewWithImage,
+	MessageReactionSummary,
 	MessageWithAttachment,
 	WsAttachmentModerationUpdate,
 	WsLinkPreviewUpdate,
@@ -40,6 +41,43 @@ const previewCache = new SvelteMap<string, LinkPreviewWithImage>();
 const pendingPreviews = new SvelteMap<string, SvelteMap<string, LinkPreviewWithImage>>();
 
 const previewTombstones = new SvelteSet<string>();
+
+// Reaction summaries do not expose created_at, and react_update only carries
+// the absolute count. Keep a per-message first-seen order so count updates,
+// optimistic remove/re-add and fresh REST snapshots cannot shuffle the pills.
+const reactionOrder = new Map<string, Map<string, number>>();
+let reactionOrderSerial = 0;
+
+function reactionSummaryKey(reaction: {
+	emoji_id: string | null;
+	unicode: string | null;
+}): string {
+	return `${reaction.emoji_id ?? ''}:${reaction.unicode ?? ''}`;
+}
+
+function stableReactionOrder(
+	messageId: string,
+	reactions: MessageReactionSummary[]
+): MessageReactionSummary[] {
+	let order = reactionOrder.get(messageId);
+	if (!order) {
+		order = new Map();
+		reactionOrder.set(messageId, order);
+	}
+
+	for (const reaction of reactions) {
+		const key = reactionSummaryKey(reaction);
+		if (!order.has(key)) {
+			order.set(key, ++reactionOrderSerial);
+		}
+	}
+
+	return [...reactions].sort(
+		(a, b) =>
+			(order!.get(reactionSummaryKey(a)) ?? Number.MAX_SAFE_INTEGER) -
+			(order!.get(reactionSummaryKey(b)) ?? Number.MAX_SAFE_INTEGER)
+	);
+}
 
 let requestSerial = 0;
 let storeEpoch = 0;
@@ -96,8 +134,9 @@ function releaseMessageResources(
 	}
 
 	for (const m of dropped) {
-		// Drop any not-yet-applied previews for this message.
+		// Drop any not-yet-applied previews/reaction ordering for this message.
 		pendingPreviews.delete(m.id);
+		reactionOrder.delete(m.id);
 		for (const p of m.previews) {
 			if (!keptPreviewIds.has(p.id)) {
 				previewCache.delete(p.id);
@@ -234,7 +273,7 @@ function coerceMessage(m: MessageWithAttachment): MessageWithAttachment {
 		...m,
 		attachments: m.attachments ?? [],
 		previews: m.previews ?? [],
-		reactions: m.reactions ?? [],
+		reactions: stableReactionOrder(m.id, m.reactions ?? []),
 		user_reactions: m.user_reactions ?? []
 	};
 }
@@ -416,6 +455,7 @@ export function removeMessage(state: MessagesState, channelId: string, messageId
 		pinned: ch.pinned.filter((p) => p.id !== messageId),
 		deletedMessageIds: new SvelteSet([...ch.deletedMessageIds, messageId])
 	});
+	reactionOrder.delete(messageId);
 }
 
 // Pin/unpin a message in the pinned list (source of truth for pinned status).
@@ -530,6 +570,7 @@ export function reactUpdate(state: MessagesState, event: WsReactUpdate): void {
 				return r;
 			});
 		}
+		reactions = stableReactionOrder(msg.id, reactions);
 		const changed =
 			msg.reactions.length !== reactions.length ||
 			msg.reactions.some(
@@ -1444,7 +1485,7 @@ function applyLocalReaction(
 
 		return {
 			...msg,
-			reactions: nextReactions,
+			reactions: stableReactionOrder(messageId, nextReactions),
 			user_reactions: nextUserReactions
 		};
 	});
@@ -1616,4 +1657,6 @@ export function reset(): void {
 	pendingPreviews.clear();
 	previewCache.clear();
 	previewTombstones.clear();
+	reactionOrder.clear();
+	reactionOrderSerial = 0;
 }
