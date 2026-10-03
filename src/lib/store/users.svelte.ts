@@ -2,7 +2,7 @@
 // typing (TTL), and a keyset list.
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
-import { blobToUrl } from '../utils/media';
+import { blobToUrl, revokeBlobKey } from '../utils/media';
 import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
 import type { UserSummary, UserProfile, KeysetCursor, PresenceStatus } from '../types';
 
@@ -117,6 +117,7 @@ function cacheProfile(profile: UserProfile): void {
 function invalidateProfile(id: string): void {
     state.profiles.delete(id);
     profileLastUsed.delete(id);
+    revokeBlobKey(`avatar:${id}`);
 }
 
 function evictProfiles(): void {
@@ -808,7 +809,7 @@ export function avatarUrl(user: UserProfile): string {
     if (!user.avatar_blob) {
         return '';
     }
-    return blobToUrl(user.avatar_blob, user.avatar_format);
+    return blobToUrl(user.avatar_blob, user.avatar_format, `avatar:${user.id}`);
 }
 // Full reset (logout / 401 / account switch) — clears every user-specific
 // cache so the previous account leaves zero residue.
@@ -819,6 +820,9 @@ export function reset(): void {
     }
     typingTimers.clear();
     state.byId.clear();
+    for (const id of state.profiles.keys()) {
+        revokeBlobKey(`avatar:${id}`);
+    }
     state.profiles.clear();
     profileLastUsed.clear();
     retainedProfileCounts.clear();
