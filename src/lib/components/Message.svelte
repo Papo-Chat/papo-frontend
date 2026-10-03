@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { MessageWithAttachment, RoleSummary } from '$lib/types';
+	import type { MessageAttachment, MessageWithAttachment, RoleSummary } from '$lib/types';
 	import { openProfile, setScrollTarget } from '$lib/store/ui.svelte';
 	import { meId, state as sessionState } from '$lib/store/session.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
@@ -87,13 +87,13 @@
 
 	const imageAttachments = $derived(
 		message.attachments.filter(
-			(attachment) =>
+			(attachment: MessageAttachment) =>
 				attachment.thumbnail_id !== null && isImageMime(attachment.mime_type).isImage
 		)
 	);
 	const otherAttachments = $derived(
 		message.attachments.filter(
-			(attachment) =>
+			(attachment: MessageAttachment) =>
 				attachment.thumbnail_id === null || !isImageMime(attachment.mime_type).isImage
 		)
 	);
