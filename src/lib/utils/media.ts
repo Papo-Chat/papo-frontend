@@ -86,12 +86,22 @@ function fnv1a64(str: string): bigint {
 
 const cache = new Map<bigint, CacheEntry>();
 
+interface LogicalCacheEntry extends CacheEntry {
+	base64: string;
+	format: string;
+}
+
+// Stable resource identities (avatar:userId, emoji:emojiId, etc.) bypass the
+// content hash entirely. Hashing a large base64 string with BigInt on every
+// component mount is expensive even when the resulting object URL is cached.
+const logicalCache = new Map<string, LogicalCacheEntry>();
+
 // Convert a base64 blob to a one-time objectURL, cached (LRU). Returns ''
 // when there is no base64 or when running outside a browser environment.
 // `format` is the image format (PNG/JPEG/JPG/WEBP/GIF); it is converted to a
-// MIME for the Blob. The key includes the format so two payloads with the
-// same base64 but different format metadata are not shared.
-export function blobToUrl(base64: string, format: string): string {
+// MIME for the Blob. Pass a stable `cacheKey` when the caller has a logical
+// resource identity; this avoids hashing the whole base64 payload on cache hits.
+export function blobToUrl(base64: string, format: string, cacheKey?: string): string {
 	if (!base64) {
 		return '';
 	}
@@ -99,6 +109,26 @@ export function blobToUrl(base64: string, format: string): string {
 		return '';
 	}
 	const mime = formatToMime(format);
+
+	if (cacheKey) {
+		const logicalHit = logicalCache.get(cacheKey);
+		if (logicalHit && logicalHit.base64 === base64 && logicalHit.format === format) {
+			return logicalHit.url;
+		}
+		if (logicalHit) {
+			URL.revokeObjectURL(logicalHit.url);
+			logicalCache.delete(cacheKey);
+		}
+		const bin = atob(base64);
+		const bytes = new Uint8Array(bin.length);
+		for (let i = 0; i < bin.length; i++) {
+			bytes[i] = bin.charCodeAt(i);
+		}
+		const url = URL.createObjectURL(new Blob([bytes], { type: mime }));
+		logicalCache.set(cacheKey, { url, mime, base64, format });
+		return url;
+	}
+
 	const key = fnv1a64(`${format}:${base64}`);
 	const hit = cache.get(key);
 	if (hit) {
@@ -128,6 +158,18 @@ export function blobToUrl(base64: string, format: string): string {
 	return url;
 }
 
+export function revokeBlobKey(cacheKey: string): void {
+	if (typeof window === 'undefined') {
+		return;
+	}
+	const entry = logicalCache.get(cacheKey);
+	if (!entry) {
+		return;
+	}
+	logicalCache.delete(cacheKey);
+	URL.revokeObjectURL(entry.url);
+}
+
 // Best-effort revoke of a previously returned objectURL (e.g. on channel evict).
 export function revokeBlobUrl(url: string): void {
 	if (!url) {
@@ -136,11 +178,18 @@ export function revokeBlobUrl(url: string): void {
 	if (typeof window === 'undefined') {
 		return;
 	}
+	for (const [key, entry] of logicalCache) {
+		if (entry.url === url) {
+			logicalCache.delete(key);
+			URL.revokeObjectURL(url);
+			return;
+		}
+	}
 	for (const [key, entry] of cache) {
 		if (entry.url === url) {
 			cache.delete(key);
 			URL.revokeObjectURL(url);
-			break;
+			return;
 		}
 	}
 }
