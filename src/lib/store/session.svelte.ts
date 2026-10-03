@@ -134,9 +134,11 @@ export async function load(): Promise<void> {
 		void dmsStore.load().catch(() => {});
 		void blocksStore.load().catch(() => {});
 
-		// Emoji consumers always operate on the complete server list. Finish
-		// pagination once during bootstrap; picker/admin never paginate.
-		await emojisStore.loadAll();
+		// Session-critical data is ready at this point. Emoji pagination is
+		// intentionally detached from the protected-route bootstrap so the
+		// shell/composer can render while custom emojis stream in page by page.
+		// Consumers are reactive, and loadAll() still completes the full list.
+		void emojisStore.loadAll().catch(() => {});
 
 		// Only the first member-directory page is loaded. Online/message/pin/
 		// notification users are hydrated independently through summary_batch.
