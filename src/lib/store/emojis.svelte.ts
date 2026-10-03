@@ -4,11 +4,12 @@ import { SvelteMap } from 'svelte/reactivity';
 import { api } from '../api';
 import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
 import { nextCursor } from '../utils/keyset';
-import { formatToMime } from '../utils/media';
+import { blobToUrl, revokeBlobKey } from '../utils/media';
 import type { Emoji, KeysetCursor } from '../types';
 
 export const state = $state({
 	byId: new SvelteMap<string, Emoji>(),
+	byName: new SvelteMap<string, Emoji>(),
 	list: [] as Emoji[],
 	loaded: false,
 	loading: false,
@@ -30,6 +31,7 @@ async function _loadPage(q?: { since?: string; last_id?: string }): Promise<void
 		}
 		for (const e of res.emojis) {
 			state.byId.set(e.id, e);
+			state.byName.set(e.name, e);
 		}
 		if (q) {
 			// loadMore: append, deduping by id.
@@ -77,6 +79,7 @@ export async function loadAll(): Promise<void> {
 
 			for (const emoji of res.emojis) {
 				state.byId.set(emoji.id, emoji);
+				state.byName.set(emoji.name, emoji);
 				if (!seen.has(emoji.id)) {
 					seen.add(emoji.id);
 					all.push(emoji);
@@ -138,6 +141,7 @@ export async function create(req: {
 		throw new Error('stale session');
 	}
 	state.byId.set(emoji.id, emoji);
+	state.byName.set(emoji.name, emoji);
 	state.list = [...state.list, emoji];
 	return emoji;
 }
@@ -148,24 +152,33 @@ export async function remove(id: string): Promise<void> {
 	if (!isCurrentSessionEpoch(epoch)) {
 		throw new Error('stale session');
 	}
+	const removed = state.byId.get(id);
 	state.byId.delete(id);
+	if (removed && state.byName.get(removed.name)?.id === id) {
+		state.byName.delete(removed.name);
+	}
+	revokeBlobKey(`emoji:${id}`);
 	state.list = state.list.filter((e) => e.id !== id);
 }
 
-// Emojis stay in memory for the whole session, so a data URL is a better
-// fit than the shared object-URL LRU. Object URLs can be revoked while an
-// <img> is still mounted when a server has many custom emojis.
+// Custom emoji images have a stable identity for the session. Reuse one
+// object URL per emoji id so channel switches do not repeatedly parse large
+// data: URLs or hash/decode the same base64 payload on every message mount.
 export function emojiUrl(emoji: Emoji): string {
 	if (!emoji.image_blob) {
 		return '';
 	}
-	return `data:${formatToMime(emoji.format)};base64,${emoji.image_blob}`;
+	return blobToUrl(emoji.image_blob, emoji.format, `emoji:${emoji.id}`);
 }
 
 // Full reset (logout / 401 / account switch).
 export function reset(): void {
 	state.loadGeneration += 1;
+	for (const id of state.byId.keys()) {
+		revokeBlobKey(`emoji:${id}`);
+	}
 	state.byId.clear();
+	state.byName.clear();
 	state.list = [];
 	state.loaded = false;
 	state.loading = false;
