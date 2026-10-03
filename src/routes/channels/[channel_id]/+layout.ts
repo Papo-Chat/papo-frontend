@@ -67,7 +67,12 @@ export async function load({
 	const channel = channelsStore.resolve(channelId);
 	if (channel) {
 		channelsStore.setOpen(channel.id);
-		await messagesStore.ensureLoaded(channel.id);
+
+		// Start fetching the latest window immediately, but do not make route
+		// navigation wait for message history. Chat.svelte defers its initial
+		// scroll positioning while this store is loading, and the page-level
+		// setLatest() call is deduped by the store's in-flight request map.
+		void messagesStore.setLatest(channel.id);
 		return;
 	}
 
