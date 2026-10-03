@@ -10,7 +10,7 @@
 	// the `.chat` container (composer, at the bottom) it always opens above.
 	import { tick } from 'svelte';
 	import { allEmojis, type EmojiOption } from '$lib/utils/emojis';
-	import { formatToMime } from '$lib/utils/media';
+	import { blobToUrl } from '$lib/utils/media';
 	import { PUBLIC_GIPHY_API_KEY } from '$lib/env';
 	import Icon from './Icon.svelte';
 
@@ -149,7 +149,7 @@
 
 	function customEmojiSrc(opt: Extract<EmojiOption, { kind: 'custom' }>): string {
 		if (!opt.image_blob) return '';
-		return `data:${formatToMime(opt.format)};base64,${opt.image_blob}`;
+		return blobToUrl(opt.image_blob, opt.format, `emoji:${opt.id}`);
 	}
 
 	function onFilterInput(e: Event): void {
