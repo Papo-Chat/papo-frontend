@@ -234,9 +234,7 @@ function coerceMessage(m: MessageWithAttachment): MessageWithAttachment {
 		...m,
 		attachments: m.attachments ?? [],
 		previews: m.previews ?? [],
-		// Backend returns reaction groups in DESC insertion order. The UI displays
-		// them oldest -> newest, so normalize once when messages enter the store.
-		reactions: [...(m.reactions ?? [])].reverse(),
+		reactions: m.reactions ?? [],
 		user_reactions: m.user_reactions ?? []
 	};
 }
