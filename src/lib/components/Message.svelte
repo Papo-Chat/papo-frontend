@@ -86,10 +86,16 @@
 	);
 
 	const imageAttachments = $derived(
-		message.attachments.filter((attachment) => isImageMime(attachment.mime_type).isImage)
+		message.attachments.filter(
+			(attachment) =>
+				attachment.thumbnail_id !== null && isImageMime(attachment.mime_type).isImage
+		)
 	);
 	const otherAttachments = $derived(
-		message.attachments.filter((attachment) => !isImageMime(attachment.mime_type).isImage)
+		message.attachments.filter(
+			(attachment) =>
+				attachment.thumbnail_id === null || !isImageMime(attachment.mime_type).isImage
+		)
 	);
 	const imageTileCount = $derived(imageAttachments.length);
 	const imageTileClass = $derived(
