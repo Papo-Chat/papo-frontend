@@ -4,9 +4,10 @@
 	import { attachmentUrl, attachmentThumbnailUrl, fetchMediaBlob } from '$lib/utils/media';
 	import { formatBytes, isImageMime } from '$lib/utils/text';
 
-	let { attachment, pinned = false } = $props<{
+	let { attachment, pinned = false, tiled = false } = $props<{
 		attachment: MessageAttachment;
 		pinned?: boolean;
+		tiled?: boolean;
 	}>();
 
 	let lightboxOpen = $state(false);
@@ -144,6 +145,7 @@
 	<button
 		type="button"
 		class="attachment-image"
+		class:tiled
 		aria-label={`Abrir ${name} em tela cheia`}
 		onclick={openLightbox}
 	>
@@ -270,6 +272,24 @@
 		height: auto;
 		max-height: 360px;
 		border-radius: 10px;
+	}
+
+	/* Message image mosaics own the tile geometry. Fill the tile and crop
+	 * like Discord instead of stacking every image at its natural aspect. */
+	.attachment-image.tiled {
+		width: 100%;
+		height: 100%;
+		margin: 0;
+		overflow: hidden;
+		border-radius: 10px;
+	}
+	.attachment-image.tiled img {
+		width: 100%;
+		height: 100%;
+		max-width: none;
+		max-height: none;
+		object-fit: cover;
+		border-radius: inherit;
 	}
 	.attachment-media {
 		display: block;
