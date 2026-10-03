@@ -35,7 +35,13 @@
 	);
 
 	const avatarSrc = $derived(
-		profile?.avatar_blob ? blobToUrl(profile.avatar_blob, profile.avatar_format) : ''
+		profile?.avatar_blob
+			? blobToUrl(
+					profile.avatar_blob,
+					profile.avatar_format,
+					effectiveUserId ? `avatar:${effectiveUserId}` : undefined
+				)
+			: ''
 	);
 
 	const iconSize = $derived(size * 0.5);
