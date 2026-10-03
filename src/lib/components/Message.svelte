@@ -11,6 +11,7 @@
 	import { state as serverState } from '$lib/store/server.svelte';
 	import { channelAccess, can } from '$lib/store/roles.svelte';
 	import { formatTime } from '$lib/utils/time';
+	import { isImageMime } from '$lib/utils/text';
 	import { isGiphyMarker } from '$lib/utils/giphy';
 	import Avatar from './Avatar.svelte';
 	import Reactions from './Reactions.svelte';
@@ -82,6 +83,23 @@
 	);
 	const goldHighlight = $derived(
 		isPinned || isEveryoneMessage || mentionsMe || repliesToMe
+	);
+
+	const imageAttachments = $derived(
+		message.attachments.filter((attachment) => isImageMime(attachment.mime_type).isImage)
+	);
+	const otherAttachments = $derived(
+		message.attachments.filter((attachment) => !isImageMime(attachment.mime_type).isImage)
+	);
+	const imageTileCount = $derived(imageAttachments.length);
+	const imageTileClass = $derived(
+		imageTileCount === 2
+			? 'two'
+			: imageTileCount === 3
+				? 'three'
+				: imageTileCount >= 4
+					? 'four'
+					: 'single'
 	);
 
 	// ── ações: edit/delete/reply/pin ─────────────────────────────────
@@ -346,9 +364,22 @@
 				{/each}
 			{/if}
 
-			<!-- anexos: thumbnail de imagem, player de vídeo/áudio ou chip. -->
-			{#if message.attachments.length}
-				{#each message.attachments as a (a.id)}
+			<!-- Multiple images use a compact Discord-like mosaic. Non-image
+			     attachments keep their existing vertical layout below it. -->
+			{#if imageAttachments.length > 1}
+				<div class="attachment-grid {imageTileClass}" data-count={imageTileCount}>
+					{#each imageAttachments as a, index (a.id)}
+						<div class="attachment-tile tile-{index + 1}">
+							<Attachment attachment={a} pinned={goldHighlight} tiled />
+						</div>
+					{/each}
+				</div>
+			{:else if imageAttachments.length === 1}
+				<Attachment attachment={imageAttachments[0]} pinned={goldHighlight} />
+			{/if}
+
+			{#if otherAttachments.length}
+				{#each otherAttachments as a (a.id)}
 					<Attachment attachment={a} pinned={goldHighlight} />
 				{/each}
 			{/if}
@@ -435,6 +466,59 @@
 		width: 100%;
 		min-width: 0;
 		animation: message-enter 180ms ease;
+	}
+
+
+	.attachment-grid {
+		display: grid;
+		width: min(560px, 100%);
+		max-width: 100%;
+		height: clamp(220px, 42vw, 360px);
+		gap: 4px;
+		margin: 3px 0;
+		overflow: hidden;
+		border-radius: 12px;
+	}
+	.attachment-tile {
+		min-width: 0;
+		min-height: 0;
+		overflow: hidden;
+	}
+	.attachment-grid.two {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-template-rows: 1fr;
+	}
+	.attachment-grid.three {
+		grid-template-columns: 1.45fr 1fr;
+		grid-template-rows: repeat(2, minmax(0, 1fr));
+	}
+	.attachment-grid.three .tile-1 {
+		grid-row: 1 / 3;
+	}
+	.attachment-grid.four {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		grid-auto-rows: minmax(0, 1fr);
+	}
+	/* For 5+ images keep a dense 2-column mosaic instead of growing the
+	 * message vertically without bound. */
+	.attachment-grid.four[data-count]:not([data-count='4']) {
+		height: auto;
+		max-height: none;
+		grid-auto-rows: clamp(120px, 24vw, 180px);
+	}
+	@media (max-width: 700px) {
+		.attachment-grid {
+			width: 100%;
+			height: clamp(180px, 58vw, 300px);
+			gap: 3px;
+			border-radius: 10px;
+		}
+		.attachment-grid.three {
+			grid-template-columns: 1.2fr 1fr;
+		}
+		.attachment-grid.four[data-count]:not([data-count='4']) {
+			grid-auto-rows: clamp(100px, 30vw, 150px);
+		}
 	}
 
 	.content {
