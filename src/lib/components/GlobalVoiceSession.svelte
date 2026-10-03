@@ -87,7 +87,7 @@
 			const rect = panelEl.getBoundingClientRect();
 			if (!desktopPositioned) {
 				position = clampFloatingVoicePosition(
-					{ x: window.innerWidth - rect.width - 20, y: 96 },
+					{ x: window.innerWidth/2, y: window.innerHeight/20 },
 					{ width: rect.width, height: rect.height },
 					{ width: window.innerWidth, height: window.innerHeight }
 				);
@@ -245,12 +245,16 @@
 		padding: 8px;
 		border: 1px solid var(--border);
 		border-radius: 14px;
-		background: color-mix(in srgb, var(--surface) 92%, transparent);
+		background: linear-gradient(145deg, rgba(251, 254, 255, 0.99), rgba(229, 244, 252, 0.985));
 		box-shadow: 0 12px 36px rgb(0 0 0 / 0.18);
-		backdrop-filter: blur(18px);
-		-webkit-backdrop-filter: blur(18px);
 		opacity: 0;
-		transition: opacity 120ms ease;
+	}
+	:global(html[data-theme='dark']) .global-voice-session {
+		border-color: rgba(156, 210, 242, 0.18);
+		background: linear-gradient(145deg, rgba(31, 59, 77, 0.995), rgba(10, 34, 49, 0.995));
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.08),
+			0 14px 34px rgba(0, 0, 0, 0.38);
 	}
 
 	.global-voice-session.ready {
