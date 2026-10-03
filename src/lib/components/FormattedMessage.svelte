@@ -5,7 +5,6 @@
 	import { emojiUrl } from '$lib/store/emojis.svelte';
 	import { renderMessageMarkdown } from '$lib/utils/markdown';
 	import { isGiphyMarker, resolveGiphyGif, type GiphyResolvedGif } from '$lib/utils/giphy';
-	import type { Emoji } from '$lib/types';
 
 	let {
 		content,
@@ -23,11 +22,9 @@
 	let giphyLoading = $state(false);
 	let giphyError = $state('');
 
-	// Mapa de nomes de emojis carregados -> emoji. Best-effort:
-	// apenas os emojis já carregados (paginação lazy) são resolvidos.
-	const nameMap = $derived(
-		new Map<string, Emoji>(emojisStore.state.list.map((e) => [e.name, e]))
-	);
+	// Shared reactive index from the emoji store. Avoid rebuilding a full
+	// name -> emoji Map for every mounted message.
+	const nameMap = $derived(emojisStore.state.byName);
 
 	const mentionIds = $derived([...content.matchAll(/@mention\(<@([0-9a-fA-F-]{16,})>\)/g)].map((m) => m[1]));
 	const mentionMap = $derived(new Map(mentionIds.map((id) => { const u = usersStore.state.byId.get(id); return [id, u?.nickname || u?.username || 'usuário'] as const; })));

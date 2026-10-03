@@ -314,7 +314,9 @@
 			<Icon name="smiley" variant="light" />
 		</button>
 
-		<EmojiPicker bind:open={emojiOpen} {onPick} />
+		{#if emojiOpen}
+			<EmojiPicker bind:open={emojiOpen} {onPick} />
+		{/if}
 	</div>
 </div>
 
