@@ -20,6 +20,13 @@ export const state = $state({
 	loadGeneration: 0
 });
 
+function rebuildNameIndex(): void {
+	state.byName.clear();
+	for (const emoji of state.list) {
+		state.byName.set(emoji.name, emoji);
+	}
+}
+
 async function _loadPage(q?: { since?: string; last_id?: string }): Promise<void> {
 	const gen = (state.loadGeneration += 1);
 	state.loading = true;
@@ -31,7 +38,6 @@ async function _loadPage(q?: { since?: string; last_id?: string }): Promise<void
 		}
 		for (const e of res.emojis) {
 			state.byId.set(e.id, e);
-			state.byName.set(e.name, e);
 		}
 		if (q) {
 			// loadMore: append, deduping by id.
@@ -42,6 +48,7 @@ async function _loadPage(q?: { since?: string; last_id?: string }): Promise<void
 			// load: replace.
 			state.list = res.emojis;
 		}
+		rebuildNameIndex();
 		state.hasMore = res.has_more;
 		state.cursor = nextCursor(res.emojis) ?? null;
 		state.loaded = true;
@@ -79,7 +86,6 @@ export async function loadAll(): Promise<void> {
 
 			for (const emoji of res.emojis) {
 				state.byId.set(emoji.id, emoji);
-				state.byName.set(emoji.name, emoji);
 				if (!seen.has(emoji.id)) {
 					seen.add(emoji.id);
 					all.push(emoji);
@@ -98,6 +104,7 @@ export async function loadAll(): Promise<void> {
 				}
 			}
 			state.list = published;
+			rebuildNameIndex();
 			state.hasMore = res.has_more;
 			cursor = nextCursor(res.emojis) ?? null;
 			state.cursor = cursor;
