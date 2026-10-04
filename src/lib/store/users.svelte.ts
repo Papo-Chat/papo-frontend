@@ -16,6 +16,8 @@ let consumedJoinNoticeSerial = 0;
 
 const PROFILE_CACHE_TARGET = 75;
 const PROFILE_CACHE_MAX = 120;
+const PROFILE_BATCH_WINDOW_MS = 20;
+const PROFILE_BATCH_MAX_IDS = 50;
 const USER_LIST_MAX = 300;
 const SUMMARY_CACHE_TARGET = 1000;
 const SUMMARY_CACHE_MAX = 1500;
@@ -36,8 +38,15 @@ let summaryTouchSeq = 0;
 const profileLastUsed = new Map<string, number>();
 const retainedProfileCounts = new Map<string, number>();
 const profileInFlight = new Map<string, Promise<UserProfile | null>>();
-const profileLoadQueue = new Set<string>();
-let profileLoadFlushQueued = false;
+const profileBatchQueue = new Set<string>();
+const profileBatchDeferred = new Map<
+    string,
+    {
+        resolve: (profile: UserProfile | null) => void;
+        reject: (error: unknown) => void;
+    }
+>();
+let profileBatchTimer: ReturnType<typeof setTimeout> | null = null;
 let profileTouchSeq = 0;
 
 function typingTimerKey(channelId: string, userId: string): string {
@@ -144,27 +153,83 @@ function evictProfiles(): void {
     }
 }
 
-function scheduleProfileLoad(id: string): void {
-    if (!id || state.profiles.has(id) || profileInFlight.has(id)) {
-        return;
-    }
+function scheduleProfileBatchFlush(): void {
+    if (profileBatchTimer !== null) return;
 
-    profileLoadQueue.add(id);
-    if (profileLoadFlushQueued) {
-        return;
-    }
+    profileBatchTimer = setTimeout(() => {
+        profileBatchTimer = null;
+        void flushProfileBatchQueue();
+    }, PROFILE_BATCH_WINDOW_MS);
+}
 
-    profileLoadFlushQueued = true;
-    queueMicrotask(() => {
-        profileLoadFlushQueued = false;
-        const ids = [...profileLoadQueue];
-        profileLoadQueue.clear();
-        if (ids.length === 0) {
-            return;
+async function flushProfileBatchQueue(): Promise<void> {
+    const ids = [...profileBatchQueue];
+    profileBatchQueue.clear();
+    if (ids.length === 0) return;
+
+    for (let i = 0; i < ids.length; i += PROFILE_BATCH_MAX_IDS) {
+        const chunk = ids.slice(i, i + PROFILE_BATCH_MAX_IDS);
+        const epoch = currentSessionEpoch();
+
+        try {
+            const res = await api.users.profileBatch(chunk);
+            if (!isCurrentSessionEpoch(epoch)) {
+                throw new Error('stale session');
+            }
+
+            const byId = new Map(res.profiles.map((profile) => [profile.id, profile]));
+            const summaries: UserSummary[] = [];
+            for (const profile of res.profiles) {
+                cacheProfile(profile);
+                summaries.push(summaryFromProfile(profile));
+            }
+            syncSummaries(summaries);
+            evictProfiles();
+
+            for (const id of chunk) {
+                const deferred = profileBatchDeferred.get(id);
+                profileBatchDeferred.delete(id);
+                deferred?.resolve(byId.get(id) ?? null);
+            }
+        } catch (error) {
+            for (const id of chunk) {
+                const deferred = profileBatchDeferred.get(id);
+                profileBatchDeferred.delete(id);
+                deferred?.reject(error);
+            }
         }
-        void ensureProfiles(ids).catch((err) => {
-            console.error('falha ao carregar perfis visíveis:', err);
-        });
+    }
+}
+
+function queueProfileLoad(id: string): Promise<UserProfile | null> {
+    const cached = state.profiles.get(id);
+    if (cached) {
+        touchProfile(id);
+        return Promise.resolve(cached);
+    }
+
+    const pending = profileInFlight.get(id);
+    if (pending) return pending;
+
+    let resolve!: (profile: UserProfile | null) => void;
+    let reject!: (error: unknown) => void;
+    const request = new Promise<UserProfile | null>((res, rej) => {
+        resolve = res;
+        reject = rej;
+    });
+
+    profileBatchDeferred.set(id, { resolve, reject });
+    profileBatchQueue.add(id);
+    trackProfileRequest(id, request);
+    scheduleProfileBatchFlush();
+    return request;
+}
+
+function scheduleProfileLoad(id: string): void {
+    if (!id || state.profiles.has(id)) return;
+
+    void queueProfileLoad(id).catch((err) => {
+        console.error('falha ao carregar perfil visível:', err);
     });
 }
 
@@ -500,89 +565,18 @@ function trackProfileRequest(id: string, request: Promise<UserProfile | null>): 
 }
 
 export async function ensureProfile(id: string): Promise<UserProfile> {
-    const cached = state.profiles.get(id);
-    if (cached) {
-        touchProfile(id);
-        return cached;
+    const profile = await queueProfileLoad(id);
+    if (!profile) {
+        throw new Error(`profile not returned for user ${id}`);
     }
-
-    const pending = profileInFlight.get(id);
-    if (pending) {
-        const profile = await pending;
-        if (profile) {
-            touchProfile(id);
-            return profile;
-        }
-    }
-
-    const epoch = currentSessionEpoch();
-    const request = api.users.profile(id).then((profile) => {
-        if (!isCurrentSessionEpoch(epoch)) {
-            throw new Error('stale session');
-        }
-        cacheProfile(profile);
-        // Seed the summary even when the user is unknown — a new author / a
-        // profile fetched directly must still appear in the summaries map.
-        syncSummary(summaryFromProfile(profile));
-        evictProfiles();
-        return profile;
-    });
-
-    trackProfileRequest(id, request);
-    return request;
+    touchProfile(id);
+    return profile;
 }
 
 export async function ensureProfiles(ids: string[]): Promise<UserProfile[]> {
     const unique = [...new Set(ids)].filter((id) => id !== '');
-    for (const id of unique) {
-        touchProfile(id);
-    }
-
-    const waits = new Set<Promise<UserProfile | null>>();
-    for (const id of unique) {
-        const pending = profileInFlight.get(id);
-        if (pending) {
-            waits.add(pending);
-        }
-    }
-
-    const missing = unique.filter((id) => !state.profiles.has(id) && !profileInFlight.has(id));
-
-    // Chunk ≤ 50 (server limit). A single promise is registered per id so a
-    // simultaneous ensureProfile/ensureProfiles call reuses the same request.
-    for (let i = 0; i < missing.length; i += 50) {
-        const chunk = missing.slice(i, i + 50);
-        const epoch = currentSessionEpoch();
-
-        const batch = api.users.profileBatch(chunk).then((res) => {
-            if (!isCurrentSessionEpoch(epoch)) {
-                throw new Error('stale session');
-            }
-            const summaries: UserSummary[] = [];
-            for (const p of res.profiles) {
-                cacheProfile(p);
-                summaries.push(summaryFromProfile(p));
-            }
-            syncSummaries(summaries);
-        });
-
-        for (const id of chunk) {
-            const request = batch.then(() => state.profiles.get(id) ?? null);
-            trackProfileRequest(id, request);
-            waits.add(request);
-        }
-
-        await batch;
-    }
-
-    if (waits.size > 0) {
-        await Promise.all(waits);
-    }
-
-    evictProfiles();
-    return unique
-        .map((id) => state.profiles.get(id) ?? null)
-        .filter((profile): profile is UserProfile => profile !== null);
+    const profiles = await Promise.all(unique.map((id) => queueProfileLoad(id)));
+    return profiles.filter((profile): profile is UserProfile => profile !== null);
 }
 
 // ── presence ────────────────────────────────────────────
@@ -842,12 +836,20 @@ export function reset(): void {
     state.profiles.clear();
     profileLastUsed.clear();
     retainedProfileCounts.clear();
+    if (profileBatchTimer !== null) {
+        clearTimeout(profileBatchTimer);
+        profileBatchTimer = null;
+    }
+    const resetError = new Error('stale session');
+    for (const deferred of profileBatchDeferred.values()) {
+        deferred.reject(resetError);
+    }
+    profileBatchDeferred.clear();
+    profileBatchQueue.clear();
     profileInFlight.clear();
     summaryInFlight.clear();
     summaryLastUsed.clear();
     summaryTouchSeq = 0;
-    profileLoadQueue.clear();
-    profileLoadFlushQueued = false;
     profileTouchSeq = 0;
     state.presence.clear();
     state.typing.clear();
