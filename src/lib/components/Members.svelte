@@ -65,8 +65,8 @@
 	let membersEl: HTMLElement | null = null;
 
 	$effect(() => {
-		if (usersStore.state.list.items.length === 0 && !usersStore.state.list.loading) {
-			void usersStore.loadList();
+		if (!usersStore.state.list.loaded && !usersStore.state.list.loading) {
+			void usersStore.loadList().catch(() => {});
 		}
 	});
 
