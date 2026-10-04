@@ -44,7 +44,7 @@ describe('user_join store integration', () => {
 		const joinedSummary = summary('u-new');
 		const joinedProfile = profile('u-new');
 		const summarySpy = vi.spyOn(api.users, 'summaryBatch').mockResolvedValue([joinedSummary]);
-		const profileSpy = vi.spyOn(api.users, 'profile').mockResolvedValue(joinedProfile);
+		const profileSpy = vi.spyOn(api.users, 'profileBatch').mockResolvedValue({ profiles: [joinedProfile] });
 
 		usersStore.handleUserJoin('u-new');
 
@@ -55,14 +55,14 @@ describe('user_join store integration', () => {
 		});
 
 		expect(summarySpy).toHaveBeenCalledWith(['u-new']);
-		expect(profileSpy).toHaveBeenCalledWith('u-new');
+		expect(profileSpy).toHaveBeenCalledWith(['u-new']);
 		expect(usersStore.state.joinNotice?.userId).toBe('u-new');
 	});
 
 	it('does not append into a paginated window that is not at the end', async () => {
 		usersStore.state.list.hasMoreNext = true;
 		vi.spyOn(api.users, 'summaryBatch').mockResolvedValue([summary('u-new')]);
-		vi.spyOn(api.users, 'profile').mockResolvedValue(profile('u-new'));
+		vi.spyOn(api.users, 'profileBatch').mockResolvedValue({ profiles: [profile('u-new')] });
 
 		usersStore.handleUserJoin('u-new');
 
