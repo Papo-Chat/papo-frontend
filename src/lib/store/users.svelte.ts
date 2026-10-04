@@ -19,6 +19,13 @@ const PROFILE_CACHE_MAX = 120;
 const USER_LIST_MAX = 300;
 const SUMMARY_CACHE_TARGET = 1000;
 const SUMMARY_CACHE_MAX = 1500;
+const USER_LIST_RETRY_COOLDOWN_MS = 5_000;
+
+// Non-reactive retry bookkeeping. A failed initial /users request used to
+// toggle list.loading back to false while leaving the list empty, immediately
+// re-triggering Svelte effects that call loadList() again. Keep failures
+// retryable, but suppress the tight reactive retry loop.
+let userListRetryNotBefore = 0;
 
 const summaryInFlight = new Map<string, Promise<UserSummary | null>>();
 const summaryLastUsed = new Map<string, number>();
@@ -298,6 +305,8 @@ export async function refreshSummaries(ids: string[]): Promise<UserSummary[]> {
 }
 
 export async function loadList(): Promise<void> {
+    if (state.list.loading || Date.now() < userListRetryNotBefore) return;
+
     const gen = ++state.list.loadGeneration;
     state.list.loading = true;
     try {
@@ -306,6 +315,12 @@ export async function loadList(): Promise<void> {
         ingestSummaries(res.users);
         publishUserWindow(res.users, false, res.has_more);
         state.list.loaded = true;
+        userListRetryNotBefore = 0;
+    } catch (error) {
+        if (state.list.loadGeneration === gen) {
+            userListRetryNotBefore = Date.now() + USER_LIST_RETRY_COOLDOWN_MS;
+        }
+        throw error;
     } finally {
         if (state.list.loadGeneration === gen) state.list.loading = false;
     }
@@ -815,6 +830,7 @@ export function avatarUrl(user: UserProfile): string {
 // cache so the previous account leaves zero residue.
 
 export function reset(): void {
+    userListRetryNotBefore = 0;
     for (const timer of typingTimers.values()) {
         clearTimeout(timer);
     }
