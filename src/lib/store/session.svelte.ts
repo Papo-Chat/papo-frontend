@@ -75,8 +75,23 @@ function startPresenceActivity(): void {
 	for (const event of events) {
 		window.addEventListener(event, onActivity, { passive: true });
 	}
+	let lastVisibilityRefresh = 0;
+	const VISIBILITY_REFRESH_COOLDOWN = 5 * 60 * 1000;
+
 	const onVisibility = () => {
-		if (!document.hidden) websocketStore.reportPresenceActivity(true);
+		if (document.hidden) return;
+
+		websocketStore.reportPresenceActivity(true);
+
+		const now = Date.now();
+
+		if (
+			state.userId &&
+			now - lastVisibilityRefresh >= VISIBILITY_REFRESH_COOLDOWN
+		) {
+			lastVisibilityRefresh = now;
+			void api.auth.refresh().catch(() => {});
+		}
 	};
 	document.addEventListener('visibilitychange', onVisibility);
 

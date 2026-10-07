@@ -122,6 +122,7 @@ export class ApiError extends Error {
 
 type OnUnauthorized = () => void;
 let unauthorizedHook: OnUnauthorized | null = null;
+let refreshPromise: Promise<void> | null = null;
 
 export function setOnUnauthorized(cb: OnUnauthorized): void {
 	unauthorizedHook = cb;
@@ -170,6 +171,7 @@ type RequestOpts = {
 	query?: string | Record<string, string | number | null | undefined>;
 	signal?: AbortSignal;
 	raw?: boolean;
+	_skipRefresh?: boolean;
 	// Skip the 401 → onUnauthorized hook. Used by public auth endpoints
 	// (login / login_server / register) where a 401 means "bad password",
 	// not an expired session.
@@ -282,8 +284,17 @@ async function request<T>(path: string, opts: RequestOpts = {}): Promise<T> {
 		} catch {
 			data = {};
 		}
-		if (res.status === 401 && authFailure !== 'ignore' && unauthorizedHook) {
-			unauthorizedHook();
+		if (res.status === 401 && authFailure !== 'ignore' && !opts._skipRefresh) {
+			try {
+				await refreshSession();
+
+				return request<T>(path, {
+					...opts,
+					_skipRefresh: true
+				});
+			} catch {
+				unauthorizedHook?.();
+			}
 		}
 		throw new ApiError(data, requestId, res.status);
 	}
@@ -376,11 +387,24 @@ export const auth = {
 	logout(): Promise<void> {
 		return request<void>('/auth/logout', { method: 'POST' });
 	},
-	refresh(): Promise<{ connection: { id: string; created_at: string; expires_at: string } }> {
-		return request<{ connection: { id: string; created_at: string; expires_at: string } }>(
-			'/auth/refresh',
-			{ method: 'POST' }
-		);
+	refresh(): Promise<{
+		connection: {
+			id: string;
+			created_at: string;
+			expires_at: string;
+		};
+	}> {
+		return request<{
+			connection: {
+				id: string;
+				created_at: string;
+				expires_at: string;
+			};
+		}>('/auth/refresh', {
+			method: 'POST',
+			authFailure: 'ignore',
+			_skipRefresh: true
+		});
 	},
 	connectedDevices(): Promise<ConnectedDevicesResponse> {
 		return request<ConnectedDevicesResponse>('/auth/connected_devices');
@@ -392,6 +416,21 @@ export const auth = {
 		});
 	}
 };
+
+async function refreshSession(): Promise<void> {
+    if (refreshPromise) {
+        return refreshPromise;
+    }
+
+    refreshPromise = api.auth
+        .refresh()
+        .then(() => undefined)
+        .finally(() => {
+            refreshPromise = null;
+        });
+
+    return refreshPromise;
+}
 
 // ── users ──────────────────────────────────────────────
 
