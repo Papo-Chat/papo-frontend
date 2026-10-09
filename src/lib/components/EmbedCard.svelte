@@ -16,9 +16,10 @@
 
 	onMount(() => {
 		if (!cardEl) return;
-		// A imagem (image_data) é só a thumbnail: sem thumbnail não há nada a
-		// buscar, e o card só é buscado quando se aproxima do viewport.
-		if (!embed.thumbnail) return;
+		// O base64 do card (image_data / author_image_data) só existe no embed
+		// resolvido: sem thumbnail nem ícone de autor não há nada a buscar, e o
+		// card só é buscado quando se aproxima do viewport.
+		if (!embed.thumbnail && !embed.author?.media) return;
 
 		const load = () => void ensureEmbed(embed.id).catch(() => {});
 		if (!('IntersectionObserver' in window)) {
@@ -46,6 +47,16 @@
 			: ''
 	);
 
+	// Ícone do autor (author_media): substitui o selo de letra da linha de topo.
+	const authorIconUrl = $derived(
+		resolved?.author_image_data
+			? blobToUrl(
+					resolved.author_image_data,
+					mimeToFormat(resolved.author?.media?.mime_type ?? 'image/png')
+				)
+			: ''
+	);
+
 	const title = $derived(embed.title ?? truncate(embed.url ?? '', 60));
 	const hasTitle = $derived(Boolean(embed.title || embed.url));
 	const host = $derived(embedHost(embed.url));
@@ -53,6 +64,8 @@
 	const hasTopline = $derived(Boolean(sourceName));
 	const authorName = $derived(embed.author?.name ?? '');
 	const authorUrl = $derived(embed.author?.url ?? '');
+	// Autor repetido na linha de baixo não serve para nada: o nome já é o selo.
+	const showAuthorLine = $derived(Boolean(authorName) && authorName !== (sourceName ?? ''));
 	const footerText = $derived(embed.footer?.text ?? '');
 	const fields = $derived(embed.fields ?? []);
 	const color = $derived(safeEmbedColor(embed.color));
@@ -83,7 +96,11 @@
 <div class="embed-card" bind:this={cardEl} style={color ? `--embed-color: ${color}` : undefined}>
 	{#if hasTopline}
 		<header class="embed-topline">
-			<span class="source-mark" aria-hidden="true">{sourceInitial}</span>
+			{#if authorIconUrl}
+				<img class="source-mark source-icon" src={authorIconUrl} alt="" aria-hidden="true" />
+			{:else}
+				<span class="source-mark" aria-hidden="true">{sourceInitial}</span>
+			{/if}
 			<div class="source-meta">
 				<p class="source-name">{sourceName}</p>
 				{#if host}
@@ -93,7 +110,7 @@
 		</header>
 	{/if}
 
-	{#if authorName}
+	{#if showAuthorLine}
 		<p class="embed-author">
 			{#if authorUrl}
 				<a href={authorUrl} target="_blank" rel="noopener noreferrer">{authorName}</a>
@@ -257,6 +274,11 @@
 		background: color-mix(in srgb, var(--embed-color) 72%, white 8%);
 		font-size: 13px;
 		font-weight: 900;
+	}
+	/* Ícone do autor (author_media) no lugar do selo de letra. */
+	.source-icon {
+		object-fit: cover;
+		background: var(--chip);
 	}
 	.source-meta {
 		min-width: 0;

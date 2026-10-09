@@ -266,10 +266,13 @@ export interface Embed {
 	fetched_at?: string | null;
 }
 
-// GET /embeds/:embed_id: campos públicos + imagem da thumbnail em base64.
+// GET /embeds/:embed_id: campos públicos + imagem da thumbnail em base64
+// (image_data) e ícone do autor em base64 (author_image_data).
 export interface EmbedWithImage extends Embed {
 	// base64 da thumbnail, null quando não há imagem.
 	image_data: string | null;
+	// base64 do ícone do autor (author_media), null quando o embed não tem.
+	author_image_data?: string | null;
 }
 
 // ── embeds customizados (entrada do cliente) ───────────
@@ -283,6 +286,8 @@ export interface EmbedMediaInput {
 export interface EmbedAuthorInput {
 	name?: string;
 	url?: string;
+	// URL HTTPS do avatar do autor: o backend baixa e re-serva (author_media).
+	icon_url?: string;
 }
 
 export interface EmbedFooterInput {

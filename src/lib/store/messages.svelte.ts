@@ -1465,8 +1465,8 @@ export function loadPinned(channelId: string, force = false): void {
 
 			for (const message of pinned) {
 				for (const embed of message.embeds) {
-					// Sem thumbnail não há image_data a buscar.
-					if (!embed.thumbnail) continue;
+					// Sem thumbnail nem ícone de autor não há base64 a buscar.
+					if (!embed.thumbnail && !embed.author?.media) continue;
 					void ensureEmbed(embed.id).catch(() => {});
 				}
 			}
