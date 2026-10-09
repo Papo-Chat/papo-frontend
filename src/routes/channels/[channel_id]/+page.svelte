@@ -11,7 +11,7 @@
 	import { meId } from '$lib/store/session.svelte';
 	import { state as uiState, setScrollTarget } from '$lib/store/ui.svelte';
 
-	import type { EmbedInput, MessageWithAttachment, SearchResult } from '$lib/types';
+	import type { MessageWithAttachment, SearchResult } from '$lib/types';
 
 	import Topbar from '$lib/components/Topbar.svelte';
 	import Chat from '$lib/components/Chat.svelte';
@@ -144,8 +144,7 @@
 	function SendMsg(
 		text: string | null,
 		files: File[] = [],
-		onProgress?: (percent: number) => void,
-		embeds: EmbedInput[] = []
+		onProgress?: (percent: number) => void
 	): Promise<void> {
 		if (!channel) {
 			return Promise.resolve();
@@ -157,7 +156,6 @@
 				content: text,
 				reply_to: replyTo?.id ?? null,
 				files,
-				embeds,
 				onProgress
 			})
 			.then(() => {

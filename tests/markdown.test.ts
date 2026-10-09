@@ -139,10 +139,15 @@ describe('renderMessageMarkdown', () => {
 		expect(out).toContain('<td>1</td>');
 	});
 
-	it('renders links and autolinks', () => {
+	it('renders links and autolinks opening in a new tab', () => {
 		const out = renderMessageMarkdown('[t](https://e.com/x) https://e.com/y', nameMap, urlFn);
-		expect(out).toContain('<a href="https://e.com/x">t</a>');
-		expect(out).toContain('<a href="https://e.com/y">https://e.com/y</a>');
+		// 6824495: links abrem em nova aba com rel="noopener noreferrer".
+		expect(out).toContain(
+			'<a href="https://e.com/x" target="_blank" rel="noopener noreferrer">t</a>'
+		);
+		expect(out).toContain(
+			'<a href="https://e.com/y" target="_blank" rel="noopener noreferrer">https://e.com/y</a>'
+		);
 	});
 
 	it('blocks unsafe link schemes (javascript:/vbscript:/data:) and renders plain text', () => {

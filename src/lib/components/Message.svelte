@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Embed, MessageAttachment, MessageWithAttachment, RoleSummary } from '$lib/types';
+	import type { MessageAttachment, MessageWithAttachment, RoleSummary } from '$lib/types';
 	import { openProfile, setScrollTarget } from '$lib/store/ui.svelte';
 	import { meId, state as sessionState } from '$lib/store/session.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
@@ -13,11 +13,9 @@
 	import { formatTime } from '$lib/utils/time';
 	import { isImageMime } from '$lib/utils/text';
 	import { isGiphyMarker } from '$lib/utils/giphy';
-	import { draftIsEmpty, draftToEmbedInput, embedToDraft, type EmbedDraft } from '$lib/utils/embeds';
 	import Avatar from './Avatar.svelte';
 	import Reactions from './Reactions.svelte';
 	import EmbedCard from './EmbedCard.svelte';
-	import EmbedEditor from './EmbedEditor.svelte';
 	import Attachment from './Attachment.svelte';
 	import FormattedMessage from './FormattedMessage.svelte';
 	import Icon from './Icon.svelte';
@@ -116,7 +114,6 @@
 	let messageEl: HTMLElement | null = null;
 	let isEditing = $state(false);
 	let editText = $state('');
-	let editEmbeds = $state<EmbedDraft[]>([]);
 	let showDeleteConfirm = $state(false);
 	let deleting = $state(false);
 	let deleteButton: HTMLButtonElement | null = null;
@@ -152,24 +149,13 @@
 	function startEdit(): void {
 		isEditing = true;
 		editText = message.content ?? '';
-		// O PUT substitui a lista completa de embeds customizados: a edição
-		// começa com os atuais para não apagá-los.
-		const current: Embed[] = message.embeds;
-		editEmbeds = current
-			.filter((embed) => embed.source_type === 'custom')
-			.map(embedToDraft);
 		showActions = false;
 	}
 
 	function doEdit(): void {
 		const t = editText.trim();
-		const embeds = editEmbeds
-			.filter((draft) => !draftIsEmpty(draft))
-			.map(draftToEmbedInput);
-		// O PUT aceita content vazio quando a mensagem mantém embeds (mensagem
-		// criada só com embed).
-		if (t || embeds.length > 0) {
-			messagesStore.edit(message.id, t, embeds);
+		if (t) {
+			messagesStore.edit(message.id, t);
 		}
 		isEditing = false;
 		showActions = false;
@@ -369,9 +355,6 @@
 					</form>
 					<button class="confirm-btn" type="button" onclick={doEdit}> Enviar </button>
 				</div>
-				<div class="edit-embeds">
-					<EmbedEditor bind:drafts={editEmbeds} title="Embeds da mensagem" />
-				</div>
 			{:else if message.content}
 				<div class="bubble {goldHighlight ? 'pinned' : ''}" class:giphy-bubble={isGiphyMessage}>
 					<FormattedMessage content={message.content} allowEveryoneHighlight={authorCanEveryone} />
@@ -480,11 +463,6 @@
 		overflow-wrap: anywhere;
 		white-space: pre-wrap;
 		outline: none;
-	}
-	.edit-embeds {
-		width: 100%;
-		max-width: 560px;
-		margin-top: 8px;
 	}
 	/* importante: seu .message só possui .message-enter como filho */
 	.message-enter {

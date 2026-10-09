@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { typingUsers } from '$lib/store/users.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
-	import type { Channel, EmbedInput, MessageWithAttachment } from '$lib/types';
+	import type { Channel, MessageWithAttachment } from '$lib/types';
 	import Avatar from './Avatar.svelte';
 	import Chat from './Chat.svelte';
 	import Composer from './Composer.svelte';
@@ -42,8 +42,7 @@
 		onSend?: (
 			text: string | null,
 			files?: File[],
-			onProgress?: (percent: number) => void,
-			embeds?: EmbedInput[]
+			onProgress?: (percent: number) => void
 		) => Promise<void>;
 		onJumpToLatest?: () => void | Promise<void>;
 		onJumpToLastRead?: () => void | Promise<boolean>;
