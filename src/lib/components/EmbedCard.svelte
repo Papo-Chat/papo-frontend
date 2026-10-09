@@ -10,6 +10,11 @@
 		safeEmbedColor
 	} from '$lib/utils/embeds';
 	import { truncate } from '$lib/utils/text';
+	import * as emojisStore from '$lib/store/emojis.svelte';
+	import * as usersStore from '$lib/store/users.svelte';
+	import { emojiUrl } from '$lib/store/emojis.svelte';
+	import { openProfile } from '$lib/store/ui.svelte';
+	import { renderMessageMarkdown } from '$lib/utils/markdown';
 
 	let { embed } = $props<{ embed: Embed }>();
 	let cardEl: HTMLElement | null = null;
@@ -71,6 +76,32 @@
 	const color = $derived(safeEmbedColor(embed.color));
 	const sourceInitial = $derived((sourceName || 'link').slice(0, 1).toUpperCase());
 
+	// A descrição do card passa pelo mesmo renderizador do corpo da mensagem:
+	// sem isso `:emoji:`, markdown e `@mention(<@id>)` de uma ponte aparecem crus.
+	const description = $derived(embed.description ?? '');
+	const mentionIds = $derived([...description.matchAll(/@mention\(<@([0-9a-fA-F-]{16,})>\)/g)].map((m) => m[1]));
+	const mentionMap = $derived(new Map(mentionIds.map((id) => { const u = usersStore.state.byId.get(id); return [id, u?.nickname || u?.username || 'usuário'] as const; })));
+	$effect(() => { if (mentionIds.length) void usersStore.ensureSummaries(mentionIds).catch(() => {}); });
+	const descriptionHtml = $derived(
+		description
+			? renderMessageMarkdown(description, emojisStore.state.byName, emojiUrl, { mentions: mentionMap })
+			: ''
+	);
+
+	function handleMentionClick(event: MouseEvent): void {
+		const target = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-mention-user-id]');
+		const id = target?.dataset.mentionUserId;
+		if (!id) return;
+		const known = usersStore.state.byId.get(id);
+		if (known) {
+			openProfile(known);
+			return;
+		}
+		void usersStore.ensureSummary(id).then((summary) => {
+			if (summary) openProfile(summary);
+		}).catch(() => {});
+	}
+
 	// Vídeo direto (og:video / custom): o player usa o relay autenticado do
 	// backend (GET /embeds/:id/video), nunca a URL de origem.
 	const directVideo = $derived(embedDirectVideoUrl(embed));
@@ -131,7 +162,9 @@
 	{/if}
 
 	{#if embed.description}
-		<p class="embed-description">{embed.description}</p>
+		<!-- svelte-ignore [render-script-tag] -->
+		<!-- svelte-ignore [a11y-click-events-have-key-events] -->
+		<div class="embed-description" onclick={handleMentionClick}>{@html descriptionHtml}</div>
 	{/if}
 
 	{#if fields.length}
@@ -338,6 +371,32 @@
 		font-size: 13px;
 		line-height: 1.55;
 		overflow-wrap: anywhere;
+	}
+
+	/* A descrição é renderizada como markdown: parágrafos do renderer não podem
+	   herdar a margem padrão dentro do card. */
+	.embed-description :global(p) { margin: 0; }
+	.embed-description :global(.message-blank-line) { height: 0.55em; }
+	.embed-description :global(a) { color: var(--link); }
+	.embed-description :global(blockquote) {
+		margin: 2px 0 6px;
+		padding-left: 8px;
+		border-left: 2px solid var(--line);
+		color: var(--muted-soft);
+	}
+	.embed-description :global(ul), .embed-description :global(ol) { margin: 2px 0; padding-left: 18px; }
+	.embed-description :global(code) {
+		padding: 0.1em 0.35em;
+		border-radius: 5px;
+		background: var(--embed-inset);
+		font-size: 12px;
+	}
+	.embed-description :global(pre) {
+		margin: 4px 0;
+		padding: 8px;
+		border-radius: 8px;
+		background: var(--embed-inset);
+		overflow-x: auto;
 	}
 
 	.embed-data {
