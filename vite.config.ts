@@ -17,7 +17,7 @@ import type { IncomingMessage } from 'http';
 // /auth, /admin etc. are served by SvelteKit directly (sample data, no
 // backend required) — useful for visual review without the Go service up.
 const demoMode = process.env.DEMO === '1';
-const backend = 'http://localhost:8080';
+const backend = process.env.PAPO_BACKEND ?? 'http://localhost:8080';
 
 const apiPrefixes = [
 	'/auth',
@@ -30,6 +30,7 @@ const apiPrefixes = [
 	'/emojis',
 	'/attachments',
 	'/media',
+	'/embeds',
 	'/link-previews',
 	'/search',
 	'/admin',
