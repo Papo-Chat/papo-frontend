@@ -12,7 +12,7 @@ const YOUTUBE_EMBED_RE = /^https:\/\/www\.youtube\.com\/embed\/[A-Za-z0-9_-]{11}
 
 const EMBED_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
-export function isAllowedEmbedUrl(embedUrl: string | null | undefined): boolean {
+export function isAllowedEmbedUrl(embedUrl: string | null | undefined): embedUrl is string {
 	return typeof embedUrl === 'string' && YOUTUBE_EMBED_RE.test(embedUrl);
 }
 
