@@ -2,7 +2,7 @@
 	import type { MessageWithAttachment } from '$lib/types';
 	import FormattedMessage from './FormattedMessage.svelte';
 	import Attachment from './Attachment.svelte';
-	import PreviewCard from './PreviewCard.svelte';
+	import EmbedCard from './EmbedCard.svelte';
 	import ReactionEmoji from './ReactionEmoji.svelte';
 
 	let {
@@ -36,10 +36,10 @@
 			</div>
 		{/if}
 
-		{#if message.previews.length}
-			<div class="compact-previews">
-				{#each message.previews as preview (preview.id)}
-					<PreviewCard {preview} />
+		{#if message.embeds.length}
+			<div class="compact-embeds">
+				{#each message.embeds as embed (embed.id)}
+					<EmbedCard {embed} />
 				{/each}
 			</div>
 		{/if}
@@ -75,7 +75,7 @@
 	}
 
 	.compact-attachments,
-	.compact-previews {
+	.compact-embeds {
 		display: flex;
 		flex-wrap: wrap;
 		align-items: flex-start;
@@ -115,17 +115,5 @@
 
 	:global(.compact-message .attachment-audio) {
 		max-width: 190px;
-	}
-
-	:global(.compact-message .preview-card) {
-		max-width: 240px;
-		padding: 6px;
-	}
-
-	:global(.compact-message .preview-description) {
-		display: -webkit-box;
-		overflow: hidden;
-		-webkit-box-orient: vertical;
-		-webkit-line-clamp: 2;
 	}
 </style>

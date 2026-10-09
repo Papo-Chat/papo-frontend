@@ -1,4 +1,4 @@
-import type { DirectConversation, LinkPreviewWithImage, MessageAttachment, VoiceState } from './models';
+import type { DirectConversation, Embed, MessageAttachment, VoiceState } from './models';
 
 // ── shared ─────────────────────────────────────────────
 
@@ -29,9 +29,10 @@ export type VoiceErrorCode =
 	| 'voice-rate-limited'
 	| 'voice-room-closed';
 
-// ── outbound (server → client, 29 types, F24) ──────────
+// ── outbound (server → client, 27 types, F24) ──────────
 
-// message — F1: no reactions/previews/user_reactions.
+// message — F1: no reactions/embeds/user_reactions (embeds chegam depois, por
+// message_embeds_update).
 export interface WsMessage {
 	type: 'message';
 	id: string;
@@ -139,26 +140,15 @@ export interface WsError {
 	code: string | null;
 }
 
-// new_preview — no channel_id (F25).
-export interface WsNewPreview {
-	type: 'new_preview';
-	message_id: string;
-	preview_id: string;
-}
-
-// remove_preview — no channel_id (F25).
-export interface WsRemovePreview {
-	type: 'remove_preview';
-	message_id: string;
-	preview_id: string;
-}
-
-// link_preview_update — carries the full preview.
-export interface WsLinkPreviewUpdate {
-	type: 'link_preview_update';
+// message_embeds_update — lista ATUAL de embeds da mensagem (mesma forma do
+// campo `embeds` de GET /channels/:channel_id/messages). Metadados apenas, sem
+// image_data: a mídia é buscada sob demanda por GET /embeds/:embed_id e
+// GET /embeds/:embed_id/video. O cliente substitui o que tem em cache, sem diff.
+export interface WsMessageEmbedsUpdate {
+	type: 'message_embeds_update';
 	channel_id: string;
 	message_id: string;
-	preview: LinkPreviewWithImage;
+	embeds: Embed[];
 }
 
 // user_join
@@ -292,9 +282,7 @@ export type WsOutbound =
 	| WsPresenceSync
 	| WsHeartbeatAck
 	| WsError
-	| WsNewPreview
-	| WsRemovePreview
-	| WsLinkPreviewUpdate
+	| WsMessageEmbedsUpdate
 	| WsUserJoin
 	| WsReactUpdate
 	| WsNewNotification

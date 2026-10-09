@@ -4,9 +4,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
 	applyEvent,
 	wsMessageToMsg,
-	mergePreview,
+	applyEmbedsUpdate,
+	mergeFetchedMessage,
 	upsertMessage,
-	linkPreviewUpdate,
 	sortedIds,
 	evict,
 	load,
@@ -14,25 +14,22 @@ import {
 	loadMoreNewer,
 	react,
 	unreact,
+	edit,
 	state as globalState,
 	reset
 } from '../src/lib/store/messages.svelte';
 import type { ChannelMessagesState, MessagesState } from '../src/lib/store/messages.types';
 import { SvelteMap } from 'svelte/reactivity';
-import type {
-	MessageWithAttachment,
-	LinkPreview,
-	LinkPreviewWithImage
-} from '../src/lib/types/models';
+import type { Embed, MessageWithAttachment } from '../src/lib/types/models';
 import type {
 	WsMessage,
 	WsMessageEdit,
 	WsMessageDelete,
 	WsMessagePin,
 	WsReactUpdate,
-	WsRemovePreview,
-	WsLinkPreviewUpdate,
-	WsAttachmentModerationUpdate
+	WsMessageEmbedsUpdate,
+	WsAttachmentModerationUpdate,
+	WsOutbound
 } from '../src/lib/types/websocket';
 import { messages as apiMessages } from '../src/lib/api';
 
@@ -59,7 +56,7 @@ function msg(id: string, overrides: Partial<MessageWithAttachment> = {}): Messag
 		edited_at: null,
 		reply_to: null,
 		attachments: [],
-		previews: [],
+		embeds: [],
 		reactions: [],
 		user_reactions: [],
 		...overrides
@@ -82,7 +79,7 @@ function newState(
 		cursorNewer: null,
 		requestGeneration: 0,
 		deletedMessageIds: new Set<string>(),
-		previewTombstones: new Set<string>(),
+		embedTombstones: new Set<string>(),
 		pinned: [],
 		pinnedLoaded: false,
 		pinnedLoading: false,
@@ -114,10 +111,10 @@ function wsMsg(id: string, overrides: Partial<WsMessage> = {}): WsMessage {
 // ── wsMessageToMsg ───────────────────────────────────────
 
 describe('wsMessageToMsg', () => {
-	it('fills empty reactions/previews/user_reactions/attachments', () => {
+	it('fills empty reactions/embeds/user_reactions/attachments', () => {
 		const m = wsMessageToMsg(wsMsg('m1'));
 		expect(m.reactions).toEqual([]);
-		expect(m.previews).toEqual([]);
+		expect(m.embeds).toEqual([]);
 		expect(m.user_reactions).toEqual([]);
 		expect(m.attachments).toEqual([]);
 		expect(m.edited_at).toBeNull();
@@ -371,88 +368,69 @@ describe('applyEvent(react_update)', () => {
 	});
 });
 
-// ── applyEvent(remove_preview / link_preview_update) ─────
+// ── applyEvent(message_embeds_update) ────────────────────
 
-describe('applyEvent(remove_preview)', () => {
-	it('removes a preview by id (leaves others)', () => {
+describe('applyEvent(message_embeds_update)', () => {
+	it('replaces the whole embed list (the event is authoritative)', () => {
 		const state = newState([
 			msg('m1', {
-				previews: [preview('p1'), preview('p2')]
+				embeds: [embed('e1'), embed('e2')]
 			})
 		]);
 		applyEvent(state, {
-			type: 'remove_preview',
-			message_id: 'm1',
-			preview_id: 'p1'
-		} satisfies WsRemovePreview);
-		expect(state.channels.get('ch1')!.byId.get('m1')!.previews).toEqual([preview('p2')]);
-	});
-
-	it('is a no-op when the preview is absent', () => {
-		const state = newState([msg('m1', { previews: [preview('p1')] })]);
-		applyEvent(state, {
-			type: 'remove_preview',
-			message_id: 'm1',
-			preview_id: 'missing'
-		} satisfies WsRemovePreview);
-		expect(state.channels.get('ch1')!.byId.get('m1')!.previews).toHaveLength(1);
-	});
-});
-
-describe('applyEvent(link_preview_update)', () => {
-	it('replaces a preview by id (others untouched)', () => {
-		const state = newState([
-			msg('m1', {
-				previews: [preview('p1'), preview('p2')]
-			})
-		]);
-		applyEvent(state, {
-			type: 'link_preview_update',
+			type: 'message_embeds_update',
 			channel_id: 'ch1',
 			message_id: 'm1',
-			preview: { ...preview('p2'), title: 'updated', image_data: null }
-		} satisfies WsLinkPreviewUpdate);
-		const previews = state.channels.get('ch1')!.byId.get('m1')!.previews;
-		expect(previews[0].id).toBe('p1');
-		expect(previews[0].title).toBe('old p1');
-		expect(previews[1].id).toBe('p2');
-		expect(previews[1].title).toBe('updated');
-	});
-});
-
-// ── mergePreview (new_preview resolution) ───────────────
-
-describe('mergePreview', () => {
-	it('adds a resolved preview to a message', () => {
-		const state = newState([msg('m1')]);
-		mergePreview(state, 'm1', {
-			id: 'p1',
-			url: 'https://example.com',
-			kind: 'article',
-			title: 'T',
-			description: 'D',
-			provider_name: 'P',
-			embed_url: null,
-			image_mime_type: null,
-			image_size_bytes: null,
-			fetched_at: '2024-01-01T00:00:00Z',
-			image_data: 'b64'
-		});
-		const previews = state.channels.get('ch1')!.byId.get('m1')!.previews;
-		expect(previews).toHaveLength(1);
-		// image_data is stripped from the stored LinkPreview.
-		expect('image_data' in previews[0]).toBe(false);
+			embeds: [embed('e2'), embed('e3')]
+		} satisfies WsMessageEmbedsUpdate);
+		const embeds = state.channels.get('ch1')!.byId.get('m1')!.embeds;
+		expect(embeds.map((e) => e.id)).toEqual(['e2', 'e3']);
 	});
 
-	it('is idempotent (same id not added twice)', () => {
-		const state = newState([msg('m1')]);
-		const p: LinkPreviewWithImage = {
-			...preview('p1'),
-			image_data: 'b64'
-		};
-		mergePreview(state, 'm1', p);
-		mergePreview(state, 'm1', p);
-		expect(state.channels.get('ch1')!.byId.get('m1')!.previews).toHaveLength(1);
+	it('clears the list when the event carries no embed', () => {
+		const state = newState([
+			msg('m1', {
+				embeds: [embed('e1')]
+			})
+		]);
+		applyEvent(state, {
+			type: 'message_embeds_update',
+			channel_id: 'ch1',
+			message_id: 'm1',
+			embeds: []
+		} satisfies WsMessageEmbedsUpdate);
+		expect(state.channels.get('ch1')!.byId.get('m1')!.embeds).toEqual([]);
+	});
+
+	it('treats the wire null list as empty (Go serializes an empty slice as null)', () => {
+		const state = newState([
+			msg('m1', {
+				embeds: [embed('e1')]
+			})
+		]);
+		// Payload exatamente como chega do socket.
+		const wire = JSON.parse(
+			'{"type":"message_embeds_update","channel_id":"ch1","message_id":"m1","embeds":null}'
+		) as WsOutbound;
+
+		applyEvent(state, wire);
+		expect(state.channels.get('ch1')!.byId.get('m1')!.embeds).toEqual([]);
+	});
+
+	it('keeps the list pending when the message is not in the window', () => {
+		const state = newState([msg('other')]);
+		applyEvent(state, {
+			type: 'message_embeds_update',
+			channel_id: 'ch1',
+			message_id: 'm1',
+			embeds: [embed('e1')]
+		} satisfies WsMessageEmbedsUpdate);
+		expect(state.channels.get('ch1')!.byId.has('m1')).toBe(false);
+
+		// The message arrives later (REST page or WS message event).
+		upsertMessage(state, 'ch1', msg('m1'));
+		const embeds = state.channels.get('ch1')!.byId.get('m1')!.embeds;
+		expect(embeds.map((e) => e.id)).toEqual(['e1']);
 	});
 });
 
@@ -639,35 +617,146 @@ describe('mergeFetchedMessage: REST does not clobber newer WS deltas', () => {
 	});
 });
 
-describe('preview tombstones (P0.5)', () => {
-	it('remove_preview blocks a later preview GET from resurrecting the preview', () => {
-		const state = newState([msg('m1', { previews: [preview('p1')] })]);
+describe('embed tombstones (P0.5)', () => {
+	it('a dropped embed is not resurrected by a stale REST page', () => {
+		const state = newState([msg('m1', { embeds: [embed('e1')] })]);
 		applyEvent(state, {
-			type: 'remove_preview',
-			message_id: 'm1',
-			preview_id: 'p1'
-		} satisfies WsRemovePreview);
-		mergePreview(state, 'm1', { ...preview('p1'), image_data: 'b64' });
-		expect(state.channels.get('ch1')!.byId.get('m1')!.previews).toHaveLength(0);
-	});
-
-	it('link_preview_update after remove_preview re-adds the preview (WS order wins)', () => {
-		const state = newState([msg('m1', { previews: [preview('p1')] })]);
-		applyEvent(state, {
-			type: 'remove_preview',
-			message_id: 'm1',
-			preview_id: 'p1'
-		} satisfies WsRemovePreview);
-		linkPreviewUpdate(state, {
-			type: 'link_preview_update',
+			type: 'message_embeds_update',
 			channel_id: 'ch1',
 			message_id: 'm1',
-			preview: { ...preview('p1'), title: 're-added', image_data: 'b64' }
-		} satisfies WsLinkPreviewUpdate);
-		const previews = state.channels.get('ch1')!.byId.get('m1')!.previews;
-		expect(previews).toHaveLength(1);
-		expect(previews[0].id).toBe('p1');
-		expect(previews[0].title).toBe('re-added');
+			embeds: []
+		} satisfies WsMessageEmbedsUpdate);
+
+		const ch = state.channels.get('ch1')!;
+		const merged = mergeFetchedMessage(ch.byId.get('m1'), msg('m1', { embeds: [embed('e1')] }), ch);
+		expect(merged!.embeds).toHaveLength(0);
+	});
+
+	it('an embed that comes back in the list clears its tombstone (WS order wins)', () => {
+		const state = newState([msg('m1', { embeds: [embed('e1')] })]);
+		applyEvent(state, {
+			type: 'message_embeds_update',
+			channel_id: 'ch1',
+			message_id: 'm1',
+			embeds: []
+		} satisfies WsMessageEmbedsUpdate);
+		applyEvent(state, {
+			type: 'message_embeds_update',
+			channel_id: 'ch1',
+			message_id: 'm1',
+			embeds: [embed('e1', { title: 're-added' })]
+		} satisfies WsMessageEmbedsUpdate);
+
+		const ch = state.channels.get('ch1')!;
+		expect(ch.byId.get('m1')!.embeds.map((e) => e.id)).toEqual(['e1']);
+
+		const merged = mergeFetchedMessage(ch.byId.get('m1'), msg('m1', { embeds: [embed('e1')] }), ch);
+		expect(merged!.embeds[0].title).toBe('re-added');
+	});
+
+	it('a tombstone is scoped to its message (shared link embeds stay in other messages)', () => {
+		const state = newState([
+			msg('m1', { embeds: [embed('e1')] }),
+			msg('m2', { embeds: [embed('e1')] })
+		]);
+		applyEvent(state, {
+			type: 'message_embeds_update',
+			channel_id: 'ch1',
+			message_id: 'm1',
+			embeds: []
+		} satisfies WsMessageEmbedsUpdate);
+
+		const ch = state.channels.get('ch1')!;
+		expect(ch.byId.get('m1')!.embeds).toHaveLength(0);
+
+		const merged = mergeFetchedMessage(ch.byId.get('m2'), msg('m2', { embeds: [embed('e1')] }), ch);
+		expect(merged!.embeds.map((e) => e.id)).toEqual(['e1']);
+	});
+});
+
+// ── edit() ↔ PUT semantics ──────────────────────────────
+
+describe('edit() replaces the custom embeds (PUT semantics)', () => {
+	function seedChannel(): void {
+		const ch: ChannelMessagesState = {
+			byId: new SvelteMap<string, MessageWithAttachment>(),
+			ids: [],
+			loaded: false,
+			loading: false,
+			windowMode: 'latest',
+			hasMoreOlder: false,
+			hasMoreNewer: false,
+			cursorOlder: null,
+			cursorNewer: null,
+			requestGeneration: 0,
+			deletedMessageIds: new Set<string>(),
+			embedTombstones: new Set<string>(),
+			pinned: [],
+			pinnedLoaded: false,
+			pinnedLoading: false,
+			pinnedGeneration: 0
+		};
+		ch.byId.set(
+			'm1',
+			msg('m1', {
+				embeds: [
+					embed('c1', { source_type: 'custom', fetch_method: 'manual' }),
+					embed('l1', { source_type: 'link', fetch_method: 'opengraph' })
+				]
+			})
+		);
+		ch.ids = ['m1'];
+		globalState.channels.set('ch1', ch);
+	}
+
+	beforeEach(() => {
+		vi.spyOn(apiMessages, 'edit');
+		seedChannel();
+	});
+
+	afterEach(() => {
+		globalState.channels.clear();
+		vi.restoreAllMocks();
+	});
+
+	it('drops the custom embed the backend replaced and keeps the link embed', async () => {
+		// PUT responde apenas com os customizados recém-criados (link embeds
+		// não vêm na resposta).
+		vi.mocked(apiMessages.edit).mockResolvedValue(
+			msg('m1', {
+				content: 'novo',
+				edited_at: '2024-01-02T00:00:00Z',
+				embeds: [embed('c2', { source_type: 'custom', fetch_method: 'manual' })]
+			})
+		);
+
+		await edit('m1', 'novo', [{ title: 'novo' }]);
+
+		const embeds = globalState.channels.get('ch1')!.byId.get('m1')!.embeds;
+		expect(embeds.map((e) => e.id)).toEqual(['l1', 'c2']);
+	});
+
+	it('a stale REST page cannot resurrect the replaced custom embed', async () => {
+		vi.mocked(apiMessages.edit).mockResolvedValue(
+			msg('m1', {
+				content: 'novo',
+				edited_at: '2024-01-02T00:00:00Z',
+				embeds: [embed('c2', { source_type: 'custom', fetch_method: 'manual' })]
+			})
+		);
+
+		await edit('m1', 'novo', [{ title: 'novo' }]);
+
+		const ch = globalState.channels.get('ch1')!;
+		const stale = msg('m1', {
+			embeds: [
+				embed('c1', { source_type: 'custom', fetch_method: 'manual' }),
+				embed('l1', { source_type: 'link', fetch_method: 'opengraph' })
+			]
+		});
+		const merged = mergeFetchedMessage(ch.byId.get('m1'), stale, ch);
+
+		expect(merged!.embeds.map((e) => e.id)).toEqual(['l1', 'c2']);
 	});
 });
 
@@ -690,7 +779,7 @@ describe('react / unreact (user_reactions)', () => {
 			cursorNewer: null,
 			requestGeneration: 0,
 			deletedMessageIds: new Set<string>(),
-			previewTombstones: new Set<string>(),
+			embedTombstones: new Set<string>(),
 			pinned: [],
 			pinnedLoaded: false,
 			pinnedLoading: false,
@@ -764,17 +853,14 @@ describe('300-message window', () => {
 
 // ── helpers ─────────────────────────────────────────────
 
-function preview(id: string): LinkPreview {
+function embed(id: string, overrides: Partial<Embed> = {}): Embed {
 	return {
 		id,
+		source_type: 'link',
+		fetch_method: 'opengraph',
 		url: `https://example.com/${id}`,
-		kind: 'article',
 		title: `old ${id}`,
-		description: null,
-		provider_name: null,
-		embed_url: null,
-		image_mime_type: null,
-		image_size_bytes: null,
-		fetched_at: '2024-01-01T00:00:00Z'
+		created_at: '2024-01-01T00:00:00Z',
+		...overrides
 	};
 }

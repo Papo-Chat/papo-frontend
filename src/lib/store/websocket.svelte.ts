@@ -240,17 +240,13 @@ export function dispatchEvent(event: WsOutbound): void {
 		case 'message_edit':
 		case 'message_pin':
 		case 'react_update':
-		case 'remove_preview':
-		case 'link_preview_update':
+		case 'message_embeds_update':
 		case 'attachment_moderation_update':
 			messagesStore.applyEvent(messagesStore.state, event);
 			break;
 		case 'message_delete':
 			messagesStore.applyEvent(messagesStore.state, event);
 			notificationsStore.removeByMessage(event.id);
-			break;
-		case 'new_preview':
-			messagesStore.handleNewPreview(event);
 			break;
 		case 'new_notification': {
 			notificationsStore.handleNewNotification();

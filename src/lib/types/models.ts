@@ -186,7 +186,7 @@ export interface Message {
 
 export interface MessageWithAttachment extends Message {
 	attachments: MessageAttachment[];
-	previews: LinkPreview[];
+	embeds: Embed[];
 	reactions: MessageReactionSummary[];
 	user_reactions: MessageUserReaction[];
 }
@@ -203,26 +203,113 @@ export interface PinnedMessageList {
 	pinned: MessageWithAttachment[];
 }
 
-// ── link previews ──────────────────────────────────────
+// ── embeds ─────────────────────────────────────────────
 
-export interface LinkPreview {
-	id: string;
-	url: string;
-	kind: string;
-	title: string | null;
-	description: string | null;
-	provider_name: string | null;
-	embed_url: string | null;
-	video_url?: string | null;
-	image_mime_type: string | null;
-	image_size_bytes: number | null;
-	fetched_at: string;
+export type EmbedSourceType = 'link' | 'custom';
+export type EmbedFetchMethod = 'opengraph' | 'oembed' | 'manual';
+
+// Mídia do embed (thumbnail, imagem, vídeo, ícone do footer, avatar do autor).
+// A referência interna (sha256) não é exposta: a imagem da thumbnail é lida por
+// GET /embeds/:embed_id (image_data) e o vídeo pelo relay autenticado
+// GET /embeds/:embed_id/video. Imagens não expõem URL.
+export interface EmbedMedia {
+	url?: string | null;
+	mime_type?: string | null;
+	width?: number | null;
+	height?: number | null;
+	size_bytes?: number | null;
 }
 
-// GET /link-previews/:preview_id: public fields + embedded base64 image.
-export interface LinkPreviewWithImage extends LinkPreview {
-	// base64 of the thumbnail, null when there is no image.
+export interface EmbedAuthor {
+	name?: string | null;
+	url?: string | null;
+	media?: EmbedMedia | null;
+}
+
+export interface EmbedFooter {
+	text?: string | null;
+	icon?: EmbedMedia | null;
+}
+
+export interface EmbedField {
+	// Ordem de exibição (0..N).
+	position: number;
+	name: string;
+	value: string;
+	inline: boolean;
+}
+
+// Embed de mensagem: automático (source_type 'link', OpenGraph/oEmbed) ou
+// customizado (source_type 'custom'). O backend omite campos ausentes
+// (omitempty), então tudo que não é sempre presente chega opcional ou null.
+export interface Embed {
+	id: string;
+	source_type: EmbedSourceType;
+	fetch_method: EmbedFetchMethod;
+	provider?: string | null;
+	site_name?: string | null;
+	url?: string | null;
+	title?: string | null;
+	description?: string | null;
+	// Cor de destaque (#RRGGBB).
+	color?: string | null;
+	author?: EmbedAuthor | null;
+	thumbnail?: EmbedMedia | null;
+	image?: EmbedMedia | null;
+	video?: EmbedMedia | null;
+	footer?: EmbedFooter | null;
+	fields?: EmbedField[];
+	// Iframe derivado de padrão hardcoded do backend (MVP: YouTube). O frontend
+	// só renderiza iframe quando casar exatamente com esse padrão.
+	embed_url?: string | null;
+	created_at: string;
+	fetched_at?: string | null;
+}
+
+// GET /embeds/:embed_id: campos públicos + imagem da thumbnail em base64.
+export interface EmbedWithImage extends Embed {
+	// base64 da thumbnail, null quando não há imagem.
 	image_data: string | null;
+}
+
+// ── embeds customizados (entrada do cliente) ───────────
+
+export interface EmbedMediaInput {
+	url: string;
+	// Obrigatório para vídeo (allowlist: video/mp4, video/webm, video/ogg).
+	mime_type?: string;
+}
+
+export interface EmbedAuthorInput {
+	name?: string;
+	url?: string;
+}
+
+export interface EmbedFooterInput {
+	text?: string;
+}
+
+export interface EmbedFieldInput {
+	name: string;
+	value: string;
+	inline?: boolean;
+}
+
+// Embed customizado enviado na criação/edição de mensagem. O cliente não
+// controla source_type/fetch_method/timestamps: o backend fixa
+// source_type='custom' e fetch_method='manual'.
+export interface EmbedInput {
+	title?: string;
+	description?: string;
+	url?: string;
+	color?: string;
+	site_name?: string;
+	author?: EmbedAuthorInput;
+	footer?: EmbedFooterInput;
+	thumbnail?: EmbedMediaInput;
+	image?: EmbedMediaInput;
+	video?: EmbedMediaInput;
+	fields?: EmbedFieldInput[];
 }
 
 // ── emojis ─────────────────────────────────────────────

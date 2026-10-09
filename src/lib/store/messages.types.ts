@@ -26,17 +26,18 @@ export interface ChannelMessagesState {
 	// Keyset cursors for navigating both directions.
 	cursorOlder: KeysetCursor | null;
 	cursorNewer: KeysetCursor | null;
-	// ── REST vs WS: a delayed REST snapshot must not clobber newer WS deltas
-	// (deleted/tombstoned messages, removed previews). ───────────────────────
+	// REST ↔ WS: a delayed REST snapshot must not clobber newer WS deltas
+	// (deleted/tombstoned messages, removed embeds). ───────────────────────────
 	// Incremented on every load/loadMore; captured before the await so a
 	// page that resolves after the channel was evicted/refreshed is discarded.
 	requestGeneration: number;
 	// Message ids deleted via WS message_delete. A delayed REST snapshot must
 	// not resurrect them.
 	deletedMessageIds: Set<string>;
-	// `${messageId}:${previewId}` tombstones from WS remove_preview. A delayed
-	// REST snapshot / in-flight GET must not resurrect the preview.
-	previewTombstones: Set<string>;
+	// `${messageId}:${embedId}` tombstones for embeds removed from a message by
+	// WS message_embeds_update. A delayed REST snapshot / in-flight GET must not
+	// resurrect them.
+	embedTombstones: Set<string>;
 
 	// Pinned messages (from GET /channels/:id/pinned), ordered by pinned_at.
 	// The source of truth for "is this message pinned".

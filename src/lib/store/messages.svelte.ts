@@ -6,8 +6,8 @@
 // mutation of a stored message.
 //
 // REST ↔ WS merge (P0.4): a delayed REST snapshot must never clobber a newer
-// WS delta. Tombstones (`deletedMessageIds`, `previewTombstones`) mark
-// messages/previews removed via WS; a late REST page must not resurrect them.
+// WS delta. Tombstones (`deletedMessageIds`, `embedTombstones`) mark
+// messages/embeds removed via WS; a late REST page must not resurrect them.
 // `requestGeneration` discards a page that resolves after the channel was
 // evicted/refreshed.
 
@@ -15,13 +15,13 @@ import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
 import type { ChannelMessagesState, MessagesState } from './messages.types';
 import type {
-	LinkPreview,
-	LinkPreviewWithImage,
+	Embed,
+	EmbedInput,
+	EmbedWithImage,
 	MessageWithAttachment,
 	WsAttachmentModerationUpdate,
-	WsLinkPreviewUpdate,
 	WsMessage,
-	WsNewPreview,
+	WsMessageEmbedsUpdate,
 	WsOutbound,
 	WsReactUpdate
 } from '../types';
@@ -31,50 +31,33 @@ import type {
 const MAX_WINDOW = 300;
 
 // ── caches (module-level, non-reactive) ─────────────────
-// Resolved previews (with image_data) keyed by preview_id. The message only
-// keeps the preview metadata; image_data lives here for rendering.
-const previewCache = new SvelteMap<string, LinkPreviewWithImage>();
-// new_preview events whose message is not yet in the cache. Keyed by
-// message_id (new_preview carries no channel_id). Applied when the message
-// arrives in a channel, subject to the tombstone check.
-const pendingPreviews = new SvelteMap<string, SvelteMap<string, LinkPreviewWithImage>>();
-
-const previewTombstones = new SvelteSet<string>();
+// Resolved embeds (with image_data) keyed by embed_id. The message only keeps
+// the embed metadata; image_data lives here for rendering.
+const embedCache = new SvelteMap<string, EmbedWithImage>();
+// message_embeds_update events whose message is not yet in the cache. Keyed by
+// message_id. Applied when the message arrives in a channel.
+const pendingEmbeds = new SvelteMap<string, Embed[]>();
 
 let requestSerial = 0;
 let storeEpoch = 0;
 
-function previewKey(messageId: string, previewId: string): string {
-	return `${messageId}:${previewId}`;
+function embedKey(messageId: string, embedId: string): string {
+	return `${messageId}:${embedId}`;
 }
 
-function setPendingPreview(messageId: string, preview: LinkPreviewWithImage): void {
-	let previews = pendingPreviews.get(messageId);
-
-	if (!previews) {
-		previews = new SvelteMap();
-		pendingPreviews.set(messageId, previews);
-	}
-
-	previews.set(preview.id, preview);
+function setPendingEmbeds(messageId: string, embeds: Embed[]): void {
+	pendingEmbeds.set(messageId, embeds);
 }
 
-function deletePendingPreview(messageId: string, previewId: string): void {
-	const previews = pendingPreviews.get(messageId);
-	if (!previews) return;
-
-	previews.delete(previewId);
-
-	if (previews.size === 0) {
-		pendingPreviews.delete(messageId);
-	}
+function deletePendingEmbeds(messageId: string): void {
+	pendingEmbeds.delete(messageId);
 }
 
 // When messages leave the window (trim), release their client-side resources so
 // they don't leak in the module-level caches.
 //
-// - previews (image_data, unbounded): drop from previewCache/pendingPreviews,
-//   unless another message still in the window references the same preview id.
+// - embeds (image_data, unbounded): drop from embedCache/pendingEmbeds, unless
+//   another message still in the window references the same embed id.
 // - attachments/thumbnails: plain server URLs — nothing held in memory.
 // - reactions / user_reactions: fields on the message object, freed with it.
 // - reaction user lists (Reactions.svelte `cached`): component-local $state,
@@ -87,20 +70,20 @@ function releaseMessageResources(
 		return;
 	}
 
-	// Preview ids still referenced by messages kept in the window.
-	const keptPreviewIds = new Set<string>();
+	// Embed ids still referenced by messages kept in the window.
+	const keptEmbedIds = new Set<string>();
 	for (const m of byId.values()) {
-		for (const p of m.previews) {
-			keptPreviewIds.add(p.id);
+		for (const e of m.embeds) {
+			keptEmbedIds.add(e.id);
 		}
 	}
 
 	for (const m of dropped) {
-		// Drop any not-yet-applied previews for this message.
-		pendingPreviews.delete(m.id);
-		for (const p of m.previews) {
-			if (!keptPreviewIds.has(p.id)) {
-				previewCache.delete(p.id);
+		// Drop any not-yet-applied embed list for this message.
+		deletePendingEmbeds(m.id);
+		for (const e of m.embeds) {
+			if (!keptEmbedIds.has(e.id)) {
+				embedCache.delete(e.id);
 			}
 		}
 	}
@@ -177,7 +160,7 @@ function newChannelState(): ChannelMessagesState {
 		cursorNewer: null,
 		requestGeneration: 0,
 		deletedMessageIds: new Set<string>(),
-		previewTombstones: new Set<string>(),
+		embedTombstones: new Set<string>(),
 		pinned: [],
 		pinnedLoaded: false,
 		pinnedLoading: false,
@@ -206,8 +189,9 @@ export function sortedIds(byId: SvelteMap<string, MessageWithAttachment>): strin
 	return msgs.map((m) => m.id);
 }
 
-// Convert a WS `message` event (no reactions/previews/user_reactions) into a
-// full MessageWithAttachment for the cache.
+// Convert a WS `message` event (no reactions/embeds/user_reactions) into a
+// full MessageWithAttachment for the cache. The embeds arrive later, by
+// message_embeds_update.
 export function wsMessageToMsg(m: WsMessage): MessageWithAttachment {
 	return {
 		id: m.id,
@@ -218,22 +202,22 @@ export function wsMessageToMsg(m: WsMessage): MessageWithAttachment {
 		edited_at: null,
 		reply_to: m.reply_to,
 		attachments: m.attachments ?? [],
-		previews: [],
+		embeds: [],
 		reactions: [],
 		user_reactions: []
 	};
 }
 
-// A API pode devolver `null` para campos de array opcionais (previews/reactions)
+// A API pode devolver `null` para campos de array opcionais (embeds/reactions)
 // — o contrato (openapi) trata `reactions` como nullable e, na prática,
-// `previews` também chega null. A normalização converte para arrays vazios,
+// `embeds` também chega null. A normalização converte para arrays vazios,
 // preservando as invariantes de array não-nulo do store (merge, tombstones,
 // trim).
 function coerceMessage(m: MessageWithAttachment): MessageWithAttachment {
 	return {
 		...m,
 		attachments: m.attachments ?? [],
-		previews: m.previews ?? [],
+		embeds: m.embeds ?? [],
 		reactions: m.reactions ?? [],
 		user_reactions: m.user_reactions ?? []
 	};
@@ -253,14 +237,12 @@ function replaceChannel(
 	state.channels.set(channelId, build(old));
 }
 
-function isPreviewRemoved(ch: ChannelMessagesState, messageId: string, previewId: string): boolean {
-	const key = previewKey(messageId, previewId);
-
-	return previewTombstones.has(key) || ch.previewTombstones.has(key);
+function isEmbedRemoved(ch: ChannelMessagesState, messageId: string, embedId: string): boolean {
+	return ch.embedTombstones.has(embedKey(messageId, embedId));
 }
 
 // Merge a REST `incoming` message into an existing local `existing` message,
-// preserving WS deltas (reactions, user_reactions, previews, edits) that a
+// preserving WS deltas (reactions, user_reactions, embeds, edits) that a
 // stale REST snapshot must not clobber. Returns null when the message is
 // tombstoned (deleted via WS) → never resurrect it.
 export function mergeFetchedMessage(
@@ -275,8 +257,8 @@ export function mergeFetchedMessage(
 	}
 	const incomingSafe: MessageWithAttachment = {
 		...normalizedIncoming,
-		previews: normalizedIncoming.previews.filter((p) =>
-			!isPreviewRemoved(ch, normalizedIncoming.id, p.id)
+		embeds: normalizedIncoming.embeds.filter((e) =>
+			!isEmbedRemoved(ch, normalizedIncoming.id, e.id)
 		)
 	};
 	if (!normalizedExisting) {
@@ -284,12 +266,13 @@ export function mergeFetchedMessage(
 		return incomingSafe;
 	}
 	// Exists locally: never blind-overwrite. Preserve WS deltas.
-	const previewKey = (pid: string) => `${normalizedExisting.id}:${pid}`;
-	const keptPreviews = normalizedExisting.previews.filter((p) => !ch.previewTombstones.has(previewKey(p.id)));
-	const keptPreviewIds = new SvelteSet(keptPreviews.map((p) => p.id));
-	const mergedPreviews: LinkPreview[] = [
-		...keptPreviews,
-		...incomingSafe.previews.filter((p) => !keptPreviewIds.has(p.id))
+	const keptEmbeds = normalizedExisting.embeds.filter(
+		(e) => !isEmbedRemoved(ch, normalizedExisting.id, e.id)
+	);
+	const keptEmbedIds = new SvelteSet(keptEmbeds.map((e) => e.id));
+	const mergedEmbeds: Embed[] = [
+		...keptEmbeds,
+		...incomingSafe.embeds.filter((e) => !keptEmbedIds.has(e.id))
 	];
 	// Attachments: preserve a local (WS-moderation) status over a stale REST.
 	const mergedAttachments = incomingSafe.attachments.map((a) => {
@@ -303,7 +286,7 @@ export function mergeFetchedMessage(
 		...incomingSafe,
 		reactions: normalizedExisting.reactions,
 		user_reactions: normalizedExisting.user_reactions,
-		previews: mergedPreviews,
+		embeds: mergedEmbeds,
 		attachments: mergedAttachments
 	};
 	// Preserve a local edit over a stale REST snapshot.
@@ -360,9 +343,9 @@ export function upsertMessage(
 		state.channels.set(channelId, c);
 		inserted = true;
 	}
-	// Apply any preview that resolved before the message arrived (P0.5).
+	// Apply any embed list that arrived before the message (P0.5).
 	if (inserted) {
-		applyPendingPreview(state, safeMessage.id);
+		applyPendingEmbeds(state, safeMessage.id);
 	}
 }
 
@@ -452,17 +435,20 @@ export function patchPinned(state: MessagesState, messageId: string, isPinned: b
 	}
 }
 
-const previewRequests = new SvelteMap<string, Promise<LinkPreviewWithImage>>();
+const embedRequests = new SvelteMap<string, Promise<EmbedWithImage>>();
 const removeRequests = new Map<string, Promise<void>>();
 
-export function ensurePreview(previewId: string): Promise<LinkPreviewWithImage> {
-	const cached = previewCache.get(previewId);
+// Embed metadata (WS/REST) has no image_data: the card asks for it when it
+// approaches the viewport. GET /embeds/:embed_id returns the embed + the
+// thumbnail in base64.
+export function ensureEmbed(embedId: string): Promise<EmbedWithImage> {
+	const cached = embedCache.get(embedId);
 
 	if (cached) {
 		return Promise.resolve(cached);
 	}
 
-	const existing = previewRequests.get(previewId);
+	const existing = embedRequests.get(embedId);
 
 	if (existing) {
 		return existing;
@@ -470,26 +456,26 @@ export function ensurePreview(previewId: string): Promise<LinkPreviewWithImage> 
 
 	const epoch = storeEpoch;
 
-	const request = api.linkPreviews
-		.get(previewId)
-		.then((preview) => {
+	const request = api.embeds
+		.get(embedId)
+		.then((embed) => {
 			if (epoch !== storeEpoch) {
-				throw new Error('stale preview request');
+				throw new Error('stale embed request');
 			}
 
-			previewCache.set(preview.id, preview);
+			embedCache.set(embed.id, embed);
 
-			return preview;
+			return embed;
 		})
 		.finally(() => {
 			// Uma request velha não pode apagar uma nova
-			// request do mesmo preview id.
-			if (previewRequests.get(previewId) === request) {
-				previewRequests.delete(previewId);
+			// request do mesmo embed id.
+			if (embedRequests.get(embedId) === request) {
+				embedRequests.delete(embedId);
 			}
 		});
 
-	previewRequests.set(previewId, request);
+	embedRequests.set(embedId, request);
 
 	return request;
 }
@@ -561,140 +547,90 @@ export function reactUpdate(state: MessagesState, event: WsReactUpdate): void {
 	}
 }
 
-// Remove a preview from a message's previews and tombstone it, so a delayed
-// REST snapshot / in-flight GET cannot resurrect it.
-export function removePreview(state: MessagesState, messageId: string, previewId: string): void {
-	const key = previewKey(messageId, previewId);
-
-	previewTombstones.add(key);
-	previewCache.delete(previewId);
-	deletePendingPreview(messageId, previewId);
-	for (const [channelId, ch] of state.channels) {
-		const msg = ch.byId.get(messageId);
-
-		if (!msg) {
-			continue;
-		}
-
-		touchDuringFresh(channelId, messageId);
-		const nextPreviews = msg.previews.filter((p) => p.id !== previewId);
-		if (nextPreviews.length === msg.previews.length) {
-			// Not present in the message, but tombstone anyway (a delayed
-			// REST page / in-flight GET must still be blocked).
-			replaceChannel(state, channelId, (old) => {
-				const m = old.byId.get(messageId);
-				if (!m) {
-					return old;
-				}
-				return {
-					...old,
-					previewTombstones: new SvelteSet([...old.previewTombstones, `${messageId}:${previewId}`])
-				};
-			});
-			continue;
-		}
-		replaceChannel(state, channelId, (old) => {
-			const m = old.byId.get(messageId);
-			if (!m) {
-				return old;
-			}
-			const newByd = new SvelteMap<string, MessageWithAttachment>();
-			for (const [id, mm] of old.byId) {
-				newByd.set(id, mm);
-			}
-			newByd.set(messageId, { ...m, previews: nextPreviews });
-			return {
-				...old,
-				byId: newByd,
-				ids: sortedIds(newByd),
-				previewTombstones: new SvelteSet([...old.previewTombstones, `${messageId}:${previewId}`])
-			};
-		});
-		break;
-	}
-}
-
-// Link preview update: upsert (replace by id, or insert if absent) and drop
-// any tombstone for this preview (this WS event is, by reception order, a
-// later creation/update that must win over an earlier remove).
-export function linkPreviewUpdate(state: MessagesState, event: WsLinkPreviewUpdate): void {
-	const { channel_id, message_id, preview } = event;
-	const key = previewKey(message_id, preview.id);
-
-	// este update é posterior ao remove, então ganha pela ordem WS
-	previewTombstones.delete(key);
-	previewCache.set(preview.id, preview);
-
+// message_embeds_update carries the CURRENT embed list of one message: the
+// client replaces what it has, without diffing. Embeds that leave the list are
+// tombstoned (a delayed REST page must not resurrect them); embeds present in
+// the list clear their tombstone (this WS event wins by reception order).
+export function applyEmbedsUpdate(state: MessagesState, event: WsMessageEmbedsUpdate): void {
+	const { channel_id, message_id } = event;
+	// `embeds: null` chega quando a mensagem fica sem embed (o backend serializa
+	// a lista vazia como null).
+	const embeds = event.embeds ?? [];
 	const ch = state.channels.get(channel_id);
+	const msg = ch?.byId.get(message_id);
 
-	if (ch?.previewTombstones.has(key)) {
-		const tombstones = new SvelteSet(ch.previewTombstones);
-
-		tombstones.delete(key);
-
-		state.channels.set(channel_id, {
-			...ch,
-			previewTombstones: tombstones
-		});
-	}
-
-	const current = state.channels.get(channel_id);
-	const msg = current?.byId.get(message_id);
-
-	if (!current || !msg) {
-		setPendingPreview(message_id, preview);
+	if (!ch || !msg) {
+		// The message is not in the window yet: keep the list and apply it when
+		// the message arrives (REST page or WS message event).
+		setPendingEmbeds(message_id, embeds);
 		return;
 	}
 
-	mergePreview(state, message_id, preview);
+	touchDuringFresh(channel_id, message_id);
+
+	const nextIds = new Set(embeds.map((e) => e.id));
+	const dropped = msg.embeds.filter((e) => !nextIds.has(e.id));
+	const tombstones = new SvelteSet(ch.embedTombstones);
+	for (const e of dropped) {
+		tombstones.add(embedKey(message_id, e.id));
+	}
+	for (const e of embeds) {
+		tombstones.delete(embedKey(message_id, e.id));
+	}
+
+	replaceChannel(state, channel_id, (old) => {
+		const m = old.byId.get(message_id);
+		if (!m) {
+			return old;
+		}
+		const newById = new SvelteMap<string, MessageWithAttachment>();
+		for (const [id, mm] of old.byId) {
+			newById.set(id, mm);
+		}
+		newById.set(message_id, { ...m, embeds });
+		return {
+			...old,
+			byId: newById,
+			ids: sortedIds(newById),
+			embedTombstones: tombstones
+		};
+	});
+
+	// image_data of embeds that left the message: released when no message in
+	// the window references them (link embeds are shared by URL across messages).
+	for (const e of dropped) {
+		releaseEmbedImage(state, e.id);
+	}
 }
 
-// Merge a resolved preview into the message it belongs to (P0.5). The message
-// keeps only the metadata (no image_data); the full preview (with image_data)
-// is stored in previewCache for rendering. Returns true if the preview was
-// applied (or was already present, i.e. idempotent); false if the message is
-// absent from the cache or the preview is tombstoned (never resurrect).
-export function mergePreview(
-	state: MessagesState,
-	messageId: string,
-	preview: LinkPreviewWithImage
-): boolean {
-	for (const [channelId, ch] of state.channels) {
-		const msg = ch.byId.get(messageId);
+function releaseEmbedImage(state: MessagesState, embedId: string): void {
+	for (const ch of state.channels.values()) {
+		for (const m of ch.byId.values()) {
+			if (m.embeds.some((e) => e.id === embedId)) {
+				return;
+			}
+		}
+		for (const m of ch.pinned) {
+			if (m.embeds.some((e) => e.id === embedId)) {
+				return;
+			}
+		}
+	}
+	embedCache.delete(embedId);
+}
 
-		if (!msg) {
+// Apply the pending embed list of a message (called after the message arrives,
+// so an update that arrived before the message is still applied).
+function applyPendingEmbeds(state: MessagesState, messageId: string): void {
+	const embeds = pendingEmbeds.get(messageId);
+	if (!embeds) return;
+
+	for (const [channelId, ch] of state.channels) {
+		if (!ch.byId.has(messageId)) {
 			continue;
 		}
 
-		touchDuringFresh(channelId, messageId);
-		if (previewTombstones.has(previewKey(messageId, preview.id))) {
-			return false;
-		}
-		if (ch.previewTombstones.has(`${messageId}:${preview.id}`)) {
-			// Tombstoned: never resurrect.
-			return false;
-		}
-		const p: LinkPreview = {
-			id: preview.id,
-			url: preview.url,
-			kind: preview.kind,
-			title: preview.title,
-			description: preview.description,
-			provider_name: preview.provider_name,
-			embed_url: preview.embed_url,
-			video_url: preview.video_url ?? null,
-			image_mime_type: preview.image_mime_type,
-			image_size_bytes: preview.image_size_bytes,
-			fetched_at: preview.fetched_at
-		};
-
-		const exists = msg.previews.some((existing) => existing.id === preview.id);
-
-		const nextPreviews = exists
-			? msg.previews.map((existing) => (existing.id === preview.id ? p : existing))
-			: [...msg.previews, p];
-
-		previewCache.set(preview.id, preview);
+		pendingEmbeds.delete(messageId);
 
 		replaceChannel(state, channelId, (old) => {
 			const m = old.byId.get(messageId);
@@ -706,10 +642,7 @@ export function mergePreview(
 				newById.set(id, mm);
 			}
 
-			newById.set(messageId, {
-				...m,
-				previews: nextPreviews
-			});
+			newById.set(messageId, { ...m, embeds });
 
 			return {
 				...old,
@@ -718,57 +651,8 @@ export function mergePreview(
 			};
 		});
 
-		return true;
-	}
-	return false;
-}
-
-// Apply any pending preview for a message (called after the message arrives,
-// so a preview resolved before the message can still be attached).
-function applyPendingPreview(state: MessagesState, messageId: string): void {
-	const previews = pendingPreviews.get(messageId);
-	if (!previews) return;
-
-	for (const [previewId, preview] of previews) {
-		if (previewTombstones.has(previewKey(messageId, previewId))) {
-			previews.delete(previewId);
-			continue;
-		}
-
-		if (mergePreview(state, messageId, preview)) {
-			previews.delete(previewId);
-		}
-	}
-
-	if (previews.size === 0) {
-		pendingPreviews.delete(messageId);
-	}
-}
-
-// new_preview is async (needs GET /link-previews/:preview_id). The store
-// fetches and applies it: if the message is already cached, immediately;
-// otherwise it stays pending until the message arrives.
-export function handleNewPreview(event: WsNewPreview): void {
-	const { message_id, preview_id } = event;
-	const key = previewKey(message_id, preview_id);
-
-	if (previewTombstones.has(key)) {
 		return;
 	}
-
-	const epoch = storeEpoch;
-
-	void ensurePreview(preview_id)
-		.then((preview) => {
-			if (epoch !== storeEpoch || previewTombstones.has(key)) {
-				return;
-			}
-
-			if (!mergePreview(state, message_id, preview)) {
-				setPendingPreview(message_id, preview);
-			}
-		})
-		.catch(() => {});
 }
 
 function touchDuringAnyFresh(messageId: string): void {
@@ -850,11 +734,8 @@ export function applyEvent(state: MessagesState, event: WsOutbound): void {
 		case 'react_update':
 			reactUpdate(state, event);
 			break;
-		case 'remove_preview':
-			removePreview(state, event.message_id, event.preview_id);
-			break;
-		case 'link_preview_update':
-			linkPreviewUpdate(state, event);
+		case 'message_embeds_update':
+			applyEmbedsUpdate(state, event);
 			break;
 		case 'attachment_moderation_update':
 			attachmentModerationUpdate(state, event);
@@ -886,17 +767,7 @@ export function evict(channelId: string): void {
 	);
 
 	for (const message of droppedById.values()) {
-		pendingPreviews.delete(message.id);
-	}
-
-	// Global preview tombstones are keyed as messageId:previewId. They only
-	// need to survive while the channel window can still receive a stale page.
-	const channelPreviewTombstones = new Set(ch.previewTombstones);
-	for (const key of [...previewTombstones]) {
-		const messageId = key.split(':', 1)[0];
-		if (droppedById.has(messageId) || channelPreviewTombstones.has(key)) {
-			previewTombstones.delete(key);
-		}
+		deletePendingEmbeds(message.id);
 	}
 
 	freshGuards.delete(channelId);
@@ -943,7 +814,7 @@ async function _fetchPage(
 	});
 	try {
 		const res = await api.messages.list(channelId, q);
-		// Normaliza arrays nulos vindos da API (previews/reactions).
+		// Normaliza arrays nulos vindos da API (embeds/reactions).
 		const messages = res.messages.map(coerceMessage);
 		const current = state.channels.get(channelId);
 		if (!current || current.requestGeneration !== gen) {
@@ -955,7 +826,7 @@ async function _fetchPage(
 			return;
 		}
 
-		// Preview image_data is intentionally loaded by PreviewCard only when the
+		// Embed image_data is intentionally loaded by EmbedCard only when the
 		// card approaches the viewport. Channel switches stay metadata-only here.
 
 		const newByd = new SvelteMap<string, MessageWithAttachment>();
@@ -1056,7 +927,7 @@ async function _fetchPage(
 		});
 		for (const message of messages) {
 			if (newByd.has(message.id)) {
-				applyPendingPreview(state, message.id);
+				applyPendingEmbeds(state, message.id);
 			}
 		}
 		if (needsFreshRetry) {
@@ -1079,8 +950,8 @@ async function _fetchPage(
 	}
 }
 
-export function getPreview(previewId: string): LinkPreviewWithImage | null {
-	return previewCache.get(previewId) ?? null;
+export function getEmbed(embedId: string): EmbedWithImage | null {
+	return embedCache.get(embedId) ?? null;
 }
 
 // In-flight explicit fresh loads, keyed by channel (dedupes concurrent
@@ -1261,6 +1132,7 @@ export function send(payload: {
 	content: string | null;
 	reply_to: string | null;
 	files?: File[];
+	embeds?: EmbedInput[];
 	onProgress?: (percent: number) => void;
 }): Promise<MessageWithAttachment> {
 	const { onProgress, ...msgPayload } = payload;
@@ -1270,11 +1142,50 @@ export function send(payload: {
 	});
 }
 
-export function edit(messageId: string, content: string): Promise<MessageWithAttachment> {
-	return api.messages.edit(messageId, { content }).then((message) => {
-		upsertMessage(state, message.channel_id, message);
-		return message;
-	});
+// PUT substitui a lista completa de embeds customizados: `embeds` ausente ou
+// vazio remove os customizados, então quem edita só o conteúdo precisa
+// reenviar os embeds customizados atuais da mensagem.
+export function edit(
+	messageId: string,
+	content: string,
+	embeds?: EmbedInput[]
+): Promise<MessageWithAttachment> {
+	return api.messages
+		.edit(messageId, embeds === undefined ? { content } : { content, embeds })
+		.then((raw) => {
+			const message = coerceMessage(raw);
+			// A resposta traz apenas os customizados recém-criados (link embeds
+			// não vêm nela). Os customizados anteriores foram substituídos no
+			// backend: tombstone para que não sobrevivam ao merge da resposta.
+			tombstoneReplacedCustomEmbeds(message);
+			upsertMessage(state, message.channel_id, message);
+			return message;
+		});
+}
+
+function tombstoneReplacedCustomEmbeds(message: MessageWithAttachment): void {
+	const ch = state.channels.get(message.channel_id);
+	const current = ch?.byId.get(message.id);
+
+	if (!ch || !current) {
+		return;
+	}
+
+	const kept = new Set(message.embeds.map((e) => e.id));
+	const replaced = current.embeds.filter((e) => e.source_type === 'custom' && !kept.has(e.id));
+
+	if (replaced.length === 0) {
+		return;
+	}
+
+	const tombstones = new SvelteSet(ch.embedTombstones);
+	for (const e of replaced) {
+		tombstones.add(embedKey(message.id, e.id));
+	}
+	replaceChannel(state, message.channel_id, (old) => ({ ...old, embedTombstones: tombstones }));
+	for (const e of replaced) {
+		releaseEmbedImage(state, e.id);
+	}
 }
 
 export function remove(messageId: string): Promise<void> {
@@ -1553,8 +1464,10 @@ export function loadPinned(channelId: string, force = false): void {
 				.filter((message) => !current.deletedMessageIds.has(message.id));
 
 			for (const message of pinned) {
-				for (const preview of message.previews) {
-					void ensurePreview(preview.id).catch(() => {});
+				for (const embed of message.embeds) {
+					// Sem thumbnail não há image_data a buscar.
+					if (!embed.thumbnail) continue;
+					void ensureEmbed(embed.id).catch(() => {});
 				}
 			}
 
@@ -1604,16 +1517,15 @@ export function applySendResponse(channelId: string, msg: MessageWithAttachment)
 }
 
 // Full reset (logout / 401 / account switch) — clears every channel cache and
-// the module-level preview/pending maps.
+// the module-level embed/pending maps.
 export function reset(): void {
 	storeEpoch += 1;
 
-	previewRequests.clear();
+	embedRequests.clear();
 	removeRequests.clear();
 	freshGuards.clear();
 	_freshInflight.clear();
 	state.channels.clear();
-	pendingPreviews.clear();
-	previewCache.clear();
-	previewTombstones.clear();
+	pendingEmbeds.clear();
+	embedCache.clear();
 }

@@ -9,7 +9,7 @@
 	import * as usersStore from '$lib/store/users.svelte';
 	import { meId } from '$lib/store/session.svelte';
 	import { state as uiState } from '$lib/store/ui.svelte';
-	import type { MessageWithAttachment, SearchResult } from '$lib/types';
+	import type { EmbedInput, MessageWithAttachment, SearchResult } from '$lib/types';
 	import DmTopbar from '$lib/components/DmTopbar.svelte';
 	import Chat from '$lib/components/Chat.svelte';
 	import Composer from '$lib/components/Composer.svelte';
@@ -95,7 +95,8 @@
 	async function sendMessage(
 		text: string | null,
 		files: File[] = [],
-		onProgress?: (percent: number) => void
+		onProgress?: (percent: number) => void,
+		embeds: EmbedInput[] = []
 	): Promise<void> {
 		if (!dm) return;
 
@@ -105,6 +106,7 @@
 				content: text,
 				reply_to: replyTo?.id ?? null,
 				files,
+				embeds,
 				onProgress
 			});
 			replyTo = null;

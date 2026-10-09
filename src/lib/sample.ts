@@ -458,7 +458,7 @@ export const sampleMessages: MessageWithAttachment[] = [
 		edited_at: null,
 		reply_to: null,
 		attachments: [],
-		previews: [],
+		embeds: [],
 		reactions: [
 			{ emoji_id: 'rx-heart', unicode: '❤️', count: 4 },
 			{ emoji_id: 'rx-thumbs', unicode: '👍', count: 3 },
@@ -476,7 +476,7 @@ export const sampleMessages: MessageWithAttachment[] = [
 		edited_at: null,
 		reply_to: null,
 		attachments: [],
-		previews: [],
+		embeds: [],
 		reactions: [],
 		user_reactions: []
 	},
@@ -490,7 +490,7 @@ export const sampleMessages: MessageWithAttachment[] = [
 		edited_at: null,
 		reply_to: null,
 		attachments: [],
-		previews: [],
+		embeds: [],
 		reactions: [],
 		user_reactions: []
 	},
@@ -503,17 +503,18 @@ export const sampleMessages: MessageWithAttachment[] = [
 		edited_at: null,
 		reply_to: null,
 		attachments: [],
-		previews: [
+		embeds: [
 			{
-				id: 'pv-dashboard',
+				id: 'em-dashboard',
+				source_type: 'link',
+				fetch_method: 'opengraph',
+				site_name: 'AeroClub',
 				url: 'https://aeroclub.example/dashboard',
-				kind: 'dashboard',
 				title: 'Preview do Dashboard',
 				description: 'Resumo da Comunidade',
-				provider_name: 'AeroClub',
+				color: '#5ac8fa',
 				embed_url: null,
-				image_mime_type: null,
-				image_size_bytes: null,
+				created_at: '2026-09-22T09:24:00Z',
 				fetched_at: '2026-09-22T09:24:00Z'
 			}
 		],
@@ -546,7 +547,7 @@ export const sampleMessages: MessageWithAttachment[] = [
 		edited_at: null,
 		reply_to: null,
 		attachments: [],
-		previews: [],
+		embeds: [],
 		reactions: [
 			{ emoji_id: 'rx-thumbs', unicode: '👍', count: 2 },
 			{ emoji_id: 'rx-smile', unicode: '😊', count: 1 }
@@ -563,7 +564,7 @@ export const sampleMessages: MessageWithAttachment[] = [
 		edited_at: null,
 		reply_to: null,
 		attachments: [],
-		previews: [],
+		embeds: [],
 		reactions: [],
 		user_reactions: []
 	},
@@ -577,7 +578,7 @@ export const sampleMessages: MessageWithAttachment[] = [
 		edited_at: null,
 		reply_to: null,
 		attachments: [],
-		previews: [],
+		embeds: [],
 		reactions: [],
 		user_reactions: []
 	},
@@ -590,7 +591,7 @@ export const sampleMessages: MessageWithAttachment[] = [
 		edited_at: null,
 		reply_to: null,
 		attachments: [],
-		previews: [],
+		embeds: [],
 		reactions: [],
 		user_reactions: []
 	},
@@ -604,7 +605,7 @@ export const sampleMessages: MessageWithAttachment[] = [
 		edited_at: null,
 		reply_to: null,
 		attachments: [],
-		previews: [],
+		embeds: [],
 		reactions: [],
 		user_reactions: []
 	},
@@ -618,7 +619,7 @@ export const sampleMessages: MessageWithAttachment[] = [
 		edited_at: null,
 		reply_to: null,
 		attachments: [],
-		previews: [],
+		embeds: [],
 		reactions: [],
 		user_reactions: []
 	}
@@ -659,17 +660,18 @@ export const samplePins: MessageWithAttachment[] = [
 		edited_at: null,
 		reply_to: null,
 		attachments: [],
-		previews: [
+		embeds: [
 			{
-				id: 'pv-dashboard',
+				id: 'em-dashboard',
+				source_type: 'link',
+				fetch_method: 'opengraph',
+				site_name: 'AeroClub',
 				url: 'https://aeroclub.example/dashboard',
-				kind: 'dashboard',
 				title: 'Preview do Dashboard',
 				description: 'Resumo da Comunidade',
-				provider_name: 'AeroClub',
+				color: '#5ac8fa',
 				embed_url: null,
-				image_mime_type: null,
-				image_size_bytes: null,
+				created_at: '2026-09-22T09:24:00Z',
 				fetched_at: '2026-09-22T09:24:00Z'
 			}
 		],
@@ -690,7 +692,7 @@ export const samplePins: MessageWithAttachment[] = [
 		edited_at: null,
 		reply_to: null,
 		attachments: [],
-		previews: [],
+		embeds: [],
 		reactions: [
 			{ emoji_id: 'rx-heart', unicode: '❤️', count: 4 },
 			{ emoji_id: 'rx-thumbs', unicode: '👍', count: 3 },

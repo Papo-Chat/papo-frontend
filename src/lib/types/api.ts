@@ -2,6 +2,7 @@ import type {
 	ChannelPermission,
 	ChannelPermissionEntry,
 	ConnectionInfo,
+	EmbedInput,
 	MessageReactionGroup,
 	RolePermissions,
 	UserConfig
@@ -214,6 +215,10 @@ export interface MessageSendPayload {
 	reply_to: string | null;
 	// FormData files under the repeated `attachments` field.
 	files?: File[];
+	// Optional custom embeds, sent as a JSON-serialized array in the multipart
+	// `embeds` field. Automatic link embeds are extracted by the backend from
+	// the content and must not be sent here.
+	embeds?: EmbedInput[];
 }
 
 export interface ReactionRequest {
@@ -291,7 +296,7 @@ export type {
 	PinnedMessageList,
 	ChannelPermissionEntry,
 	ChannelPermission,
-	LinkPreviewWithImage,
+	EmbedWithImage,
 	SearchResponse,
 	AuditLogList,
 	UserConfig

@@ -10,6 +10,7 @@ import {
 	users,
 	channels,
 	messages,
+	embeds,
 	auth,
 	ApiError,
 	setOnUnauthorized,
@@ -329,6 +330,57 @@ describe('multipart upload credentials', () => {
 		expect(instance).not.toBeNull();
 		const request = instance as FakeXMLHttpRequest | null;
 		expect(request?.withCredentials).toBe(true);
+	});
+});
+
+
+describe('embeds contract', () => {
+	it('GET /embeds/:embed_id', async () => {
+		const { calls } = installFetch({ status: 200, body: { id: 'embed 1' } });
+		await embeds.get('embed 1');
+		expect(calls).toHaveLength(1);
+		const url = new URL(calls[0].url);
+		expect(url.pathname).toBe('/embeds/embed%201');
+	});
+
+	it('send() serializes custom embeds as a JSON multipart field', async () => {
+		const { calls } = installFetch({ status: 201, body: { id: 'm1' } });
+		await messages.send({
+			channel_id: 'channel-1',
+			content: 'hello',
+			reply_to: null,
+			files: [],
+			embeds: [{ title: 'T', color: '#5ac8fa' }]
+		});
+
+		const form = calls[0].init.body as FormData;
+		expect(JSON.parse(String(form.get('embeds')))).toEqual([{ title: 'T', color: '#5ac8fa' }]);
+	});
+
+	it('send() omits the embeds field when there is no custom embed', async () => {
+		const { calls } = installFetch({ status: 201, body: { id: 'm1' } });
+		await messages.send({ channel_id: 'channel-1', content: 'hello', reply_to: null, files: [] });
+
+		const form = calls[0].init.body as FormData;
+		expect(form.has('embeds')).toBe(false);
+	});
+
+	it('edit() sends the full custom embed list (PUT replaces it)', async () => {
+		const { calls } = installFetch({ status: 200, body: { id: 'm1' } });
+		await messages.edit('m1', { content: 'edited', embeds: [{ title: 'T' }] });
+
+		expect(calls[0].init.method).toBe('PUT');
+		expect(JSON.parse(String(calls[0].init.body))).toEqual({
+			content: 'edited',
+			embeds: [{ title: 'T' }]
+		});
+	});
+
+	it('edit() without embeds sends no embeds field (store omits it)', async () => {
+		const { calls } = installFetch({ status: 200, body: { id: 'm1' } });
+		await messages.edit('m1', { content: 'edited' });
+
+		expect(JSON.parse(String(calls[0].init.body))).toEqual({ content: 'edited' });
 	});
 });
 

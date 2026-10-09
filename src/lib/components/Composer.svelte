@@ -16,7 +16,10 @@
 	import EmojiPicker from './EmojiPicker.svelte';
 	import Avatar from './Avatar.svelte';
 	import FormattedMessage from './FormattedMessage.svelte';
+	import EmbedEditor from './EmbedEditor.svelte';
 	import { onDestroy } from 'svelte';
+	import type { EmbedInput } from '$lib/types';
+	import { draftIsEmpty, draftToEmbedInput, type EmbedDraft } from '$lib/utils/embeds';
 
 	let {
 		onSend,
@@ -29,7 +32,8 @@
 		onSend?: (
 			text: string | null,
 			files?: File[],
-			onProgress?: (percent: number) => void
+			onProgress?: (percent: number) => void,
+			embeds?: EmbedInput[]
 		) => Promise<void>;
 		onReplyCancel?: () => void;
 		channelId?: string | null;
@@ -48,6 +52,8 @@
 	let desktopEmojiOpen = $state(false);
 	let mobileEmojiOpen = $state(false);
 	let mobileActionsOpen = $state(false);
+	let embedEditorOpen = $state(false);
+	let embeds = $state<EmbedDraft[]>([]);
 
 	let inputEl: HTMLTextAreaElement | null = null;
 	let fileInput: HTMLInputElement | null = null;
@@ -81,6 +87,8 @@
 	const canSendAttachment = $derived(
 		allowAttachments ?? rolesStore.can('send_attachment', permissionContext)
 	);
+	// O backend aceita mensagem sem content quando ela tem attachment ou embed.
+	const hasEmbedDraft = $derived(embeds.some((draft) => !draftIsEmpty(draft)));
 
 	function mentionOptions(): MentionOption[] {
 		if (!mentionOpen) return [];
@@ -413,8 +421,10 @@
 
 		const t = text.trim();
 		const wireText = t ? serializeMentions(t) : '';
+		const wireEmbeds = embeds.filter((d) => !draftIsEmpty(d)).map(draftToEmbedInput);
 
-		if ((!t && files.length === 0) || disabled || sending) {
+		// O backend exige content, attachment ou pelo menos um embed.
+		if ((!t && files.length === 0 && wireEmbeds.length === 0) || disabled || sending) {
 			return;
 		}
 
@@ -427,12 +437,15 @@
 			files,
 			(percent: number) => {
 				progress = percent;
-			}
+			},
+			wireEmbeds
 		)
 			.then(() => {
 				text = '';
 				if (channelId) channelDrafts.delete(channelId);
 				files = [];
+				embeds = [];
+				embedEditorOpen = false;
 				selectedMentions.clear();
 				desktopEmojiOpen = false;
 				mobileEmojiOpen = false;
@@ -533,6 +546,14 @@
 			desktopEmojiOpen = !desktopEmojiOpen;
 			mobileEmojiOpen = false;
 		}
+	}
+
+	function toggleEmbedEditor(): void {
+		if (disabled) return;
+
+		embedEditorOpen = !embedEditorOpen;
+		desktopEmojiOpen = false;
+		mobileEmojiOpen = false;
 	}
 
 	function toggleMobileActions(): void {
@@ -907,6 +928,12 @@
 		</div>
 	{/if}
 
+	{#if embedEditorOpen || embeds.length > 0}
+		<div class="composer-embeds">
+			<EmbedEditor bind:drafts={embeds} {disabled} />
+		</div>
+	{/if}
+
 	<footer class="composer" class:no-attachments={!canSendAttachment}>
 		{#if recording || stopping}
 			<div class="audio-recorder" aria-live="polite">
@@ -980,6 +1007,24 @@
 					onPickGif={onPickGif}
 				/>
 			</div>
+
+			<button
+				class="composer-tool embed-tool"
+				class:active={embeds.length > 0}
+				title="Embed"
+				aria-label="Embed"
+				aria-expanded={embedEditorOpen}
+				onclick={toggleEmbedEditor}
+				{disabled}
+			>
+				<Icon
+					name="link"
+					variant="light"
+				/>
+				{#if embeds.length > 0}
+					<span class="embed-tool-count">{embeds.length}</span>
+				{/if}
+			</button>
 		</div>
 
 		<div
@@ -1012,6 +1057,22 @@
 						onPickGif={onPickGif}
 					/>
 				</div>
+
+				<button
+					class="composer-tool mobile-action embed-tool"
+					class:active={embeds.length > 0}
+					title="Embed"
+					aria-label="Embed"
+					aria-expanded={embedEditorOpen}
+					tabindex={mobileActionsOpen ? 0 : -1}
+					onclick={toggleEmbedEditor}
+					{disabled}
+				>
+					<Icon name="link" variant="light" />
+					{#if embeds.length > 0}
+						<span class="embed-tool-count">{embeds.length}</span>
+					{/if}
+				</button>
 
 				{#if canSendAttachment}
 					<button
@@ -1150,7 +1211,7 @@
 			onclick={send}
 			disabled={
 				disabled ||
-				text.trim() === '' && files.length === 0
+				text.trim() === '' && files.length === 0 && !hasEmbedDraft
 			}
 		>
 			Enviar
@@ -1299,6 +1360,39 @@
 		position: relative;
 	}
 
+	.composer-tool.embed-tool {
+		position: relative;
+	}
+
+	.composer-tool.embed-tool.active {
+		background: rgba(90, 200, 250, 0.22);
+		box-shadow:
+			inset 0 1px 0 rgba(255, 255, 255, 0.9),
+			0 0 14px rgba(90, 200, 250, 0.24);
+	}
+
+	.embed-tool-count {
+		position: absolute;
+		top: -4px;
+		right: -4px;
+
+		min-width: 16px;
+		height: 16px;
+		padding: 0 4px;
+		box-sizing: border-box;
+
+		display: flex;
+		align-items: center;
+		justify-content: center;
+
+		border-radius: 9999px;
+		background: var(--blue);
+		color: #fff;
+		font-size: 10px;
+		font-weight: 700;
+		line-height: 1;
+	}
+
 	.send-error {
 		display: flex;
 		align-items: center;
@@ -1422,6 +1516,13 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: 6px;
+
+		padding: 0 14px;
+	}
+
+	.composer-embeds {
+		max-height: min(46vh, 420px);
+		overflow-y: auto;
 
 		padding: 0 14px;
 	}

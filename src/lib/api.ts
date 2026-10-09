@@ -28,7 +28,8 @@ import type {
 	DropConnectionResponse,
 	DirectConversation,
 	DirectConversationList,
-	LinkPreviewWithImage,
+	EmbedInput,
+	EmbedWithImage,
 	LoginRequest,
 	LoginResponse,
 	LoginServerRequest,
@@ -677,8 +678,9 @@ export const messages = {
 		});
 	},
 	// Multipart POST /messages (F13): fields channel_id, content, reply_to?,
-	// and files under the repeated `attachments` field. `onProgress`
-	// reports multipart upload progress (0–100).
+	// files under the repeated `attachments` field, and `embeds` (JSON-serialized
+	// array of custom embeds). `onProgress` reports multipart upload progress
+	// (0–100).
 	send(
 		payload: MessageSendPayload,
 		onProgress?: (percent: number) => void
@@ -691,6 +693,9 @@ export const messages = {
 		if (payload.reply_to != null) {
 			form.append('reply_to', payload.reply_to);
 		}
+		if (payload.embeds?.length) {
+			form.append('embeds', JSON.stringify(payload.embeds));
+		}
 		for (const f of payload.files ?? []) {
 			form.append('attachments', f);
 		}
@@ -700,7 +705,12 @@ export const messages = {
 			onProgress
 		});
 	},
-	edit(messageId: string, req: { content: string }): Promise<MessageWithAttachment> {
+	// PUT /messages/:message_id: `embeds` substitui a lista completa de embeds
+	// customizados (array vazio remove os customizados).
+	edit(
+		messageId: string,
+		req: { content: string; embeds?: EmbedInput[] }
+	): Promise<MessageWithAttachment> {
 		return request<MessageWithAttachment>(`/messages/${encodeURIComponent(messageId)}`, {
 			method: 'PUT',
 			body: req
@@ -777,11 +787,11 @@ export const messages = {
 
 // (fetchJson removed: request() now handles FormData directly.)
 
-// ── linkPreviews ───────────────────────────────────────
+// ── embeds ─────────────────────────────────────────────
 
-export const linkPreviews = {
-	get(previewId: string): Promise<LinkPreviewWithImage> {
-		return request<LinkPreviewWithImage>(`/link-previews/${encodeURIComponent(previewId)}`);
+export const embeds = {
+	get(embedId: string): Promise<EmbedWithImage> {
+		return request<EmbedWithImage>(`/embeds/${encodeURIComponent(embedId)}`);
 	}
 };
 
@@ -870,7 +880,7 @@ export const api = {
 	server,
 	channels,
 	messages,
-	linkPreviews,
+	embeds,
 	roles,
 	emojis,
 	search,
