@@ -3,7 +3,12 @@
 	import { getEmbed, ensureEmbed } from '$lib/store/messages.svelte';
 	import { onMount } from 'svelte';
 	import { blobToUrl, embedVideoUrl, mimeToFormat } from '$lib/utils/media';
-	import { embedHost, isAllowedEmbedUrl, isHttpsUrl, safeEmbedColor } from '$lib/utils/embeds';
+	import {
+		embedDirectVideoUrl,
+		embedHost,
+		embedIframeUrl,
+		safeEmbedColor
+	} from '$lib/utils/embeds';
 	import { truncate } from '$lib/utils/text';
 
 	let { embed } = $props<{ embed: Embed }>();
@@ -53,11 +58,10 @@
 	const color = $derived(safeEmbedColor(embed.color));
 	const sourceInitial = $derived((sourceName || 'link').slice(0, 1).toUpperCase());
 
-	// Vídeo: o player usa o relay autenticado do backend (GET /embeds/:id/video),
-	// nunca a URL de origem. O relay rejeita MIME não permitido e downgrade de
-	// esquema; aqui só valida que o embed declara vídeo HTTPS.
-	const hasVideo = $derived(Boolean(embed.video?.url && isHttpsUrl(embed.video.url)));
-	const videoUrl = $derived(hasVideo ? embedVideoUrl(embed.id) : '');
+	// Vídeo direto (og:video / custom): o player usa o relay autenticado do
+	// backend (GET /embeds/:id/video), nunca a URL de origem.
+	const directVideo = $derived(embedDirectVideoUrl(embed));
+	const videoUrl = $derived(directVideo ? embedVideoUrl(embed.id) : '');
 	let failedVideoUrl = $state('');
 
 	function handleVideoError(): void {
@@ -66,8 +70,9 @@
 		}
 	}
 
-	// Iframe somente para o provedor allowlistado (padrão hardcoded do backend).
-	const isYoutube = $derived(isAllowedEmbedUrl(embed.embed_url));
+	// Iframe somente para o provedor allowlistado (padrão hardcoded do backend,
+	// entregue em video.url sem mime_type: não é arquivo reproduzível pelo relay).
+	const iframeUrl = $derived(embedIframeUrl(embed));
 
 	let youtubeLoaded = $state(false);
 	function openYouTube(): void {
@@ -125,7 +130,7 @@
 		</div>
 	{/if}
 
-	{#if isYoutube}
+	{#if iframeUrl}
 		<div class="embed-media">
 			{#if !youtubeLoaded}
 				<button class="media-play-btn" aria-label="Reproduzir vídeo" onclick={openYouTube}>
@@ -137,7 +142,7 @@
 			{:else}
 				<iframe
 					class="media-iframe"
-					src={embed.embed_url}
+					src={iframeUrl}
 					title="Vídeo"
 					allow="autoplay; encrypted-media; picture-in-picture"
 					allowfullscreen
