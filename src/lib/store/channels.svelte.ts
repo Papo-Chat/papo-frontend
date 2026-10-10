@@ -47,8 +47,13 @@ export function markReadLocal(
 	if (!channel) return;
 
 	const unread = state.unread.get(channelId);
-	if (channel.last_read_message === messageId && channel.last_read_at === createdAt &&
-		(!unread || (!unread.has && unread.count === 0))) return;
+	if (
+		channel.last_read_message === messageId &&
+		channel.last_read_at === createdAt &&
+		(!unread || (!unread.has && unread.count === 0))
+	) {
+		return;
+	}
 
 	if (channel.last_read_message !== messageId || channel.last_read_at !== createdAt) {
 		state.byId.set(channelId, {
