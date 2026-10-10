@@ -68,11 +68,12 @@ export async function load({
 	if (channel) {
 		channelsStore.setOpen(channel.id);
 
-		// Start fetching the latest window immediately, but do not make route
-		// navigation wait for message history. Chat.svelte defers its initial
-		// scroll positioning while this store is loading, and the page-level
-		// setLatest() call is deduped by the store's in-flight request map.
-		void messagesStore.setLatest(channel.id);
+		// Hydrate a channel only once. SvelteKit can re-run this load on
+		// navigation/revalidation; setLatest() would reset the message window
+		// and issue another REST request every time, visibly refreshing chat.
+		// A WebSocket reconnect or an explicit "latest" action still uses
+		// setLatest() when an authoritative refresh is needed.
+		void messagesStore.ensureLoaded(channel.id);
 		return;
 	}
 
