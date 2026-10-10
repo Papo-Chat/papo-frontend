@@ -123,6 +123,11 @@ export function setOpen(id: string | null): void {
 export function markReadLocal(id: string, messageId: string, createdAt: string): void {
 	const dm = state.byId.get(id);
 	if (!dm) return;
+	if (
+		dm.last_read_message === messageId &&
+		dm.last_read_at === createdAt &&
+		dm.unread_count === 0
+	) return;
 	state.byId.set(id, {
 		...dm,
 		last_read_message: messageId,
