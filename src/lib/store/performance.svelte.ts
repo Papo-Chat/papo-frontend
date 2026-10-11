@@ -8,6 +8,13 @@ import { writable } from 'svelte/store';
 const KEY = 'papo:flat-ui';
 const MOBILE_QUERY = '(max-width: 700px)';
 
+// WebKit (Safari, GNOME Web, qualquer navegador no iOS): o compositor estoura
+// memória com muitos backdrop-filter. Temporário até achar o elemento culpado.
+const WEBKIT =
+	typeof navigator !== 'undefined' &&
+	/AppleWebKit/.test(navigator.userAgent) &&
+	!/(Chrome|Chromium|Edg|OPR)\//.test(navigator.userAgent);
+
 function readPreference(): boolean {
 	if (typeof window === 'undefined') {
 		return false;
@@ -26,12 +33,13 @@ function applyToDom(): void {
 	}
 
 	const mobile = window.matchMedia(MOBILE_QUERY).matches;
-	const enabled = mobile || preference;
+	const forced = mobile || WEBKIT;
+	const enabled = forced || preference;
 	const root = document.documentElement;
 
 	root.toggleAttribute('data-ui-flat', enabled);
 	root.toggleAttribute('data-ui-mobile', mobile);
-	mobileFlatUi.set(mobile);
+	mobileFlatUi.set(forced);
 }
 
 export function setFlatUi(next: boolean): void {
