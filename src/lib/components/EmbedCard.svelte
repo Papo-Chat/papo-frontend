@@ -226,42 +226,71 @@
 </div>
 
 <style>
-	/* Embed (aero, versão de baixo custo para WebKit).
-	   O card é repetido uma vez por embed visível, então nada aqui pode criar
-	   camada de composição própria nem superfície fora da tela:
-	   - sem backdrop-filter e sem filter (nem em pseudo-elementos);
-	   - sem isolation, overflow:hidden ou transform no card;
-	   - brilho feito só com gradiente + sombra inset (pintura simples).
-	   A cor do embed é a borda lateral. Variáveis de tema (--text, --line-strong,
-	   --blue, ...) vêm de theme.css; as de superfície são locais ao card e o
-	   aero.css as redefine no tema escuro. */
+	/* Aero embed: superfície glass + cor ambiente (não é a barra lateral do
+	   Discord). As variáveis de tema (--text, --line-strong, --shadow-md,
+	   --ease) vêm de theme.css; as de superfície são locais ao card. */
 	.embed-card {
 		--embed-color: var(--blue);
-		--embed-surface: linear-gradient(145deg, rgba(255, 255, 255, 0.92), rgba(226, 243, 252, 0.88));
-		--embed-inset: rgba(255, 255, 255, 0.7);
+		--embed-surface: linear-gradient(145deg, rgba(255, 255, 255, 0.76), rgba(224, 242, 252, 0.62));
+		--embed-inset: rgba(255, 255, 255, 0.64);
 		--media-surface: linear-gradient(135deg, #d5effc, #cce8f5 52%, #dff7f0);
-		--chip: rgba(255, 255, 255, 0.55);
+		--chip: rgba(255, 255, 255, 0.46);
+		position: relative;
+		isolation: isolate;
 		display: block;
 		width: 100%;
 		max-width: min(590px, 100%);
 		min-width: 0;
 		margin-top: 9px;
-		padding: 14px 14px 14px 16px;
+		padding: 14px;
 		box-sizing: border-box;
+		overflow: hidden;
 		border: 1px solid var(--line-strong);
-		border-left: 4px solid var(--embed-color);
-		border-radius: 16px;
+		border-radius: 19px;
 		background: var(--embed-surface);
 		box-shadow:
-			inset 0 1px 0 var(--embed-inset),
-			0 1px 3px rgba(16, 72, 108, 0.12);
+			var(--shadow-md),
+			inset 0 1px 0 var(--embed-inset);
+		backdrop-filter: blur(20px) saturate(150%);
+		-webkit-backdrop-filter: blur(20px) saturate(150%);
+		transition:
+			transform 0.22s var(--ease),
+			box-shadow 0.22s var(--ease);
 	}
-	@media (hover: hover) {
-		.embed-card:hover {
-			box-shadow:
-				inset 0 1px 0 var(--embed-inset),
-				0 3px 10px rgba(16, 72, 108, 0.18);
-		}
+	.embed-card::before {
+		content: '';
+		position: absolute;
+		z-index: -1;
+		pointer-events: none;
+		top: -92px;
+		right: -55px;
+		width: 230px;
+		height: 170px;
+		border-radius: 50%;
+		background: var(--embed-color);
+		opacity: 0.105;
+		filter: blur(48px);
+	}
+	/* Brilho diagonal da superfície (mesma camada do demo). */
+	.embed-card::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		z-index: -1;
+		pointer-events: none;
+		border-radius: inherit;
+		background: linear-gradient(
+			112deg,
+			rgba(255, 255, 255, 0.12),
+			transparent 32% 78%,
+			rgba(90, 200, 250, 0.035)
+		);
+	}
+	.embed-card:hover {
+		transform: translateY(-1px);
+		box-shadow:
+			var(--shadow-lg),
+			inset 0 1px 0 var(--embed-inset);
 	}
 
 	.embed-topline {
@@ -367,12 +396,6 @@
 		background: var(--embed-inset);
 		font-size: 12px;
 	}
-	.embed-description :global(table) {
-		display: block;
-		max-width: 100%;
-		overflow-x: auto;
-	}
-	.embed-description :global(img) { max-width: 100%; }
 	.embed-description :global(pre) {
 		margin: 4px 0;
 		padding: 8px;
@@ -393,6 +416,7 @@
 		border: 1px solid var(--line);
 		border-radius: 12px;
 		background: var(--chip);
+		box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
 	}
 	.data-chip:not(.inline) {
 		grid-column: 1 / -1;
@@ -494,7 +518,7 @@
 	/* Renderização compacta (pins/busca): card menor e texto limitado. */
 	:global(.compact-message) .embed-card {
 		max-width: 240px;
-		padding: 8px 8px 8px 10px;
+		padding: 8px;
 		border-radius: 14px;
 	}
 	:global(.compact-message) .embed-description {
@@ -507,8 +531,8 @@
 	@media (max-width: 600px) {
 		.embed-card {
 			margin-top: 6px;
-			padding: 12px 12px 12px 14px;
-			border-radius: 14px;
+			padding: 12px;
+			border-radius: 16px;
 		}
 		.embed-topline {
 			gap: 8px;
