@@ -46,12 +46,25 @@ export function markReadLocal(
 	const channel = state.byId.get(channelId);
 	if (!channel) return;
 
-	state.byId.set(channelId, {
-		...channel,
-		last_read_message: messageId,
-		last_read_at: createdAt
-	});
-	state.unread.set(channelId, { has: false, count: 0 });
+	const unread = state.unread.get(channelId);
+	if (
+		channel.last_read_message === messageId &&
+		channel.last_read_at === createdAt &&
+		(!unread || (!unread.has && unread.count === 0))
+	) {
+		return;
+	}
+
+	if (channel.last_read_message !== messageId || channel.last_read_at !== createdAt) {
+		state.byId.set(channelId, {
+			...channel,
+			last_read_message: messageId,
+			last_read_at: createdAt
+		});
+	}
+	if (unread?.has || unread?.count) {
+		state.unread.set(channelId, { has: false, count: 0 });
+	}
 }
 
 // Resolve a channel from a raw route param: exact id first, then name (so

@@ -995,12 +995,13 @@ export function load(channelId: string): void {
 	_freshLoadTracked(channelId).catch(() => {});
 }
 
-// Idempotent initial load: used by the page effect. Skips when the channel
-// already has a page in flight or already loaded, so an effect re-run cannot
-// re-trigger a fresh fetch. `load()`/`setLatest()` stay for explicit refreshes.
+// Idempotent initial load: only fetch an uncached channel. A loaded channel
+// can be paging through historical messages while `loading` is true; route
+// navigation must not interrupt that request with an unrelated fresh fetch.
+// Explicit refreshes (jump to latest, reconnect) still use setLatest().
 export function ensureLoaded(channelId: string): Promise<void> {
 	const ch = state.channels.get(channelId);
-	if (ch && ch.loaded && !ch.loading) {
+	if (ch?.loaded) {
 		return Promise.resolve();
 	}
 	return _freshLoadTracked(channelId).catch(() => {});
