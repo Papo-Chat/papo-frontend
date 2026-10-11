@@ -662,9 +662,8 @@ button.name:focus-visible {
 	outline: none;
 }
 
-/* floating cards */
+/* floating cards (.embed-card fica fora: sem isolation, ver EmbedCard.svelte) */
 .bubble,
-.embed-card,
 .panel,
 .kpi {
 	position: relative;

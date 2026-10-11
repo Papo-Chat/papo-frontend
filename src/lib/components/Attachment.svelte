@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
 	import type { MessageAttachment } from '$lib/types';
 	import { attachmentUrl, attachmentThumbnailUrl, fetchMediaBlob } from '$lib/utils/media';
 	import { formatBytes, isImageMime } from '$lib/utils/text';
@@ -9,6 +8,8 @@
 		pinned?: boolean;
 		tiled?: boolean;
 	}>();
+	let audioActivated = $state(false);
+
 
 	let lightboxOpen = $state(false);
 	let lightbox: HTMLDialogElement | undefined = $state();
@@ -26,9 +27,9 @@
 	const isAudio = attachment.mime_type.startsWith('audio/') || isRecordedAudioName;
 	const SMALL_AUDIO_MAX = 2 * 1024 * 1024;
 
+	let audioStarted = false; // plain: não renderiza nada
+
 	let audioEl: HTMLAudioElement | null = $state(null);
-	let audioSrc = $state('');
-	let audioObjectUrl = '';
 	let audioPlaying = $state(false);
 	let audioCurrent = $state(0);
 	let audioDuration = $state(0);
@@ -51,8 +52,17 @@
 
 	function toggleAudio(): void {
 		if (!audioEl) return;
+		if (!audioStarted) {
+			audioStarted = true;
+			audioLoading = true;
+			// src definido uma única vez e dentro do gesto: o iOS rejeita play()
+			// se o elemento ainda não tinha fonte quando o toque aconteceu.
+			audioEl.src = fullUrl;
+		}
 		if (audioEl.paused) {
-			void audioEl.play();
+			void audioEl.play().catch(() => {
+				audioLoading = false;
+			});
 		} else {
 			audioEl.pause();
 		}
@@ -67,7 +77,6 @@
 
 	$effect(() => {
 		if (!isAudio) return;
-		audioSrc = fullUrl;
 
 		if (attachment.size_bytes <= 0 || attachment.size_bytes > SMALL_AUDIO_MAX) {
 			return;
@@ -78,22 +87,12 @@
 		void fetchMediaBlob(fullUrl, controller.signal)
 			.then((blob) => {
 				if (controller.signal.aborted) return;
-				if (audioObjectUrl) URL.revokeObjectURL(audioObjectUrl);
-				audioObjectUrl = URL.createObjectURL(blob);
-				audioSrc = audioObjectUrl;
-			})
-			.catch(() => {
-				if (!controller.signal.aborted) audioSrc = fullUrl;
 			})
 			.finally(() => {
 				if (!controller.signal.aborted) audioLoading = false;
 			});
 
 		return () => controller.abort();
-	});
-
-	onDestroy(() => {
-		if (audioObjectUrl) URL.revokeObjectURL(audioObjectUrl);
 	});
 
 	async function downloadAttachment(): Promise<void> {
@@ -118,6 +117,14 @@
 		}
 	}
 
+	function handleAudioError(): void {
+		audioStarted = false;
+		audioPlaying = false;
+		audioLoading = false;
+		audioEl?.removeAttribute('src');
+		audioEl?.load();
+	}
+
 	function openLightbox(): void {
 		lightboxOpen = true;
 	}
@@ -138,6 +145,7 @@
 			lightbox.showModal();
 		}
 	});
+	let videoLoaded = $state(false);
 </script>
 
 {#if (attachment.thumbnail_id !== null && isImage.isImage)}
@@ -181,22 +189,24 @@
 	</dialog>
 {/if}
 {:else if isAudio}
-	<!-- Áudio: player compacto. Áudios pequenos são baixados inteiros para
-	     blob local, evitando Range/206 e metadados de duração instáveis. -->
+	<!-- Áudio: player compacto. O arquivo só é pedido no primeiro toque. -->
 	<div class="attachment-media attachment-audio" class:pinned-attachment={pinned} title={name}>
 		<audio
 			bind:this={audioEl}
-			src={audioSrc || fullUrl}
-			preload="metadata"
+			preload="none"
 			onplay={() => (audioPlaying = true)}
 			onpause={() => (audioPlaying = false)}
 			onended={() => {
 				audioPlaying = false;
 				syncAudioTime();
 			}}
-			onloadedmetadata={syncAudioTime}
+			onloadedmetadata={() => {
+				audioLoading = false;
+				syncAudioTime();
+			}}
 			ondurationchange={syncAudioTime}
 			ontimeupdate={syncAudioTime}
+			onerror={handleAudioError}
 		></audio>
 		<button class="audio-play" type="button" onclick={toggleAudio} aria-label={audioPlaying ? 'Pausar áudio' : 'Reproduzir áudio'}>
 			<span aria-hidden="true">{audioPlaying ? '❚❚' : '▶'}</span>
@@ -218,9 +228,32 @@
 		</span>
 	</div>
 {:else if attachment.mime_type.startsWith('video/') || attachment.mime_type.startsWith('application/octet-stream')}
-	<!-- Vídeo: player inline. Binários genéricos seguem para o download abaixo. -->
 	<div class="attachment-media">
-		<video src={fullUrl} controls preload="metadata" class:pinned-attachment={pinned}></video>
+		{#if !videoLoaded}
+			<button
+				type="button"
+				class="attachment-video-placeholder"
+				class:pinned-attachment={pinned}
+				aria-label={`Reproduzir ${name}`}
+				onclick={() => (videoLoaded = true)}
+			>
+				{#if thumbUrl}
+					<img src={thumbUrl} alt="" loading="lazy" />
+				{/if}
+				<span class="video-play" aria-hidden="true">▶</span>
+				<span class="video-meta">
+					{name}{#if attachment.size_bytes > 0} · {formatBytes(attachment.size_bytes)}{/if}
+				</span>
+			</button>
+		{:else}
+			<video
+				src={fullUrl}
+				controls
+				playsinline
+				preload="metadata"
+				class:pinned-attachment={pinned}
+			></video>
+		{/if}
 	</div>
 {:else}
 	<!-- Arquivo: chip de download. -->
@@ -244,6 +277,42 @@
 {/if}
 
 <style>
+	.attachment-video-placeholder {
+		position: relative;
+		display: grid;
+		place-items: center;
+		width: 100%;
+		max-width: min(480px, 100%);
+		aspect-ratio: 16 / 9;
+		padding: 0;
+		overflow: hidden;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		background: var(--surface);
+		cursor: pointer;
+	}
+	.attachment-video-placeholder img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.video-play {
+		position: relative;
+		font-size: 28px;
+	}
+	.video-meta {
+		position: absolute;
+		left: 8px;
+		right: 8px;
+		bottom: 6px;
+		overflow: hidden;
+		font-size: 12px;
+		color: var(--text-secondary);
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 	.attachment-image {
 		display: block;
 		width: fit-content;
