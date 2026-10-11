@@ -10,7 +10,7 @@ const MOBILE_QUERY = '(max-width: 700px)';
 
 // WebKit (Safari, GNOME Web, qualquer navegador no iOS): o compositor estoura
 // memória com muitos backdrop-filter. Temporário até achar o elemento culpado.
-const WEBKIT =
+export const WEBKIT =
 	typeof navigator !== 'undefined' &&
 	/AppleWebKit/.test(navigator.userAgent) &&
 	!/(Chrome|Chromium|Edg|OPR)\//.test(navigator.userAgent);

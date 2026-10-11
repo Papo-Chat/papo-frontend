@@ -14,6 +14,7 @@
 	import * as usersStore from '$lib/store/users.svelte';
 	import { emojiUrl } from '$lib/store/emojis.svelte';
 	import { openProfile } from '$lib/store/ui.svelte';
+	import { WEBKIT } from '$lib/store/performance.svelte';
 	import { renderMessageMarkdown } from '$lib/utils/markdown';
 
 	let { embed } = $props<{ embed: Embed }>();
@@ -117,8 +118,10 @@
 	// Iframe somente para o provedor allowlistado (padrão hardcoded do backend,
 	// entregue em video.url sem mime_type: não é arquivo reproduzível pelo relay).
 	const iframeUrl = $derived(embedIframeUrl(embed));
-	// Card com vídeo direto: usa CSS sem máscara/filtro (ver .has-video).
 	const showsVideo = $derived(!iframeUrl && videoUrl !== '' && failedVideoUrl !== videoUrl);
+	// Só no WebKit: o card com vídeo direto usa CSS sem máscara/filtro (ver .has-video).
+	// Os outros motores mantêm o visual completo.
+	const flatVideoCard = $derived(WEBKIT && showsVideo);
 
 	let youtubeLoaded = $state(false);
 	function openYouTube(): void {
@@ -138,7 +141,7 @@
 	}
 </script>
 
-<div class="embed-card" class:has-video={showsVideo} bind:this={cardEl} style={color ? `--embed-color: ${color}` : undefined}>
+<div class="embed-card" class:has-video={flatVideoCard} bind:this={cardEl} style={color ? `--embed-color: ${color}` : undefined}>
 	{#if hasTopline}
 		<header class="embed-topline">
 			{#if authorIconUrl}
