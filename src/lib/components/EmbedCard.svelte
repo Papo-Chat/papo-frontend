@@ -199,16 +199,7 @@
 				></iframe>
 			{/if}
 		</div>
-	{:else if videoUrl && failedVideoUrl !== videoUrl}
-		<video
-			class="embed-video"
-			src={videoUrl}
-			poster={imageUrl || undefined}
-			controls
-			playsinline
-			preload="metadata"
-			onerror={handleVideoError}
-		></video>
+
 	{:else if imageUrl}
 		<img class="embed-image" src={imageUrl} alt="" loading="lazy" />
 	{/if}
