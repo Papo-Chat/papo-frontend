@@ -9,14 +9,16 @@ const FORMAT_TO_MIME: Record<string, string> = {
 	JPEG: 'image/jpeg',
 	JPG: 'image/jpeg',
 	WEBP: 'image/webp',
-	GIF: 'image/gif'
+	GIF: 'image/gif',
+	AVIF: 'image/avif'
 };
 
 const MIME_TO_FORMAT: Record<string, string> = {
 	'image/png': 'PNG',
 	'image/jpeg': 'JPEG',
 	'image/webp': 'WEBP',
-	'image/gif': 'GIF'
+	'image/gif': 'GIF',
+	'image/avif': 'AVIF'
 };
 
 export function formatToMime(format: string): string {
