@@ -122,7 +122,18 @@
 	function openYouTube(): void {
 		youtubeLoaded = true;
 	}
-	let videoLoaded = $state(false);
+
+	let videoEl: HTMLVideoElement | null = $state(null);
+	let videoStarted = $state(false);
+
+	function startVideo(): void {
+		if (!videoEl) return;
+		videoStarted = true;
+		// O elemento já existe (sem src, sem rede). src e play() ficam no mesmo
+		// gesto: o iOS rejeita play() em elemento criado depois do toque.
+		videoEl.src = videoUrl;
+		void videoEl.play().catch(() => {});
+	}
 </script>
 
 <div class="embed-card" bind:this={cardEl} style={color ? `--embed-color: ${color}` : undefined}>
@@ -200,20 +211,31 @@
 				></iframe>
 			{/if}
 		</div>
-			{:else if videoUrl && failedVideoUrl !== videoUrl}
-				<div class="embed-media">
-					{#if !videoLoaded}
-						<button class="media-play-btn" aria-label="Reproduzir vídeo" onclick={() => (videoLoaded = true)}>
-							{#if imageUrl}
-								<img src={imageUrl} alt="" loading="lazy" />
-							{/if}
-							<span class="media-play" aria-hidden="true">▶</span>
-						</button>
-					{:else}
-						<video class="embed-video" src={videoUrl} poster={imageUrl || undefined}
-							controls playsinline preload="metadata" onerror={handleVideoError}></video>
+	{:else if videoUrl && failedVideoUrl !== videoUrl}
+		<div class="embed-media embed-media-video">
+			<video
+				bind:this={videoEl}
+				class="embed-video"
+				poster={videoStarted ? imageUrl || undefined : undefined}
+				controls={videoStarted}
+				playsinline
+				preload="none"
+				onerror={handleVideoError}
+			></video>
+			{#if !videoStarted}
+				<button
+					type="button"
+					class="media-play-btn media-play-overlay"
+					aria-label="Reproduzir vídeo"
+					onclick={startVideo}
+				>
+					{#if imageUrl}
+						<img src={imageUrl} alt="" loading="lazy" />
 					{/if}
-	</div>
+					<span class="media-play" aria-hidden="true">▶</span>
+				</button>
+			{/if}
+		</div>
 	{:else if imageUrl}
 		<img class="embed-image" src={imageUrl} alt="" loading="lazy" />
 	{/if}
@@ -482,6 +504,22 @@
 		background: #0b1b2b;
 	}
 
+	/* Vídeo direto: o wrapper dá borda/raio/margem; o <video> e o overlay de play
+	   ocupam a mesma caixa 16:9. */
+	.embed-media-video {
+		position: relative;
+	}
+	.embed-media-video .embed-video {
+		margin-top: 0;
+		border: 0;
+		border-radius: 0;
+	}
+	.media-play-overlay {
+		position: absolute;
+		inset: 0;
+		height: 100%;
+		aspect-ratio: auto;
+	}
 	.embed-video {
 		display: block;
 		width: 100%;

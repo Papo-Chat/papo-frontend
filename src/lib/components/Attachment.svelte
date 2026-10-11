@@ -8,8 +8,6 @@
 		pinned?: boolean;
 		tiled?: boolean;
 	}>();
-	let audioActivated = $state(false);
-
 
 	let lightboxOpen = $state(false);
 	let lightbox: HTMLDialogElement | undefined = $state();
@@ -25,7 +23,6 @@
 	const isImage = isImageMime(attachment.mime_type);
 	const isRecordedAudioName = /^audio_.*\.(webm|ogg|wav|mp3|m4a|aac|opus)$/i.test(name);
 	const isAudio = attachment.mime_type.startsWith('audio/') || isRecordedAudioName;
-	const SMALL_AUDIO_MAX = 2 * 1024 * 1024;
 
 	let audioStarted = false; // plain: não renderiza nada
 
@@ -74,26 +71,6 @@
 		audioEl.currentTime = value;
 		audioCurrent = value;
 	}
-
-	$effect(() => {
-		if (!isAudio) return;
-
-		if (attachment.size_bytes <= 0 || attachment.size_bytes > SMALL_AUDIO_MAX) {
-			return;
-		}
-
-		const controller = new AbortController();
-		audioLoading = true;
-		void fetchMediaBlob(fullUrl, controller.signal)
-			.then((blob) => {
-				if (controller.signal.aborted) return;
-			})
-			.finally(() => {
-				if (!controller.signal.aborted) audioLoading = false;
-			});
-
-		return () => controller.abort();
-	});
 
 	async function downloadAttachment(): Promise<void> {
 		if (downloading) return;
@@ -145,7 +122,26 @@
 			lightbox.showModal();
 		}
 	});
-	let videoLoaded = $state(false);
+
+	let videoEl: HTMLVideoElement | null = $state(null);
+	let videoStarted = $state(false);
+	let videoReady = $state(false);
+
+	function startVideo(): void {
+		if (!videoEl) return;
+		videoStarted = true;
+		// O elemento já existe (sem src, sem rede). src e play() ficam no mesmo
+		// gesto: o iOS rejeita play() em elemento criado depois do toque.
+		videoEl.src = fullUrl;
+		void videoEl.play().catch(() => {});
+	}
+
+	function handleVideoError(): void {
+		videoStarted = false;
+		videoReady = false;
+		videoEl?.removeAttribute('src');
+		videoEl?.load();
+	}
 </script>
 
 {#if (attachment.thumbnail_id !== null && isImage.isImage)}
@@ -229,31 +225,34 @@
 	</div>
 {:else if attachment.mime_type.startsWith('video/') || attachment.mime_type.startsWith('application/octet-stream')}
 	<div class="attachment-media">
-		{#if !videoLoaded}
-			<button
-				type="button"
-				class="attachment-video-placeholder"
-				class:pinned-attachment={pinned}
-				aria-label={`Reproduzir ${name}`}
-				onclick={() => (videoLoaded = true)}
-			>
-				{#if thumbUrl}
-					<img src={thumbUrl} alt="" loading="lazy" />
-				{/if}
-				<span class="video-play" aria-hidden="true">▶</span>
-				<span class="video-meta">
-					{name}{#if attachment.size_bytes > 0} · {formatBytes(attachment.size_bytes)}{/if}
-				</span>
-			</button>
-		{:else}
+		<div class="attachment-video" class:pinned-attachment={pinned}>
 			<video
-				src={fullUrl}
-				controls
+				bind:this={videoEl}
+				class:unsized={!videoReady}
+				poster={videoStarted ? thumbUrl || undefined : undefined}
+				controls={videoStarted}
 				playsinline
-				preload="metadata"
-				class:pinned-attachment={pinned}
+				preload="none"
+				onloadedmetadata={() => (videoReady = true)}
+				onerror={handleVideoError}
 			></video>
-		{/if}
+			{#if !videoStarted}
+				<button
+					type="button"
+					class="attachment-video-overlay"
+					aria-label={`Reproduzir ${name}`}
+					onclick={startVideo}
+				>
+					{#if thumbUrl}
+						<img src={thumbUrl} alt="" loading="lazy" />
+					{/if}
+					<span class="video-play" aria-hidden="true">▶</span>
+					<span class="video-meta">
+						{name}{#if attachment.size_bytes > 0} · {formatBytes(attachment.size_bytes)}{/if}
+					</span>
+				</button>
+			{/if}
+		</div>
 	</div>
 {:else}
 	<!-- Arquivo: chip de download. -->
@@ -277,27 +276,6 @@
 {/if}
 
 <style>
-	.attachment-video-placeholder {
-		position: relative;
-		display: grid;
-		place-items: center;
-		width: 100%;
-		max-width: min(480px, 100%);
-		aspect-ratio: 16 / 9;
-		padding: 0;
-		overflow: hidden;
-		border: 1px solid var(--border);
-		border-radius: 10px;
-		background: var(--surface);
-		cursor: pointer;
-	}
-	.attachment-video-placeholder img {
-		position: absolute;
-		inset: 0;
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
 	.video-play {
 		position: relative;
 		font-size: 28px;
@@ -374,6 +352,39 @@
 		max-width: min(480px, 100%);
 		height: auto;
 		border-radius: 10px;
+	}
+	.attachment-video {
+		position: relative;
+		width: 100%;
+		max-width: min(480px, 100%);
+		border-radius: 10px;
+	}
+	.attachment-video video {
+		max-width: 100%;
+		background: var(--surface);
+	}
+	/* Sem metadados o <video> não tem proporção; reserva 16:9 até carregar. */
+	.attachment-video video.unsized {
+		aspect-ratio: 16 / 9;
+	}
+	.attachment-video-overlay {
+		position: absolute;
+		inset: 0;
+		display: grid;
+		place-items: center;
+		padding: 0;
+		border: 1px solid var(--border);
+		border-radius: 10px;
+		background: transparent;
+		cursor: pointer;
+	}
+	.attachment-video-overlay img {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		border-radius: inherit;
 	}
 
 	.attachment-audio {
