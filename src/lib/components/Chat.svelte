@@ -88,15 +88,15 @@
 
 		// A real end sentinel is more reliable than assigning scrollHeight to
 		// scrollTop, especially after images/media change intrinsic height.
-		if (bottomEl) {
-			bottomEl.scrollIntoView({
-				block: 'end',
-				inline: 'nearest',
-				behavior: 'auto'
-			});
-		} else {
-			listEl.scrollTop = listEl.scrollHeight;
-		}
+		//if (bottomEl) {
+		//	bottomEl.scrollIntoView({
+		//		block: 'end',
+		//		inline: 'nearest',
+		//		behavior: 'auto'
+		//	});
+		//} else {
+		//	listEl.scrollTop = listEl.scrollHeight;
+		//}
 
 		// Clamp once more on the container. Fractional layout pixels and
 		// scrollbar implementations differ between engines.
@@ -612,14 +612,14 @@
 		// engines that batch ResizeObserver notifications differently.
 		list.addEventListener('load', settleBottom, true);
 		list.addEventListener('loadedmetadata', settleBottom, true);
-		window.addEventListener('resize', settleBottom);
+		//window.addEventListener('resize', settleBottom);
 
 		return () => {
 			cancelAnimationFrame(frame);
 			observer?.disconnect();
 			list.removeEventListener('load', settleBottom, true);
 			list.removeEventListener('loadedmetadata', settleBottom, true);
-			window.removeEventListener('resize', settleBottom);
+			//window.removeEventListener('resize', settleBottom);
 		};
 	});
 
