@@ -117,6 +117,8 @@
 	// Iframe somente para o provedor allowlistado (padrão hardcoded do backend,
 	// entregue em video.url sem mime_type: não é arquivo reproduzível pelo relay).
 	const iframeUrl = $derived(embedIframeUrl(embed));
+	// Card com vídeo direto: usa CSS sem máscara/filtro (ver .has-video).
+	const showsVideo = $derived(!iframeUrl && videoUrl !== '' && failedVideoUrl !== videoUrl);
 
 	let youtubeLoaded = $state(false);
 	function openYouTube(): void {
@@ -136,7 +138,7 @@
 	}
 </script>
 
-<div class="embed-card" bind:this={cardEl} style={color ? `--embed-color: ${color}` : undefined}>
+<div class="embed-card" class:has-video={showsVideo} bind:this={cardEl} style={color ? `--embed-color: ${color}` : undefined}>
 	{#if hasTopline}
 		<header class="embed-topline">
 			{#if authorIconUrl}
@@ -313,6 +315,40 @@
 		box-shadow:
 			var(--shadow-lg),
 			inset 0 1px 0 var(--embed-inset);
+	}
+
+	/* Card com vídeo direto. No iOS, rolar a página com um <video> iniciado dentro
+	   de um card recortado (overflow + raio), isolado e com pseudo-elemento
+	   filter:blur derruba a aba. Aqui o vídeo fica livre de máscara de recorte,
+	   filtro, backdrop e grupo de isolamento; o raio passa a ser do próprio
+	   elemento. */
+	.embed-card.has-video {
+		isolation: auto;
+		overflow: visible;
+		transition: none;
+		backdrop-filter: none;
+		-webkit-backdrop-filter: none;
+	}
+	.embed-card.has-video::before,
+	.embed-card.has-video::after {
+		display: none;
+	}
+	.embed-card.has-video:hover {
+		transform: none;
+	}
+	.embed-card.has-video .embed-media-video {
+		overflow: visible;
+	}
+	.embed-card.has-video .embed-media-video .embed-video,
+	.embed-card.has-video .media-play-btn img,
+	.embed-card.has-video .media-play {
+		border-radius: 13px;
+	}
+	/* Sem overflow:hidden no card, tabelas largas do markdown precisam se conter. */
+	.embed-card.has-video .embed-description :global(table) {
+		display: block;
+		max-width: 100%;
+		overflow-x: auto;
 	}
 
 	.embed-topline {
