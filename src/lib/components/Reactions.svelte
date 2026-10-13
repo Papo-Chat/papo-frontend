@@ -11,13 +11,11 @@
 	import EmojiPicker from './EmojiPicker.svelte';
 	import ReactionUsersPopover from './ReactionUsersPopover.svelte';
 
-	let { reactions, userReactions, messageId, channelId, showAdd = true } = $props<{
+	let { reactions, userReactions, messageId, channelId } = $props<{
 		reactions: MessageReactionSummary[];
 		userReactions: MessageUserReaction[];
 		messageId: string;
 		channelId: string;
-		// Botão de adicionar reação: só na última mensagem de um grupo.
-		showAdd?: boolean;
 	}>();
 
 	const reactionKey = (emojiId: string | null, unicode: string | null) =>
@@ -109,9 +107,7 @@
 		if (!mine) return;
 
 		const key = reactionKey(r.emoji_id ?? null, r.unicode ?? null);
-		const group = cached.reactions.find(
-			(g) => reactionKey(g.emoji_id, g.unicode) === key
-		);
+		const group = cached.reactions.find((g) => reactionKey(g.emoji_id, g.unicode) === key);
 		if (!group) return;
 
 		const hasMine = group.users.some((u) => u.user_id === mine);
@@ -250,9 +246,7 @@
 	}
 
 	function loadMoreFor(emoji: string): void {
-		const pill = reactions.find(
-			(r: MessageReactionSummary) => (r.unicode ?? r.emoji_id) === emoji
-		);
+		const pill = reactions.find((r: MessageReactionSummary) => (r.unicode ?? r.emoji_id) === emoji);
 		const need = pill?.count ?? 0;
 
 		const have =
@@ -326,22 +320,20 @@
 		</span>
 	{/each}
 
-	{#if showAdd}
-		<div class="reaction-add-wrap">
-			<button
-				class="react add-react"
-				title="Adicionar reação"
-				aria-label="Adicionar reação"
-				onclick={() => (emojiOpen = !emojiOpen)}
-			>
-				<Icon name="smiley" variant="light" />
-			</button>
+	<div class="reaction-add-wrap">
+		<button
+			class="react add-react"
+			title="Adicionar reação"
+			aria-label="Adicionar reação"
+			onclick={() => (emojiOpen = !emojiOpen)}
+		>
+			<Icon name="smiley" variant="light" />
+		</button>
 
-			{#if emojiOpen}
-				<EmojiPicker bind:open={emojiOpen} {onPick} />
-			{/if}
-		</div>
-	{/if}
+		{#if emojiOpen}
+			<EmojiPicker bind:open={emojiOpen} {onPick} />
+		{/if}
+	</div>
 </div>
 
 <style>

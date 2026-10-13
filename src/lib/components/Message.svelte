@@ -347,7 +347,7 @@
 			{/if}
 		</div>
 		{#if isEditing}
-			<div class="bubble" class:bubblegrouped={grouped}>
+			<div class="bubble">
 				<form
 					class="edit-form"
 					onsubmit={(e) => {
@@ -367,24 +367,24 @@
 				<button class="confirm-btn" type="button" onclick={doEdit}> Enviar </button>
 			</div>
 		{:else if message.content}
-			<div class="bubble {goldHighlight ? 'pinned' : ''} {!groupLast ? 'bubblegrouped': ''}" class:giphy-bubble={isGiphyMessage}>
+			<div class="bubble {goldHighlight ? 'pinned' : ''}" class:giphy-bubble={isGiphyMessage}>
 				<FormattedMessage content={message.content} allowEveryoneHighlight={authorCanEveryone} />
 			</div>
 			{#if message.embeds.length}
 				{#each message.embeds as embed (embed.id)}
-					<EmbedCard embed={embed} grouped = {!groupLast && !groupFirst} />
+					<EmbedCard embed={embed} />
 				{/each}
 			{/if}
 		{:else if message.embeds.length}
 			{#each message.embeds as embed (embed.id)}
-				<EmbedCard embed={embed} grouped = {!groupLast && !groupFirst} />
+				<EmbedCard embed={embed} />
 			{/each}
 		{/if}
 
 		<!-- Multiple images use a compact Discord-like mosaic. Non-image
 			     attachments keep their existing vertical layout below it. -->
 		{#if imageAttachments.length > 1}
-			<div class="attachment-grid {imageTileClass} {!groupLast ? 'bubblegrouped': ''}" data-count={imageTileCount}>
+			<div class="attachment-grid {imageTileClass}" data-count={imageTileCount}>
 				{#each imageAttachments as a, index (a.id)}
 					<div class="attachment-tile tile-{index + 1}">
 						<Attachment attachment={a} pinned={goldHighlight} tiled />
@@ -392,12 +392,12 @@
 				{/each}
 			</div>
 		{:else if imageAttachments.length === 1}
-			<Attachment grouped={!groupLast} attachment={imageAttachments[0]} pinned={goldHighlight} />
+			<Attachment attachment={imageAttachments[0]} pinned={goldHighlight} />
 		{/if}
 
 		{#if otherAttachments.length}
 			{#each otherAttachments as a (a.id)}
-				<Attachment grouped={!groupLast} attachment={a} pinned={goldHighlight} />
+				<Attachment attachment={a} pinned={goldHighlight} />
 			{/each}
 		{/if}
 
@@ -418,15 +418,14 @@
 				</button>
 			</div>
 		{:else}
-			{#if groupLast && (message.reactions.length || canReply)}
+			<!--{#if message.reactions.length || canReply}
 				<Reactions
 					messageId={message.id}
 					channelId={message.channel_id}
 					reactions={message.reactions}
 					userReactions={message.user_reactions}
-					showAdd={groupLast}
 				/>
-			{/if}
+			{/if} -->
 		{/if}
 	</div>
 </article>
@@ -439,7 +438,7 @@
 		min-width: 0;
 		box-sizing: border-box;
 		gap: 8px;
-		padding: 4px 8px;
+		padding: 1px 8px;
 		border-radius: 10px;
 		position: relative;
 	}

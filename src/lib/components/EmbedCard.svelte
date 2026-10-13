@@ -17,7 +17,7 @@
 	import { WEBKIT } from '$lib/store/performance.svelte';
 	import { renderMessageMarkdown } from '$lib/utils/markdown';
 
-	let { embed, grouped = false } = $props<{ embed: Embed, grouped?:boolean }>();
+	let { embed } = $props<{ embed: Embed }>();
 	let cardEl: HTMLElement | null = null;
 
 	onMount(() => {
@@ -141,7 +141,7 @@
 	}
 </script>
 
-<div class="embed-card {grouped ? 'embedgrouped':'embednotgrouped'}" class:has-video={flatVideoCard} bind:this={cardEl} style={color ? `--embed-color: ${color}` : undefined}>
+<div class="embed-card" class:has-video={flatVideoCard} bind:this={cardEl} style={color ? `--embed-color: ${color}` : undefined}>
 	{#if hasTopline}	
 		<header class="embed-topline">
 			{#if authorIconUrl}
@@ -262,6 +262,7 @@
 		--embed-inset: rgba(255, 255, 255, 0.64);
 		--media-surface: linear-gradient(135deg, #d5effc, #cce8f5 52%, #dff7f0);
 		--chip: rgba(255, 255, 255, 0.46);
+		margin-top: 5px;
 		position: relative;
 		isolation: isolate;
 		display: block;
