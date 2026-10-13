@@ -3,10 +3,11 @@
 	import { attachmentUrl, attachmentThumbnailUrl, fetchMediaBlob } from '$lib/utils/media';
 	import { formatBytes, isImageMime } from '$lib/utils/text';
 
-	let { attachment, pinned = false, tiled = false } = $props<{
+	let { attachment, pinned = false, tiled = false, grouped = true } = $props<{
 		attachment: MessageAttachment;
 		pinned?: boolean;
 		tiled?: boolean;
+		grouped?:boolean;
 	}>();
 
 	let lightboxOpen = $state(false);
@@ -148,7 +149,7 @@
 	<!-- Imagem: thumbnail inline; o clique abre o original em lightbox (in-app). -->
 	<button
 		type="button"
-		class="attachment-image"
+		class="attachment-image {!grouped ? 'bubblegrouped': ''}"
 		class:tiled
 		aria-label={`Abrir ${name} em tela cheia`}
 		onclick={openLightbox}
@@ -186,7 +187,7 @@
 {/if}
 {:else if isAudio}
 	<!-- Áudio: player compacto. O arquivo só é pedido no primeiro toque. -->
-	<div class="attachment-media attachment-audio" class:pinned-attachment={pinned} title={name}>
+	<div class="attachment-media attachment-audio {!grouped ? 'bubblegrouped': ''}" class:pinned-attachment={pinned} title={name}>
 		<audio
 			bind:this={audioEl}
 			preload="none"
@@ -224,7 +225,7 @@
 		</span>
 	</div>
 {:else if attachment.mime_type.startsWith('video/') || attachment.mime_type.startsWith('application/octet-stream')}
-	<div class="attachment-media">
+	<div class="attachment-media {!grouped ? 'bubblegrouped': ''}">
 		<div class="attachment-video" class:pinned-attachment={pinned}>
 			<video
 				bind:this={videoEl}
@@ -258,7 +259,7 @@
 	<!-- Arquivo: chip de download. -->
 	<button
 		type="button"
-		class="attachment-file pill"
+		class="attachment-file pill {!grouped ? 'bubblegrouped': ''}"
 		class:pinned-attachment={pinned}
 		disabled={downloading}
 		onclick={downloadAttachment}

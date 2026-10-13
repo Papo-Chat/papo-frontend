@@ -142,7 +142,7 @@
 </script>
 
 <div class="embed-card {grouped ? 'embedgrouped':'embednotgrouped'}" class:has-video={flatVideoCard} bind:this={cardEl} style={color ? `--embed-color: ${color}` : undefined}>
-	{#if hasTopline}
+	{#if hasTopline}	
 		<header class="embed-topline">
 			{#if authorIconUrl}
 				<img class="source-mark source-icon" src={authorIconUrl} alt="" aria-hidden="true" />
