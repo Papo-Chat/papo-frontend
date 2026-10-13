@@ -406,18 +406,27 @@
 		const activeChannelId = channelId ?? null;
 		const isDisabled = disabled;
 		const mobile = isMobileUi();
-		if (!activeChannelId || isDisabled || mobile) return;
+
+		if (!activeChannelId) {
+			focusRequestedChannelId = null;
+			return;
+		}
+		if (isDisabled || mobile) return;
 		if (focusRequestedChannelId === activeChannelId) return;
 
 		focusRequestedChannelId = activeChannelId;
 		void tick().then(() => {
-			if (
-				channelId === activeChannelId &&
-				!disabled &&
-				!isMobileUi()
-			) {
-				inputEl?.focus({ preventScroll: true });
-			}
+			requestAnimationFrame(() => {
+				requestAnimationFrame(() => {
+					if (
+						channelId === activeChannelId &&
+						!disabled &&
+						!isMobileUi()
+					) {
+						inputEl?.focus({ preventScroll: true });
+					}
+				});
+			});
 		});
 	});
 
