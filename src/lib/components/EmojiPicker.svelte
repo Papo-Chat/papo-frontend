@@ -49,6 +49,7 @@
 	};
 
 	let cardEl: HTMLElement | null = null;
+	let filterEl: HTMLInputElement | null = null;
 	let filter = $state('');
 	let tab = $state<'emoji' | 'gif'>('emoji');
 	let gifs = $state<GiphyGif[]>([]);
@@ -78,6 +79,9 @@
 		if (open) {
 			open = false;
 			onOpenChange(false);
+			if (typeof window !== 'undefined') {
+				window.dispatchEvent(new Event('papo:popover-closed'));
+			}
 		}
 	}
 
@@ -146,6 +150,7 @@
 		tab = next;
 		filter = '';
 		if (next === 'gif' && gifs.length === 0) void loadGifs();
+		if (!isMobileUi()) void tick().then(() => filterEl?.focus());
 	}
 
 	function customEmojiSrc(opt: Extract<EmojiOption, { kind: 'custom' }>): string {
@@ -169,6 +174,7 @@
 			filter = '';
 			tab = 'emoji';
 			gifsError = '';
+			if (!isMobileUi()) void tick().then(() => filterEl?.focus());
 		}
 		return () => {
 			if (gifDebounce) {
@@ -311,6 +317,7 @@
 			<input
 				type="text"
 				class="emoji-filter"
+				bind:this={filterEl}
 				placeholder={tab === 'gif' ? 'Buscar GIFs…' : 'Filtrar emojis…'}
 				aria-label={tab === 'gif' ? 'Buscar GIFs' : 'Filtrar emojis'}
 				value={filter}
