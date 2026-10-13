@@ -150,6 +150,9 @@
             if (cardEl && !cardEl.contains(e.target as Node)) {
                 open = false;
                 onOpenChange(false);
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new Event('papo:popover-closed'));
+                }
             }
         }
 
@@ -157,6 +160,9 @@
             if (e.key === 'Escape') {
                 open = false;
                 onOpenChange(false);
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new Event('papo:popover-closed'));
+                }
             }
         }
 
