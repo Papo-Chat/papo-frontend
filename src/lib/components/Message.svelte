@@ -427,12 +427,11 @@
 					channelId={message.channel_id}
 					reactions={message.reactions}
 					userReactions={message.user_reactions}
-					showAdd={false}
+					showAdd={canReply && (showActions || groupLast)}
 				/>
 			</div>
-		{/if}
-		{#if canReply}
-			<div class="message-reaction-add" class:always-visible={groupLast}>
+		{:else if canReply && (showActions || groupLast)}
+			<div class="message-reaction-add-float">
 				<Reactions
 					messageId={message.id}
 					channelId={message.channel_id}
@@ -582,46 +581,24 @@
 	}
 
 	.message-reactions :global(.reactions) {
+		width: 100%;
 		margin-top: 0;
 	}
 
-	/* Botão flutuante abaixo do conteúdo, sem entrar no fluxo da mensagem. */
-	.message-reaction-add {
+	/* Sem reações, o botão flutua abaixo da mensagem sem alterar o fluxo. */
+	.message-reaction-add-float {
 		position: absolute;
 		top: 100%;
-		left: 0;
+		left: 55px;
 		z-index: 6;
-		opacity: 0;
-		pointer-events: none;
-		transform: translateY(2px);
-		transition: opacity 120ms ease, transform 120ms ease;
+		transform: translateY(-2px);
 	}
 
-	.message-reaction-add :global(.reactions) {
+	.message-reaction-add-float :global(.reactions) {
 		width: auto;
 		margin-top: 0;
 		flex-wrap: nowrap;
 		gap: 0;
-	}
-
-	.message:hover .message-reaction-add,
-	.message:focus-within .message-reaction-add,
-	.message-reaction-add.always-visible {
-		opacity: 1;
-		pointer-events: auto;
-		transform: translateY(0);
-	}
-
-	@media (hover: none), (pointer: coarse) {
-		.message-reaction-add {
-			opacity: 0;
-			pointer-events: none;
-		}
-
-		.message-reaction-add.always-visible {
-			opacity: 1;
-			pointer-events: auto;
-		}
 	}
 
 	.bubble.giphy-bubble {
