@@ -302,8 +302,17 @@
 				{/if}
 			{/if}
 
-			{#if showActions || isPinned}
+			{#if showActions || isPinned || (isLastMessage && canReply)}
 				<div class="message-actions" role="toolbar">
+					{#if canReply && (showActions || isLastMessage)}
+						<Reactions
+							messageId={message.id}
+							channelId={message.channel_id}
+							reactions={[]}
+							userReactions={[]}
+							showAdd
+						/>
+					{/if}
 					{#if isPinned}
 						<button
 							class="act-btn pinned-action"
@@ -426,17 +435,6 @@
 					reactions={message.reactions}
 					userReactions={message.user_reactions}
 					showAdd={false}
-				/>
-			</div>
-		{/if}
-		{#if canReply}
-			<div class="message-reaction-add" class:always-visible={isLastMessage}>
-				<Reactions
-					messageId={message.id}
-					channelId={message.channel_id}
-					reactions={[]}
-					userReactions={[]}
-					showAdd
 				/>
 			</div>
 		{/if}
@@ -573,41 +571,6 @@
 		margin-top: 0;
 	}
 
-	.message-reaction-add {
-		position: absolute;
-		top: 0;
-		right: 8px;
-		z-index: 6;
-		opacity: 0;
-		pointer-events: none;
-		transform: translateY(-50%);
-		transition: opacity 120ms ease;
-	}
-
-	.message-reaction-add :global(.reactions) {
-		width: auto;
-		margin-top: 0;
-		flex-wrap: nowrap;
-		gap: 0;
-	}
-
-	.message:hover .message-reaction-add,
-	.message:focus-within .message-reaction-add,
-	.message-reaction-add.always-visible {
-		opacity: 1;
-		pointer-events: auto;
-	}
-
-	@media (hover: none), (pointer: coarse) {
-		.message-reaction-add {
-			opacity: 0;
-			pointer-events: none;
-		}
-		.message-reaction-add.always-visible {
-			opacity: 1;
-			pointer-events: auto;
-		}
-	}
 
 	.bubble.giphy-bubble {
 		display: inline-flex;
