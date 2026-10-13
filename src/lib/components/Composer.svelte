@@ -17,7 +17,7 @@
 	import EmojiPicker from './EmojiPicker.svelte';
 	import Avatar from './Avatar.svelte';
 	import FormattedMessage from './FormattedMessage.svelte';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
 
 	let {
 		onSend,
@@ -396,6 +396,25 @@
 		closeMentions();
 		closeEmojiAutocomplete();
 		resetInputHeight();
+
+		if (nextChannel && !isMobileUi()) {
+			void tick().then(() => inputEl?.focus());
+		}
+	});
+
+	$effect(() => {
+		const pickerOpen = desktopEmojiOpen;
+		if (pickerOpen || isMobileUi()) return;
+		void tick().then(() => inputEl?.focus());
+	});
+
+	$effect(() => {
+		if (isMobileUi()) return;
+		const onPopoverClosed = () => {
+			void tick().then(() => inputEl?.focus());
+		};
+		window.addEventListener('papo:popover-closed', onPopoverClosed);
+		return () => window.removeEventListener('papo:popover-closed', onPopoverClosed);
 	});
 
 	// Ao iniciar um reply, o foco vai para o composer (não-mobile), como no
