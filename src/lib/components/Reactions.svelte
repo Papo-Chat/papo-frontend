@@ -11,11 +11,13 @@
 	import EmojiPicker from './EmojiPicker.svelte';
 	import ReactionUsersPopover from './ReactionUsersPopover.svelte';
 
-	let { reactions, userReactions, messageId, channelId } = $props<{
+	let { reactions, userReactions, messageId, channelId, showAdd = true } = $props<{
 		reactions: MessageReactionSummary[];
 		userReactions: MessageUserReaction[];
 		messageId: string;
 		channelId: string;
+		// Botão de adicionar reação: só na última mensagem de um grupo.
+		showAdd?: boolean;
 	}>();
 
 	const reactionKey = (emojiId: string | null, unicode: string | null) =>
@@ -79,6 +81,26 @@
 		userLoadGen++;
 		loadingUsers = false;
 	}
+
+	// Quando a contagem de um grupo muda (reação de outra pessoa via WS), a
+	// lista de usuários em cache está obsoleta: invalida para o próximo hover
+	// buscar a lista atualizada. Reações próprias são espelhadas por
+	// patchCachedMine e não disparam invalidação.
+	$effect(() => {
+		if (!cached) return;
+
+		const cachedCounts = new Map(
+			cached.reactions.map((g) => [reactionKey(g.emoji_id, g.unicode), g.count])
+		);
+
+		for (const r of reactions) {
+			const have = cachedCounts.get(reactionKey(r.emoji_id ?? null, r.unicode ?? null));
+			if (have !== undefined && have !== r.count) {
+				invalidateUsersCache();
+				return;
+			}
+		}
+	});
 
 	function patchCachedMine(r: MessageReactionSummary, remove: boolean): void {
 		if (!cached) return;
@@ -304,20 +326,22 @@
 		</span>
 	{/each}
 
-	<div class="reaction-add-wrap">
-		<button
-			class="react add-react"
-			title="Adicionar reação"
-			aria-label="Adicionar reação"
-			onclick={() => (emojiOpen = !emojiOpen)}
-		>
-			<Icon name="smiley" variant="light" />
-		</button>
+	{#if showAdd}
+		<div class="reaction-add-wrap">
+			<button
+				class="react add-react"
+				title="Adicionar reação"
+				aria-label="Adicionar reação"
+				onclick={() => (emojiOpen = !emojiOpen)}
+			>
+				<Icon name="smiley" variant="light" />
+			</button>
 
-		{#if emojiOpen}
-			<EmojiPicker bind:open={emojiOpen} {onPick} />
-		{/if}
-	</div>
+			{#if emojiOpen}
+				<EmojiPicker bind:open={emojiOpen} {onPick} />
+			{/if}
+		</div>
+	{/if}
 </div>
 
 <style>

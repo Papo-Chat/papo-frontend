@@ -570,6 +570,17 @@
 	gap: 11px;
 	margin: 0 0 16px;
 }
+.message .bubblegrouped{	
+	margin: 0 0 -27px;
+}
+.message .embedgrouped{	
+	margin: 0 0 -27px;
+	margin-top: 30px;
+}
+.message .embednotgrouped{
+	margin-top: 5px;
+}
+
 .message .content {
 	min-width: 0;
 	max-width: 750px;

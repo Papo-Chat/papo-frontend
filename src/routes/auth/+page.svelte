@@ -4,16 +4,25 @@
 	import Icon from '$lib/components/Icon.svelte';
 	import { api, ApiError } from '$lib/api';
 	import * as healthStore from '$lib/store/health.svelte';
+	import { isMobileUi } from '$lib/store/performance.svelte';
 
 	let username = $state('');
 	let password = $state('');
 	let serverPassword = $state('');
 	let error = $state<string | null>(null);
 	let busy = $state(false);
+	let usernameEl: HTMLInputElement | null = $state(null);
+
+	// Autofocus no primeiro campo quando não é mobile.
+	$effect(() => {
+		if (!isMobileUi()) usernameEl?.focus();
+	});
+
+	const canSubmit = $derived(username.trim() !== '' && password !== '');
 
 	async function login(): Promise<void> {
 		error = null;
-		if (busy || healthStore.state.status !== 'online') {
+		if (busy || !canSubmit || healthStore.state.status !== 'online') {
 			return;
 		}
 		busy = true;
@@ -60,8 +69,14 @@
 	</div>
 </div>
 
-<div class="form-grid">
-	<AuthField label="Usuário" icon="user" placeholder="Seu usuário" bind:value={username} />
+<form
+	class="form-grid"
+	onsubmit={(e) => {
+		e.preventDefault();
+		void login();
+	}}
+>
+	<AuthField label="Usuário" icon="user" placeholder="Seu usuário" bind:value={username} bind:inputEl={usernameEl} />
 	<AuthField
 		label="Senha"
 		icon="lock-key"
@@ -93,9 +108,8 @@
 
 	<button
 		class="submit"
-		type="button"
-		disabled={busy || healthStore.state.status !== 'online'}
-		onclick={login}
+		type="submit"
+		disabled={busy || !canSubmit || healthStore.state.status !== 'online'}
 	>
 		Entrar
 		<i class="ph-light ph-arrow-right"></i>
@@ -105,7 +119,7 @@
 		<span>Não tem conta?</span>
 		<a href="/auth/register">Registre-se</a>
 	</div>
-</div>
+</form>
 
 <div class="auth-bottom">
 	<span class="connection">

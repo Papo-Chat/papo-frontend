@@ -254,6 +254,7 @@
 	{:else}
 		{#key channel.id}<Chat
 			{messages}
+			channelId={channel.id}
 			{loading}
 			{hasMoreNewer}
 			{hasMoreOlder}

@@ -27,6 +27,6 @@ describe('mimeToFormat', () => {
 	});
 
 	it('falls through to the input for an unknown MIME', () => {
-		expect(mimeToFormat('image/avif')).toBe('image/avif');
+		expect(mimeToFormat('image/tiff')).toBe('image/tiff');
 	});
 });

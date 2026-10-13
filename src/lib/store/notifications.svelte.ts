@@ -2,11 +2,12 @@
 // mark-read and the live unread counter.
 
 import { SvelteSet } from 'svelte/reactivity';
-import { api } from '../api';
+import { api, ApiError } from '../api';
 import { debounce } from '../utils/throttle';
 import { meId as sessionMeId } from '../store/session.svelte';
 import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
 import { nextCursor } from '../utils/keyset';
+import * as messagesStore from './messages.svelte';
 import type { NotificationSummary, KeysetCursor } from '../types';
 
 export const state = $state({
@@ -87,14 +88,37 @@ export function markRead(ids: string[]): void {
 	if (!userId || ids.length === 0) {
 		return;
 	}
+	const idSet = new Set(ids);
+	// O contador local é incrementado otimisticamente (new_notification). O
+	// `updated` do servidor só conta linhas que realmente mudaram: quando a
+	// notificação já estava lida no servidor (updated < local), o contador
+	// local precisa ser decrementado igualmente — senão o badge fica preso
+	// e só um F5 (re-seed) o corrige.
+	const locallyUnread = state.items.filter((n) => !n.read && idSet.has(n.id)).length;
 	const epoch = currentSessionEpoch();
-	api.users.markRead(userId, { notification_ids: ids }).then((res) => {
-		if (!isCurrentSessionEpoch(epoch)) {
-			throw new Error('stale session');
-		}
-		state.items = state.items.map((n) => (ids.includes(n.id) ? { ...n, read: true } : n));
-		state.unreadCount = Math.max(0, state.unreadCount - res.updated);
-	});
+	const markLocal = (): void => {
+		state.items = state.items.map((n) => (idSet.has(n.id) ? { ...n, read: true } : n));
+	};
+	api.users
+		.markRead(userId, { notification_ids: ids })
+		.then((res) => {
+			if (!isCurrentSessionEpoch(epoch)) {
+				return;
+			}
+			markLocal();
+			state.unreadCount = Math.max(
+				0,
+				state.unreadCount - Math.max(res.updated, locallyUnread)
+			);
+		})
+		.catch((err: unknown) => {
+			// 404 (notification not found): todas as ids já estavam lidas no
+			// servidor. Reconcilia o estado local para o badge não travar.
+			if (err instanceof ApiError && err.status === 404) {
+				markLocal();
+				state.unreadCount = Math.max(0, state.unreadCount - locallyUnread);
+			}
+		});
 }
 
 // new_notification (F3): the id may be ephemeral — never insert the event
@@ -103,6 +127,34 @@ export function markAllRead(): void {
 	const ids = state.items.filter((notification) => !notification.read).map((notification) => notification.id);
 	for (let offset = 0; offset < ids.length; offset += 1000) {
 		markRead(ids.slice(offset, offset + 1000));
+	}
+}
+
+// last_read atualizado (canal/DM): notificações daquele canal até a mensagem
+// lida são consideradas lidas (espelha a regra aplicada no backend).
+export function markChannelRead(channelId: string, messageId: string, messageCreatedAt: string): void {
+	const window = messagesStore.getChannel(channelId);
+	const readIndex = window ? window.ids.indexOf(messageId) : -1;
+
+	let changed = 0;
+	state.items = state.items.map((n) => {
+		if (n.read || n.channel_id !== channelId) return n;
+
+		// A posição na janela carregada é o critério autoritativo (o
+		// created_at da notificação é ligeiramente posterior ao da mensagem).
+		// Fora da janela, cai no comparativo de timestamps.
+		const nIndex = window ? window.ids.indexOf(n.message_id) : -1;
+		const before =
+			readIndex >= 0 && nIndex >= 0
+				? nIndex <= readIndex
+				: n.created_at <= messageCreatedAt;
+
+		if (!before) return n;
+		changed += 1;
+		return { ...n, read: true };
+	});
+	if (changed > 0) {
+		state.unreadCount = Math.max(0, state.unreadCount - changed);
 	}
 }
 

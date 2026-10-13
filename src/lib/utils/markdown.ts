@@ -14,7 +14,15 @@ import type { Tokens } from 'marked';
 
 type EmojiNameMap = Map<string, Emoji>;
 const BLANK_LINE_MARKER = 'PAPOMESSAGEBLANKLINETOKEN';
-export interface MessageMarkdownOptions { mentions?: ReadonlyMap<string, string>; highlightEveryone?: boolean; }
+export interface MessageMarkdownOptions {
+	mentions?: ReadonlyMap<string, string>;
+	highlightEveryone?: boolean;
+	// Renderização "light" para espaços compactos (preview de reply): colapsa
+	// blocos em texto inline, sem mídia (imagens viram texto alternativo) e
+	// sem elementos interativos (mentions/links viram texto), porque o
+	// preview já é um botão e não pode aninhar controles.
+	light?: boolean;
+}
 type TextToken = { kind: 'text'; value: string };
 type EmojiToken = { kind: 'emoji'; name: string; emoji: Emoji };
 
@@ -53,6 +61,8 @@ function tokenize(content: string, nameMap: EmojiNameMap): {
 
 // Escapes like the marked default renderer (preserving existing &#ref;).
 const escapeTestNoEncode = /[<>"']|&(?!(#\d{1,7}|#[Xx][A-Fa-f0-9]{1,6}|\w+);)/;
+// Same test with /g: replace must escape every occurrence, not only the first.
+const escapeEvery = new RegExp(escapeTestNoEncode.source, 'g');
 const escapeMap: Record<string, string> = {
 	'&': '&amp;',
 	'<': '&lt;',
@@ -65,7 +75,7 @@ function escapeText(s: string): string {
 	if (!escapeTestNoEncode.test(s)) {
 		return s;
 	}
-	return s.replace(escapeTestNoEncode, (c) => escapeMap[c]);
+	return s.replace(escapeEvery, (c) => escapeMap[c]);
 }
 
 // Chat input is intentionally forgiving: three backticks always mean a
@@ -181,7 +191,13 @@ function makeRenderer(
 			const key = `MENTIONTOKEN${placeholders.size}TOKEN`;
 			if (userId) {
 				const label = options.mentions?.get(userId) ?? 'usuário';
-				placeholders.set(key, `<button type="button" class="message-mention" data-mention-user-id="${escapeText(userId)}">@${escapeText(label)}</button>`);
+				const attrs = `class="message-mention" data-mention-user-id="${escapeText(userId)}"`;
+				placeholders.set(
+					key,
+					options.light
+						? `<span ${attrs}>@${escapeText(label)}</span>`
+						: `<button type="button" ${attrs}>@${escapeText(label)}</button>`
+				);
 			} else {
 				placeholders.set(key, options.highlightEveryone ? '<span class="message-mention message-mention-everyone">@everyone</span>' : '@everyone');
 			}
@@ -196,7 +212,7 @@ function makeRenderer(
 					const url = urlFn(t.emoji);
 					if (url) {
 						return `<img
-							class="${hasText ? 'inline-emoji' : 'full-emoji'}"
+							class="${hasText || options.light ? 'inline-emoji' : 'full-emoji'}"
 							src="${url}"
 							alt="${t.name}"
 							aria-hidden="true" />`;
@@ -209,6 +225,38 @@ function makeRenderer(
 			})
 			.join('');
 	};
+	if (options.light) {
+		// Modo compacto: todo bloco colapsa em fluxo inline. Sem mídia e sem
+		// elementos interativos (o preview de reply já é um botão).
+		r.paragraph = function (token: Tokens.Paragraph): string {
+			if (token.text === BLANK_LINE_MARKER) return ' ';
+			return `${this.parser.parseInline(token.tokens)} `;
+		};
+		r.code = (token: Tokens.Code): string => `<code>${escapeText(token.text)}</code> `;
+		r.br = () => ' ';
+		r.heading = function (token: Tokens.Heading): string {
+			return `<strong>${this.parser.parseInline(token.tokens)}</strong> `;
+		};
+		r.hr = () => ' ';
+		r.blockquote = function (token: Tokens.Blockquote): string {
+			return `${this.parser.parse(token.tokens)} `;
+		};
+		r.list = function (token: Tokens.List): string {
+			return `${token.items.map((item) => this.parser.parse(item.tokens ?? [])).join(' · ')} `;
+		};
+		r.image = (token: Tokens.Image): string => escapeText(token.text || token.href);
+		r.link = function (token: Tokens.Link): string {
+			const { text, tokens, autolink } = token;
+			return autolink ? escapeText(text) : this.parser.parseInline(tokens);
+		};
+		r.table = function (token: Tokens.Table): string {
+			const cells = [
+				...token.header.map((cell) => this.parser.parseInline(cell.tokens ?? [])),
+				...token.rows.flatMap((row) => row.map((cell) => this.parser.parseInline(cell.tokens ?? [])))
+			];
+			return `${cells.join(' · ')} `;
+		};
+	}
 	return r;
 }
 

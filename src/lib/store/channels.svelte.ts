@@ -8,6 +8,7 @@ import { debounce } from '../utils/throttle';
 import { evict as messagesEvict } from '../store/messages.svelte';
 import { clearRoom as voiceClearRoom } from '../store/voice.svelte';
 import { meId as sessionMeId } from '../store/session.svelte';
+import * as notificationsStore from '../store/notifications.svelte';
 import type {
 	Channel,
 	ChannelPermissionEntry,
@@ -36,6 +37,43 @@ const reseedChannels = debounce(() => {
 
 export function setOpen(channelId: string | null): void {
 	state.openChannelId = channelId;
+	flushPendingReads();
+}
+
+// ── persistência do read no servidor ─────────────────────
+// markReadLocal é local; o servidor precisa conhecer o read para persistir o
+// last_read entre sessões e marcar as notificações do canal como lidas
+// (PUT /channels/:id/read). Debounce por canal; reads pendentes são
+// descarregados quando o canal aberto muda, para não perder o último read ao
+// trocar de canal.
+const pendingReads = new Map<
+	string,
+	{ messageId: string; timer: { run: () => void; cancel: () => void } }
+>();
+
+function sendChannelRead(channelId: string, messageId: string): void {
+	api.channels.markRead(channelId, messageId).catch(() => {
+		// best-effort: o read local continua válido; o próximo
+		// markReadLocal tenta de novo.
+	});
+}
+
+export function persistChannelRead(channelId: string, messageId: string): void {
+	pendingReads.get(channelId)?.timer.cancel();
+	const timer = debounce(() => {
+		pendingReads.delete(channelId);
+		sendChannelRead(channelId, messageId);
+	}, 800);
+	pendingReads.set(channelId, { messageId, timer });
+	timer.run();
+}
+
+function flushPendingReads(): void {
+	for (const [channelId, entry] of [...pendingReads]) {
+		entry.timer.cancel();
+		pendingReads.delete(channelId);
+		sendChannelRead(channelId, entry.messageId);
+	}
 }
 
 export function markReadLocal(
@@ -65,6 +103,10 @@ export function markReadLocal(
 	if (unread?.has || unread?.count) {
 		state.unread.set(channelId, { has: false, count: 0 });
 	}
+	// last_read avançou: notificações até essa mensagem são lidas (item 9).
+	notificationsStore.markChannelRead(channelId, messageId, createdAt);
+	// Persiste o read no servidor (last_read + notificações).
+	persistChannelRead(channelId, messageId);
 }
 
 // Resolve a channel from a raw route param: exact id first, then name (so
@@ -88,17 +130,18 @@ export function resolve(id: string | null | undefined): Channel | null {
 }
 
 // The "home" channel used by the bootstrap when the URL points to the root:
-// first text channel, falling back to the first channel of any type.
-export function homeChannel(): Channel | null {
+// first text channel, falling back to the first channel of any type. The
+// optional filter lets callers skip channels the user cannot access.
+export function homeChannel(filter?: (c: Channel) => boolean): Channel | null {
 	for (const cid of state.ordered) {
 		const c = state.byId.get(cid);
-		if (c && c.type === 'text') {
+		if (c && c.type === 'text' && (!filter || filter(c))) {
 			return c;
 		}
 	}
 	for (const cid of state.ordered) {
 		const c = state.byId.get(cid);
-		if (c) {
+		if (c && (!filter || filter(c))) {
 			return c;
 		}
 	}

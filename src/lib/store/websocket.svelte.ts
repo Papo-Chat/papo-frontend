@@ -252,8 +252,14 @@ export function dispatchEvent(event: WsOutbound): void {
 			notificationsStore.handleNewNotification();
 			const userId = sessionMeId();
 			const config = settingsStore.state.config;
+			// Se a DM dessa conversa está aberta, o usuário já está vendo a
+			// mensagem: não tocar som de notificação.
+			const openDmId = dmsStore.state.openDmId;
+			const openDm = openDmId ? dmsStore.get(openDmId) : null;
+			const dmOpen = !!openDm && openDm.user.id === event.user_id;
 			if (
 				userId &&
+				!dmOpen &&
 				config?.notifications.enabled &&
 				config.notifications.sound &&
 				sessionState.status !== 'busy'

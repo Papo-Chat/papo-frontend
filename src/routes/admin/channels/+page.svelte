@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as channelsStore from '$lib/store/channels.svelte';
+	import { isMobileUi } from '$lib/store/performance.svelte';
 	import * as rolesStore from '$lib/store/roles.svelte';
 	import type { Channel, ChannelPermission, ChannelType } from '$lib/types';
 	import Icon from '$lib/components/Icon.svelte';
@@ -249,7 +250,7 @@
 
 	{#if creating}
 		<div class="new-channel">
-			<input class="admin-input" placeholder="nome do canal" bind:value={newName} />
+			<input class="admin-input" placeholder="nome do canal" bind:value={newName} autofocus={!isMobileUi()} />
 			<select class="admin-select" bind:value={newType}>
 				<option value="text">Texto</option>
 				<option value="category">Categoria</option>
@@ -328,7 +329,7 @@
 				<div class="admin-card-body">
 					<div class="admin-field">
 						<label for="ch-name">Nome</label>
-						<input id="ch-name" class="admin-input" bind:value={editName} />
+						<input id="ch-name" class="admin-input" bind:value={editName} autofocus={!isMobileUi()} />
 					</div>
 					{#if selected.type !== 'category'}
 						<div class="admin-field">

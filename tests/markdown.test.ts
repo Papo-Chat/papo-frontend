@@ -186,3 +186,72 @@ describe('renderMessageMarkdown', () => {
 		expect(renderMessageMarkdown('\\*not bold\\*', nameMap, urlFn)).not.toContain('<strong>');
 	});
 });
+
+describe('renderMessageMarkdown (light mode)', () => {
+	const light = (src: string, options = {}) =>
+		renderMessageMarkdown(src, nameMap, urlFn, { light: true, ...options });
+
+	it('collapses paragraphs inline without block elements', () => {
+		const out = light('a\n\nb\nc');
+		expect(out).not.toContain('<p>');
+		expect(out).not.toContain('<br>');
+		expect(out).toContain('a');
+		expect(out).toContain('b');
+		expect(out).toContain('c');
+	});
+
+	it('renders fenced code as inline code (no <pre>)', () => {
+		const out = light('```\nfoo <bar>\n```');
+		expect(out).not.toContain('<pre>');
+		expect(out).toContain('<code>foo &lt;bar&gt;</code>');
+	});
+
+	it('collapses headings, lists, blockquote, hr and tables', () => {
+		const out = light(
+			'# T\n- a\n- b\n\n> q\n\n***\n\n| c | d |\n|--|--|\n| 1 | 2 |'
+		);
+		expect(out).not.toContain('<h1>');
+		expect(out).not.toContain('<ul>');
+		expect(out).not.toContain('<blockquote>');
+		expect(out).not.toContain('<hr>');
+		expect(out).not.toContain('<table>');
+		expect(out).toContain('<strong>T</strong>');
+		expect(out).toContain('a');
+		expect(out).toContain('b');
+		expect(out).toContain('q');
+		expect(out).toContain('1');
+	});
+
+	it('renders images as alt text and links as plain text (no media, no anchors)', () => {
+		const out = light('![alt text](https://e.com/i.png) [t](https://e.com/x) https://e.com/y');
+		expect(out).not.toContain('<img');
+		expect(out).not.toContain('<a ');
+		expect(out).toContain('alt text');
+		expect(out).toContain('t');
+		expect(out).toContain('https://e.com/y');
+	});
+
+	it('renders mentions as non-interactive spans', () => {
+		const mentions = new Map([['abc123def4567890', 'Fulano']]);
+		const out = light('@mention(<@abc123def4567890>) oi', { mentions });
+		expect(out).not.toContain('<button');
+		expect(out).toContain('<span class="message-mention"');
+		expect(out).toContain('@Fulano');
+	});
+
+	it('keeps a lone custom emoji small (inline, not full size)', () => {
+		const out = light(':x:');
+		expect(out).toContain('inline-emoji');
+		expect(out).not.toContain('full-emoji');
+	});
+
+	it('never emits nested interactive elements', () => {
+		const out = light(
+			'# h\n- [l](https://e.com)\n\n`code` **b** :x:\n\n![i](https://e.com/i.png)'
+		);
+		expect(out).not.toContain('<button');
+		expect(out).not.toContain('<a ');
+		// Markdown images are dropped; only custom-emoji shortcodes render.
+		expect(out).not.toContain('https://e.com/i.png');
+	});
+});

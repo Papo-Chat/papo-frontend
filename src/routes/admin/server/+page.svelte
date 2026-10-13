@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { state as sessionState } from '$lib/store/session.svelte';
 	import * as serverStore from '$lib/store/server.svelte';
+	import { isMobileUi } from '$lib/store/performance.svelte';
 	import { blobToUrl } from '$lib/utils/media';
 	import { isValidPassword } from '$lib/utils/password';
 	import Icon from '$lib/components/Icon.svelte';
@@ -180,6 +181,7 @@
 							class="admin-input"
 							bind:value={name}
 							placeholder="Nome do servidor"
+							autofocus={!isMobileUi()}
 						/>
 					</div>
 

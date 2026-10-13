@@ -12,6 +12,7 @@
 	import * as rolesStore from '$lib/store/roles.svelte';
 	import { state as sessionState } from '$lib/store/session.svelte';
 	import { state as serverState } from '$lib/store/server.svelte';
+	import { isMobileUi } from '$lib/store/performance.svelte';
 	import Icon from './Icon.svelte';
 	import EmojiPicker from './EmojiPicker.svelte';
 	import Avatar from './Avatar.svelte';
@@ -338,9 +339,9 @@
 	/**
 	 * Ajusta o textarea automaticamente.
 	 *
-	 * 1 até 5 linhas:
-	 * - abaixo de 5 linhas: cresce automaticamente
-	 * - acima de 5 linhas: mantém altura e usa scroll interno
+	 * Desktop: 1 até 5 linhas — cresce até 5 e depois usa scroll interno.
+	 * Mobile: altura fixa de 1 linha; texto longo permanece com overflow
+	 * vertical com scroll dentro do composer (requisito: só no mobile).
 	 */
 	function resizeInput(): void {
 		if (!inputEl) return;
@@ -364,8 +365,10 @@
 		const borderBottom =
 			Number.parseFloat(style.borderBottomWidth) || 0;
 
+		const mobile = isMobileUi();
+
 		const maxHeight =
-			lineHeight * MAX_LINES +
+			lineHeight * (mobile ? 1 : MAX_LINES) +
 			paddingTop +
 			paddingBottom +
 			borderTop +
@@ -393,6 +396,14 @@
 		closeMentions();
 		closeEmojiAutocomplete();
 		resetInputHeight();
+	});
+
+	// Ao iniciar um reply, o foco vai para o composer (não-mobile), como no
+	// Discord: a ação de responder já indica a intenção de digitar.
+	$effect(() => {
+		const replyId = replyTo?.id ?? null;
+		if (!replyId || isMobileUi()) return;
+		queueMicrotask(() => inputEl?.focus());
 	});
 
 	function resetInputHeight(): void {

@@ -87,11 +87,16 @@
 
 	function computeSections(): Array<{ title: string; members: UserSummary[] }> {
 		const get = (u: UserSummary) => usersStore.effectiveStatus(u.id);
+		// Ordem alfabética por nome de exibição dentro de cada grupo de status.
+		const byName = (a: UserSummary, b: UserSummary) =>
+			(a.nickname || a.username).localeCompare(b.nickname || b.username, undefined, {
+				sensitivity: 'base'
+			});
 		const groups: Array<{ title: string; members: UserSummary[] }> = [];
-		const online = users.filter((u) => get(u) === 'online');
-		const offline = users.filter((u) => get(u) === 'offline');
-		const away = users.filter((u) => get(u) === 'away');
-		const busy = users.filter((u) => get(u) === 'busy');
+		const online = users.filter((u) => get(u) === 'online').sort(byName);
+		const offline = users.filter((u) => get(u) === 'offline').sort(byName);
+		const away = users.filter((u) => get(u) === 'away').sort(byName);
+		const busy = users.filter((u) => get(u) === 'busy').sort(byName);
 		if (online.length) groups.push({ title: `ONLINE — ${online.length}`, members: online });
 		if (away.length) groups.push({ title: `AUSENTE — ${away.length}`, members: away });
 		if (busy.length) groups.push({ title: `OCUPADO — ${busy.length}`, members: busy });
@@ -103,7 +108,13 @@
 	function computeMatches(): UserSummary[] | null {
 		const q = searchQuery.trim().toLowerCase();
 		if (!q) return null;
-		return users.filter((u) => (u.nickname || u.username).toLowerCase().includes(q));
+		return users
+			.filter((u) => (u.nickname || u.username).toLowerCase().includes(q))
+			.sort((a, b) =>
+				(a.nickname || a.username).localeCompare(b.nickname || b.username, undefined, {
+					sensitivity: 'base'
+				})
+			);
 	}
 	const matches = $derived(computeMatches());
 

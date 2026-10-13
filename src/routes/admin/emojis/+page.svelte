@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as emojisStore from '$lib/store/emojis.svelte';
+	import { isMobileUi } from '$lib/store/performance.svelte';
 	import { fileToBase64 } from '$lib/utils/upload';
 	import { mimeToFormat } from '$lib/utils/media';
 	import Icon from '$lib/components/Icon.svelte';
@@ -95,6 +96,7 @@
 				placeholder="nome do emoji"
 				bind:value={name}
 				aria-label="Nome do emoji"
+				autofocus={!isMobileUi()}
 			/>
 			<div class="emoji-upload-field">
 				<input

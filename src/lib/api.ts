@@ -630,6 +630,14 @@ export const channels = {
 			method: 'DELETE'
 		});
 	},
+	// Registra a leitura do canal até uma mensagem: avança o last_read no
+	// servidor e marca as notificações do canal até essa mensagem como lidas.
+	markRead(id: string, messageId: string): Promise<void> {
+		return request<void>(`/channels/${encodeURIComponent(id)}/read`, {
+			method: 'PUT',
+			body: { message_id: messageId }
+		});
+	},
 	pinned(id: string): Promise<PinnedMessageList> {
 		return request<PinnedMessageList>(`/channels/${encodeURIComponent(id)}/pinned`);
 	},

@@ -418,7 +418,7 @@
 
 {#if canManageServer}
 							<div class="user-actions">
-								{#if u.id !== me}
+								{#if isOwner && u.id !== me}
 									<button
 										class="admin-btn ghost small"
 										type="button"

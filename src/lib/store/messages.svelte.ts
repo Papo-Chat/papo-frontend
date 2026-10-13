@@ -27,8 +27,9 @@ import type {
 } from '../types';
 
 // ── window policy (P1.12) ───────────────────────────────
-// Max messages kept per channel.
-const MAX_WINDOW = 300;
+// Max messages kept per channel (3 páginas de 30, o tamanho de página padrão
+// do backend em GET /channels/:id/messages).
+const MAX_WINDOW = 90;
 
 // ── caches (module-level, non-reactive) ─────────────────
 // Resolved embeds (with image_data) keyed by embed_id. The message only keeps
@@ -959,7 +960,8 @@ export function getEmbed(embedId: string): EmbedWithImage | null {
 // scroll after the latest page is in the window.
 const _freshInflight = new SvelteMap<string, Promise<void>>();
 
-// Fresh load: latest 100, anchored at the newest message. Awaits the fetch.
+// Fresh load: latest page (30 por padrão), anchored at the newest message.
+// Awaits the fetch.
 // Always fetches (no short-circuit) so callers can rely on a real reload.
 async function _freshLoad(channelId: string): Promise<void> {
 	if (!state.channels.has(channelId)) {
@@ -990,7 +992,8 @@ function _freshLoadTracked(channelId: string): Promise<void> {
 	return p;
 }
 
-// Fresh load: latest 100, anchored at the newest message (always fetches).
+// Fresh load: latest page (30 por padrão), anchored at the newest message
+// (always fetches).
 export function load(channelId: string): void {
 	_freshLoadTracked(channelId).catch(() => {});
 }

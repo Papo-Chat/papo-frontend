@@ -4,6 +4,8 @@ import type { DirectConversation, WsDmUpdate } from '../types';
 import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
 import * as usersStore from './users.svelte';
 import { evict as evictMessages } from './messages.svelte';
+import * as notificationsStore from './notifications.svelte';
+import * as channelsStore from './channels.svelte';
 
 export const state = $state({
 	byId: new SvelteMap<string, DirectConversation>(),
@@ -134,6 +136,10 @@ export function markReadLocal(id: string, messageId: string, createdAt: string):
 		last_read_at: createdAt,
 		unread_count: 0
 	});
+	// last_read avançou: notificações até essa mensagem são lidas (item 9).
+	notificationsStore.markChannelRead(id, messageId, createdAt);
+	// Persiste o read no servidor (DM id é um channel id; mesmo endpoint).
+	channelsStore.persistChannelRead(id, messageId);
 }
 
 export function drop(id: string): void {

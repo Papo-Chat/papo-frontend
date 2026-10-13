@@ -6,7 +6,7 @@
 	import * as usersStore from '$lib/store/users.svelte';
 	import { state as sessionState, meId, logout } from '$lib/store/session.svelte';
 	import * as rolesStore from '$lib/store/roles.svelte';
-	import { can } from '$lib/store/roles.svelte';
+	import { can, channelAccess } from '$lib/store/roles.svelte';
 	import Icon from './Icon.svelte';
 	import ServerIcon from './ServerIcon.svelte';
 	import ChannelItem from './ChannelItem.svelte';
@@ -19,6 +19,22 @@
 
 	const server = $derived(serverState.server);
 	const groups = $derived(channelsStore.grouped());
+
+	// Canais que exigem permissão de VIEW: só aparecem na lista lateral para
+	// quem tem a permissão (canal aberto ou role com read_channel). Canais de
+	// voz também entram quando o usuário tem connect_voice. Categorias sem
+	// canais visíveis são ocultadas.
+	const visibleGroups = $derived(
+		groups
+			.map((group) => ({
+				...group,
+				channels: group.channels.filter((c) => {
+					const access = channelAccess(c, adminCtx);
+					return c.type === 'voice' ? access.read || access.voice : access.read;
+				})
+			}))
+			.filter((group) => group.channels.length > 0)
+	);
 
 	const onlineCount = $derived(
 		[...usersStore.state.presence.entries()].filter(([id, presence]) => {
@@ -56,7 +72,7 @@
 
 	function goHome(): void {
 		state.channelsDrawerOpen = false;
-		const home = channelsStore.homeChannel();
+		const home = channelsStore.homeChannel((c) => channelAccess(c, adminCtx).read);
 		if (home) goto(`/channels/${home.id}`);
 	}
 
@@ -120,7 +136,7 @@
 		<strong>Início</strong>
 	</button>
 
-	{#each groups as group}
+	{#each visibleGroups as group}
 		{#if group.category}
 			<div class="section-title">{group.category.name}</div>
 		{/if}

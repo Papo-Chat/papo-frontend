@@ -1,10 +1,27 @@
+<script module lang="ts">
+	// Posição de scroll salva por canal quando o chat desmonta (troca de
+	// canal). Restaurada ao voltar, exceto quando o usuário estava
+	// stick-to-bottom (nesse caso o fluxo normal de bottom/unread vale).
+	type SavedChatScroll = {
+		anchorId: string;
+		offset: number;
+		stickToBottom: boolean;
+	};
+	const savedChatScrolls = new Map<string, SavedChatScroll>();
+</script>
+
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { tick, onDestroy } from 'svelte';
 	import type { MessageWithAttachment } from '$lib/types';
 	import Message from './Message.svelte';
 
+	// Janela de agrupamento Discord-like: mensagens consecutivas do mesmo
+	// autor dentro de 10min formam um grupo (reply quebra o grupo).
+	const GROUP_WINDOW_MS = 10 * 60 * 1000;
+
 	let {
 		messages,
+		channelId = null,
 		onReply,
 		searchActive = false,
 		loading = false,
@@ -21,6 +38,7 @@
 		onReachLatest
 	} = $props<{
 		messages: MessageWithAttachment[];
+		channelId?: string | null;
 		onReply?: (message: MessageWithAttachment) => void;
 		searchActive?: boolean;
 		loading?: boolean;
@@ -38,6 +56,26 @@
 	}>();
 
 	const BOTTOM_THRESHOLD = 24;
+
+	// "Voltar às recentes" quando o usuário está a mais de 2 páginas (60) da
+	// mensagem mais nova ainda dentro da janela de 90.
+	const RETURN_RECENT_THRESHOLD = 60;
+
+	// Agrupamento: mensagem i pertence ao grupo da anterior quando é do mesmo
+	// autor, dentro da janela de 10min e sem reply_to próprio.
+	function sameAuthorWindow(a: MessageWithAttachment, b: MessageWithAttachment): boolean {
+		if (b.reply_to) return false;
+		if (a.author_id == null || b.author_id == null) return false;
+		if (a.author_id !== b.author_id) return false;
+		const ta = Date.parse(a.created_at);
+		const tb = Date.parse(b.created_at);
+		if (Number.isNaN(ta) || Number.isNaN(tb)) return false;
+		return tb >= ta && tb - ta <= GROUP_WINDOW_MS;
+	}
+
+	const groupedFlags = $derived(
+		messages.map((m: MessageWithAttachment, i: number) => i > 0 && sameAuthorWindow(messages[i - 1], m))
+	);
 
 	let listEl: HTMLElement | null = null;
 	let contentEl: HTMLElement | null = null;
@@ -78,7 +116,7 @@
 	}
 
 	function isAtBottom(): boolean {
-		// Bottom of a historical 300-message window is not the real channel
+		// Bottom of a historical 90-message window is not the real channel
 		// bottom while newer messages are outside the checkpoint.
 		return !hasMoreNewer && distanceFromBottom() <= BOTTOM_THRESHOLD;
 	}
@@ -160,7 +198,37 @@
 			const readId = lastReadMessageId;
 			let positionedAtUnread = false;
 
-			if (readId) {
+			// Ao voltar para o canal, restaura a posição salva (exceto quando o
+			// usuário saiu stick-to-bottom: nesse caso vale o fluxo normal).
+			const saved = channelId ? savedChatScrolls.get(channelId) : undefined;
+			if (saved && !saved.stickToBottom && saved.anchorId) {
+				// O divisor de não lidas é montado antes da medição para que o
+				// layout final seja o mesmo no momento do ajuste.
+				if (readId) {
+					const readIndex = messages.findIndex((m: MessageWithAttachment) => m.id === readId);
+					const unreadInWindow =
+						readIndex >= 0 ? Math.max(0, messages.length - readIndex - 1) : 0;
+					const hasUnreadAfter =
+						(readIndex >= 0 && readIndex < messages.length - 1) || hasMoreNewer;
+					if (hasUnreadAfter) {
+						visibleLastReadMessageId = readId;
+						setUnreadCount(Math.max(hasMoreNewer ? 1 : 0, unreadInWindow));
+					}
+				}
+
+				await tick();
+
+				const anchor = messageElement(saved.anchorId);
+				if (anchor && listEl) {
+					const listTop = listEl.getBoundingClientRect().top;
+					const currentOffset = anchor.getBoundingClientRect().top - listTop;
+					listEl.scrollTop += currentOffset - saved.offset;
+					stickToBottom = false;
+					positionedAtUnread = true;
+				}
+			}
+
+			if (readId && !positionedAtUnread) {
 				const readIndex = messages.findIndex((m: MessageWithAttachment) => m.id === readId);
 				const unreadInWindow =
 					readIndex >= 0 ? Math.max(0, messages.length - readIndex - 1) : 0;
@@ -350,8 +418,35 @@
 			return;
 		}
 		const index = messages.findIndex((message: MessageWithAttachment) => message.id === firstVisibleId);
-		showReturnRecent = index >= 0 && messages.length - index - 1 > 100;
+		showReturnRecent = index >= 0 && messages.length - index - 1 > RETURN_RECENT_THRESHOLD;
 	}
+
+	// Guarda a posição de scroll atual do canal para restaurar quando o
+	// usuário voltar (exceto stick-to-bottom, que segue o fluxo normal).
+	function saveScroll(): void {
+		if (!channelId || !listEl || !initialScrollDone) return;
+
+		if (stickToBottom) {
+			savedChatScrolls.set(channelId, { anchorId: '', offset: 0, stickToBottom: true });
+			return;
+		}
+
+		const listTop = listEl.getBoundingClientRect().top;
+		const nodes = listEl.querySelectorAll<HTMLElement>('[data-message-id]');
+		for (const node of nodes) {
+			const rect = node.getBoundingClientRect();
+			if (rect.bottom >= listTop) {
+				savedChatScrolls.set(channelId, {
+					anchorId: node.dataset.messageId ?? '',
+					offset: rect.top - listTop,
+					stickToBottom: false
+				});
+				return;
+			}
+		}
+	}
+
+	onDestroy(saveScroll);
 
 	function handleScroll(): void {
 		if (!listEl || !initialScrollDone || suppressScrollHandler) return;
@@ -412,7 +507,7 @@
 		loadingOlder = true;
 
 		// Preserve a concrete message in the viewport instead of relying on the
-		// total scrollHeight delta. Once the 300-message checkpoint starts
+		// total scrollHeight delta. Once the 90-message checkpoint starts
 		// dropping newer messages, scrollHeight may barely change even though a
 		// full older page was prepended.
 		const anchorId = messages[0]?.id ?? null;
@@ -486,7 +581,7 @@
 		const previousLastId = lastMessageId;
 		const previousIndex = messages.findIndex((m: MessageWithAttachment) => m.id === previousLastId);
 
-		// A historical checkpoint shifts the 300-message window backwards and
+		// A historical checkpoint shifts the 90-message window backwards and
 		// can remove the former newest message. That is not a new message and
 		// must not create unread counts/dividers/animations.
 		if (previousIndex < 0) {
@@ -713,6 +808,8 @@
 				>
 					<Message
 						message={m}
+						grouped={groupedFlags[index]}
+						groupLast={index === messages.length - 1 || !groupedFlags[index + 1]}
 						onReply={(msg) => onReply?.(msg)}
 					/>
 				</div>

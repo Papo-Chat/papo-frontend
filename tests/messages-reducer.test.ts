@@ -815,14 +815,14 @@ describe('react / unreact (user_reactions)', () => {
 	});
 });
 
-// ── 300-message window (P1.12) ──────────────────────────
+// ── 90-message window (P1.12) ───────────────────────────
 
-describe('300-message window', () => {
-	it('trims a fresh load to the 300 newest messages (P1.12)', async () => {
+describe('90-message window', () => {
+	it('trims a fresh load to the 90 newest messages (P1.12)', async () => {
 		evict('ch_k');
 		vi.spyOn(apiMessages, 'list');
 		const messages: MessageWithAttachment[] = [];
-		for (let i = 0; i < 350; i++) {
+		for (let i = 0; i < 120; i++) {
 			messages.push({
 				...msg(`m${i}`, {
 					created_at: new Date(Date.UTC(2024, 0, 1) + i * 60_000).toISOString()
@@ -837,15 +837,15 @@ describe('300-message window', () => {
 		load('ch_k');
 		await vi.waitFor(() => {
 			const ch = globalState.channels.get('ch_k');
-			return !!ch && ch.byId.size === 300;
+			return !!ch && ch.byId.size === 90;
 		});
 		const ch = globalState.channels.get('ch_k')!;
-		expect(ch.byId.size).toBe(300);
-		// Oldest 50 dropped; the 300 newest remain.
+		expect(ch.byId.size).toBe(90);
+		// Oldest 30 dropped; the 90 newest remain.
 		expect(ch.byId.has('m0')).toBe(false);
-		expect(ch.byId.has('m49')).toBe(false);
-		expect(ch.byId.has('m50')).toBe(true);
-		expect(ch.byId.has('m349')).toBe(true);
+		expect(ch.byId.has('m29')).toBe(false);
+		expect(ch.byId.has('m30')).toBe(true);
+		expect(ch.byId.has('m119')).toBe(true);
 		evict('ch_k');
 		vi.restoreAllMocks();
 	});

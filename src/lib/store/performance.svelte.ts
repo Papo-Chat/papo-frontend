@@ -51,6 +51,15 @@ export function setFlatUi(next: boolean): void {
 	applyToDom();
 }
 
+// Fonte única de "é mobile?" para comportamento de UI (autofocus, composer).
+// Reflete o atributo aplicado por applyToDom (MOBILE_QUERY).
+export function isMobileUi(): boolean {
+	return (
+		typeof document !== 'undefined' &&
+		document.documentElement.hasAttribute('data-ui-mobile')
+	);
+}
+
 if (typeof window !== 'undefined') {
 	const media = window.matchMedia(MOBILE_QUERY);
 	applyToDom();

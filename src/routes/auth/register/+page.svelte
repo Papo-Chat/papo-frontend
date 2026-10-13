@@ -5,6 +5,7 @@
 	import { api, ApiError } from '$lib/api';
 	import * as healthStore from '$lib/store/health.svelte';
 	import { isValidPassword, minPasswordLength } from '$lib/utils/password';
+	import { isMobileUi } from '$lib/store/performance.svelte';
 
 	let username = $state('');
 	let password = $state('');
@@ -12,8 +13,14 @@
 	let confirmPassword = $state('');
 	let error = $state<string | null>(null);
 	let busy = $state(false);
+	let usernameEl: HTMLInputElement | null = $state(null);
 	const passwordCheck = $derived(isValidPassword(password));
 	const usernameValid = $derived(username.trim().length >= 3);
+
+	// Autofocus no primeiro campo quando não é mobile.
+	$effect(() => {
+		if (!isMobileUi()) usernameEl?.focus();
+	});
 
 	async function register(): Promise<void> {
 		error = null;
@@ -84,8 +91,14 @@
 	</div>
 </div>
 
-<div class="form-grid">
-	<AuthField label="Usuário" icon="user" placeholder="Seu usuário" bind:value={username} />
+<form
+	class="form-grid"
+	onsubmit={(e) => {
+		e.preventDefault();
+		void register();
+	}}
+>
+	<AuthField label="Usuário" icon="user" placeholder="Seu usuário" bind:value={username} bind:inputEl={usernameEl} />
 	<AuthField
 		label="Senha da conta"
 		icon="lock-key"
@@ -136,9 +149,8 @@
 
 	<button
 		class="submit"
-		type="button"
+		type="submit"
 		disabled={busy || healthStore.state.status !== 'online' || !usernameValid || !passwordCheck.ok || password !== confirmPassword}
-		onclick={register}
 	>
 		Criar conta
 		<i class="ph-light ph-arrow-right"></i>
@@ -148,7 +160,7 @@
 		<span>Já tem conta?</span>
 		<a href="/auth">Voltar para o login</a>
 	</div>
-</div>
+</form>
 
 <div class="auth-bottom">
 	<span class="connection">

@@ -8,13 +8,15 @@
 		icon = 'user',
 		placeholder = '',
 		type = 'text',
-		value = $bindable('')
+		value = $bindable(''),
+		inputEl = $bindable(null as HTMLInputElement | null)
 	} = $props<{
 		label: string;
 		icon?: string;
 		placeholder?: string;
 		type?: string;
 		value?: string;
+		inputEl?: HTMLInputElement | null;
 	}>();
 
 	function onInput(e: Event): void {
@@ -28,6 +30,13 @@
 	{/if}
 	<div class="input-shell">
 		<div class="input-icon"><Icon name={icon} variant="light" /></div>
-		<input {type} {placeholder} aria-label={label} {value} on:input={onInput} />
+		<input
+			{type}
+			{placeholder}
+			aria-label={label}
+			{value}
+			bind:this={inputEl}
+			on:input={onInput}
+		/>
 	</div>
 </div>

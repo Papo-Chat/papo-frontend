@@ -18,11 +18,23 @@
 	import EmbedCard from './EmbedCard.svelte';
 	import Attachment from './Attachment.svelte';
 	import FormattedMessage from './FormattedMessage.svelte';
+	import LightFormattedMessage from './LightFormattedMessage.svelte';
 	import Icon from './Icon.svelte';
 	import { tick } from 'svelte';
 
-	let { message, onReply } = $props<{
+	let {
+		message,
+		grouped = false,
+		groupLast = true,
+		onReply
+	} = $props<{
 		message: MessageWithAttachment;
+		// Mensagem do mesmo autor dentro da janela de agrupamento: sem
+		// avatar/nome/hora (estilo Discord).
+		grouped?: boolean;
+		// Última mensagem do grupo: único ponto onde o botão de adicionar
+		// reação aparece.
+		groupLast?: boolean;
 		onReply?: (message: MessageWithAttachment) => void;
 	}>();
 
@@ -34,8 +46,7 @@
 	const channel = $derived(channelsStore.state.byId.get(message.channel_id));
 	const isDirectMessage = $derived(!!dmsStore.state.byId.get(message.channel_id));
 	const isOwner = $derived(!!me && serverState.server?.owner_id === me);
-  	const isMobile = () =>
-    	window.matchMedia('(pointer: coarse)').matches;
+	const isMobile = () => window.matchMedia('(pointer: coarse)').matches;
 	// Permissões: SOMENTE as roles do usuário logado. Os ids vêm do whoami
 	// (sessionState.roles); os detalhes de permissão vêm do list do store de
 	// roles. Usar todas as roles do servidor daria permissão que o usuário não tem.
@@ -47,7 +58,12 @@
 	const access = $derived(channel ? channelAccess(channel, ctx) : null);
 	const authorRoleIds = $derived(new Set(author?.roles.map((r) => r.id) ?? []));
 	const authorRoles = $derived(rolesStore.state.list.filter((r) => authorRoleIds.has(r.id)));
-	const authorCanEveryone = $derived(can('everyone_message', { roles: authorRoles, isOwner: !!message.author_id && serverState.server?.owner_id === message.author_id }));
+	const authorCanEveryone = $derived(
+		can('everyone_message', {
+			roles: authorRoles,
+			isOwner: !!message.author_id && serverState.server?.owner_id === message.author_id
+		})
+	);
 
 	const isAuthor = $derived(message.author_id === me);
 	const canEdit = $derived(isAuthor);
@@ -68,22 +84,18 @@
 	const name = $derived(author?.nickname || author?.username || 'Usuário');
 	const msgReply = $derived(messagesStore.getMessage(message.channel_id, message.reply_to));
 	const replyAuthor = $derived(usersStore.state.byId.get(msgReply?.author_id ?? ''));
-	const mentionsMe = $derived(
-		!!me && (message.content ?? '').includes(`@mention(<@${me}>)`)
-	);
+	const mentionsMe = $derived(!!me && (message.content ?? '').includes(`@mention(<@${me}>)`));
 	const replyPreviewText = $derived(
 		msgReply?.content
-			? (isGiphyMarker(msgReply.content) ? 'GIF' : msgReply.content.replace(/\s+/g, ' ').trim())
+			? isGiphyMarker(msgReply.content)
+				? 'GIF'
+				: msgReply.content
 			: msgReply?.attachments.length
 				? 'Anexo'
 				: ''
 	);
-	const repliesToMe = $derived(
-		!!me && !!message.reply_to && msgReply?.author_id === me
-	);
-	const goldHighlight = $derived(
-		isPinned || isEveryoneMessage || mentionsMe || repliesToMe
-	);
+	const repliesToMe = $derived(!!me && !!message.reply_to && msgReply?.author_id === me);
+	const goldHighlight = $derived(isPinned || isEveryoneMessage || mentionsMe || repliesToMe);
 
 	const imageAttachments = $derived(
 		message.attachments.filter(
@@ -161,16 +173,11 @@
 		showActions = false;
 	}
 
-	function handleEditKeydown(event:KeyboardEvent) {
+	function handleEditKeydown(event: KeyboardEvent) {
 		if (event.key === 'Escape') cancelEdit();
-		if (
-		event.key === 'Enter' &&
-			!event.shiftKey &&
-			!event.isComposing &&
-			!isMobile()
-		) {
-		event.preventDefault();
-		doEdit();
+		if (event.key === 'Enter' && !event.shiftKey && !event.isComposing && !isMobile()) {
+			event.preventDefault();
+			doEdit();
 		}
 	}
 	function cancelEdit(): void {
@@ -226,6 +233,13 @@
 	onpointerenter={onEnter}
 	onpointerleave={onLeave}
 >
+	{#if grouped}
+		<div class="avatar-spacer" aria-hidden="true">
+			<span class="grouped-time" title={formatTime(message.created_at, true)}>
+				{formatTime(message.created_at, true)}
+			</span>
+		</div>
+	{:else}
 		<Avatar
 			user={author}
 			userId={message.author_id}
@@ -235,25 +249,28 @@
 				if (author) openProfile(author);
 			}}
 		/>
-		<div class="content">
-			<div class="meta">
-		<button
-			class="name"
-			style={roleColor ? `color:${roleColor}` : undefined}
-			aria-label={author ? `Ver perfil de ${name}` : undefined}
-			onclick={() => {
-			if (author) openProfile(author);
-		}}
-	>
-		{name}
-		</button>
+	{/if}
+	<div class="content">
+		<div class="meta">
+			{#if !grouped}
+				<button
+					class="name"
+					style={roleColor ? `color:${roleColor}` : undefined}
+					aria-label={author ? `Ver perfil de ${name}` : undefined}
+					onclick={() => {
+						if (author) openProfile(author);
+					}}
+				>
+					{name}
+				</button>
 
-			<span class="time">
-				{formatTime(message.created_at)}
-				{#if message.edited_at}
-					<span class="edited">· editado</span>
-				{/if}
-			</span>
+				<span class="time">
+					{formatTime(message.created_at)}
+					{#if message.edited_at}
+						<span class="edited">· editado</span>
+					{/if}
+				</span>
+			{/if}
 
 			{#if message.reply_to}
 				{#if replyAuthor}
@@ -267,7 +284,9 @@
 						{replyAuthor.nickname || replyAuthor.username}
 
 						{#if replyPreviewText}
-							<span class="reply-preview-text">{replyPreviewText}</span>
+							<span class="reply-preview-text">
+								<LightFormattedMessage content={replyPreviewText} />
+							</span>
 						{/if}
 					</button>
 				{:else}
@@ -305,12 +324,7 @@
 						{/if}
 
 						{#if canPin && !isPinned}
-							<button
-								class="act-btn"
-								type="button"
-								title="Fixar mensagem"
-								onclick={togglePin}
-							>
+							<button class="act-btn" type="button" title="Fixar mensagem" onclick={togglePin}>
 								<Icon name="push-pin" variant="light" />
 							</button>
 						{/if}
@@ -322,12 +336,7 @@
 						{/if}
 
 						{#if canDelete}
-							<button
-								class="act-btn"
-								type="button"
-								title="Excluir"
-								onclick={startDelete}
-							>
+							<button class="act-btn" type="button" title="Excluir" onclick={startDelete}>
 								<Icon name="trash" variant="light" />
 							</button>
 						{/if}
@@ -335,15 +344,15 @@
 				</div>
 			{/if}
 		</div>
-			{#if isEditing}
-				<div class="bubble">
-					<form
-						class="edit-form"
-						onsubmit={(e) => {
-							e.preventDefault();
-							doEdit();
-						}}
-					>
+		{#if isEditing}
+			<div class="bubble" class:bubblegrouped={grouped}>
+				<form
+					class="edit-form"
+					onsubmit={(e) => {
+						e.preventDefault();
+						doEdit();
+					}}
+				>
 					<textarea
 						class="edit-input"
 						bind:value={editText}
@@ -352,69 +361,72 @@
 						autofocus
 						onkeydown={handleEditKeydown}
 					/>
-					</form>
-					<button class="confirm-btn" type="button" onclick={doEdit}> Enviar </button>
-				</div>
-			{:else if message.content}
-				<div class="bubble {goldHighlight ? 'pinned' : ''}" class:giphy-bubble={isGiphyMessage}>
-					<FormattedMessage content={message.content} allowEveryoneHighlight={authorCanEveryone} />
-				</div>
-				{#if message.embeds.length}
-					{#each message.embeds as embed (embed.id)}
-						<EmbedCard {embed} />
-					{/each}
-				{/if}
-			{:else if message.embeds.length}
+				</form>
+				<button class="confirm-btn" type="button" onclick={doEdit}> Enviar </button>
+			</div>
+		{:else if message.content}
+			<div class="bubble {goldHighlight ? 'pinned' : ''} {!groupLast ? 'bubblegrouped': ''}" class:giphy-bubble={isGiphyMessage}>
+				<FormattedMessage content={message.content} allowEveryoneHighlight={authorCanEveryone} />
+			</div>
+			{#if message.embeds.length}
 				{#each message.embeds as embed (embed.id)}
-					<EmbedCard {embed} />
+					<EmbedCard embed={embed} grouped = {grouped} />
 				{/each}
 			{/if}
+		{:else if message.embeds.length}
+			{#each message.embeds as embed (embed.id)}
+				<EmbedCard embed={embed} grouped = {grouped} />
+			{/each}
+		{/if}
 
-			<!-- Multiple images use a compact Discord-like mosaic. Non-image
+		<!-- Multiple images use a compact Discord-like mosaic. Non-image
 			     attachments keep their existing vertical layout below it. -->
-			{#if imageAttachments.length > 1}
-				<div class="attachment-grid {imageTileClass}" data-count={imageTileCount}>
-					{#each imageAttachments as a, index (a.id)}
-						<div class="attachment-tile tile-{index + 1}">
-							<Attachment attachment={a} pinned={goldHighlight} tiled />
-						</div>
-					{/each}
-				</div>
-			{:else if imageAttachments.length === 1}
-				<Attachment attachment={imageAttachments[0]} pinned={goldHighlight} />
-			{/if}
-
-			{#if otherAttachments.length}
-				{#each otherAttachments as a (a.id)}
-					<Attachment attachment={a} pinned={goldHighlight} />
+		{#if imageAttachments.length > 1}
+			<div class="attachment-grid {imageTileClass}" data-count={imageTileCount}>
+				{#each imageAttachments as a, index (a.id)}
+					<div class="attachment-tile tile-{index + 1}">
+						<Attachment attachment={a} pinned={goldHighlight} tiled />
+					</div>
 				{/each}
-			{/if}
+			</div>
+		{:else if imageAttachments.length === 1}
+			<Attachment attachment={imageAttachments[0]} pinned={goldHighlight} />
+		{/if}
 
-			{#if showDeleteConfirm}
-				<div class="delete-confirm" role="alert">
-					<span>Excluir mensagem?</span>
-					<button
-						bind:this={deleteButton}
-						class="confirm-btn danger"
-						type="button"
-						disabled={deleting}
-						onclick={doDelete}
-					>
-						{deleting ? 'Excluindo…' : 'Excluir'}
-					</button>
-					<button class="confirm-btn" type="button" onclick={cancelDelete} disabled={deleting}> Cancelar </button>
-				</div>
-			{:else}
-				{#if message.reactions.length || canReply}
-					<Reactions
-						messageId={message.id}
-						channelId={message.channel_id}
-						reactions={message.reactions}
-						userReactions={message.user_reactions}
-					/>
-				{/if}
+		{#if otherAttachments.length}
+			{#each otherAttachments as a (a.id)}
+				<Attachment attachment={a} pinned={goldHighlight} />
+			{/each}
+		{/if}
+
+		{#if showDeleteConfirm}
+			<div class="delete-confirm" role="alert">
+				<span>Excluir mensagem?</span>
+				<button
+					bind:this={deleteButton}
+					class="confirm-btn danger"
+					type="button"
+					disabled={deleting}
+					onclick={doDelete}
+				>
+					{deleting ? 'Excluindo…' : 'Excluir'}
+				</button>
+				<button class="confirm-btn" type="button" onclick={cancelDelete} disabled={deleting}>
+					Cancelar
+				</button>
+			</div>
+		{:else}
+			{#if message.reactions.length || (canReply && groupLast)}
+				<Reactions
+					messageId={message.id}
+					channelId={message.channel_id}
+					reactions={message.reactions}
+					userReactions={message.user_reactions}
+					showAdd={groupLast}
+				/>
 			{/if}
-		</div>
+		{/if}
+	</div>
 </article>
 
 <style>
@@ -473,7 +485,6 @@
 		min-width: 0;
 		animation: message-enter 180ms ease;
 	}
-
 
 	.attachment-grid {
 		display: grid;
@@ -583,6 +594,34 @@
 
 	.edited {
 		color: var(--muted-soft);
+	}
+
+	/* Agrupamento: spacer no lugar do avatar para alinhar o conteúdo. */
+	.avatar-spacer {
+		position: relative;
+		width: 39px;
+		flex-shrink: 0;
+	}
+
+	/* Hora discreta nas mensagens agrupadas: no gutter do avatar, aparece
+	   no hover/foco da mensagem (não desloca o conteúdo). */
+	.grouped-time {
+		position: absolute;
+		top: 12px;
+		left: 0;
+		width: 39px;
+		text-align: center;
+		color: var(--muted);
+		font-size: 11px;
+		line-height: 1.4;
+		white-space: nowrap;
+		opacity: 0;
+		transition: opacity 120ms ease;
+	}
+
+	.message:hover .grouped-time,
+	.message:focus-within .grouped-time {
+		opacity: 1;
 	}
 
 	.message-actions {

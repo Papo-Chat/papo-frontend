@@ -12,6 +12,7 @@
 	import { allEmojis, type EmojiOption } from '$lib/utils/emojis';
 	import { blobToUrl } from '$lib/utils/media';
 	import { PUBLIC_GIPHY_API_KEY } from '$lib/env';
+	import { isMobileUi } from '$lib/store/performance.svelte';
 	import Icon from './Icon.svelte';
 
 	let {
@@ -313,6 +314,7 @@
 				placeholder={tab === 'gif' ? 'Buscar GIFs…' : 'Filtrar emojis…'}
 				aria-label={tab === 'gif' ? 'Buscar GIFs' : 'Filtrar emojis'}
 				value={filter}
+				autofocus={!isMobileUi()}
 				oninput={onFilterInput}
 			/>
 			<button class="popover-close" onclick={close} aria-label="Fechar">

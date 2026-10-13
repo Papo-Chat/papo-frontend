@@ -2,6 +2,7 @@
 	// Roles: list + create. Data: rolesStore (roles) + usersStore (member counts).
 	import * as rolesStore from '$lib/store/roles.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
+	import { isMobileUi } from '$lib/store/performance.svelte';
 	import type { Role, RolePermissions } from '$lib/types';
 	import Icon from '$lib/components/Icon.svelte';
 
@@ -101,6 +102,7 @@
 				placeholder="Nome do Role"
 				bind:value={name}
 				aria-label="Nome do Role"
+				autofocus={!isMobileUi()}
 			/>
 			<div class="color-pick">
 				<input class="color-input" type="color" bind:value={color} aria-label="Cor do Role" />

@@ -28,6 +28,7 @@ afterEach(() => {
 describe('re-entering a mobile channel', () => {
  it('reuses already-loaded history, including while older pagination is loading', async () => {
   const list = vi.spyOn(api.messages, 'list').mockResolvedValue({
+   channel_id: 'channel-1',
    messages: [], has_more: false
   });
   await messages.ensureLoaded('channel-1');
@@ -44,6 +45,7 @@ describe('re-entering a mobile channel', () => {
 
  it('deduplicates simultaneous first loads', async () => {
   const list = vi.spyOn(api.messages, 'list').mockResolvedValue({
+   channel_id: 'channel-1',
    messages: [], has_more: false
   });
   await Promise.all([
