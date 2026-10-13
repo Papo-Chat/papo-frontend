@@ -236,11 +236,7 @@
 	onpointerleave={onLeave}
 >
 	{#if grouped}
-		<div class="avatar-spacer" aria-hidden="true">
-			<span class="grouped-time" title={formatTime(message.created_at, true)}>
-				{formatTime(message.created_at, true)}
-			</span>
-		</div>
+
 	{:else}
 		<Avatar
 			user={author}
@@ -266,7 +262,12 @@
 					{name}
 				</button>
 
-
+				<span class="time">
+					{formatTime(message.created_at)}
+					{#if message.edited_at}
+						<span class="edited">· editado</span>
+					{/if}
+				</span>
 			{/if}
 
 			{#if message.reply_to}
