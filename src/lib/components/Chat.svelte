@@ -805,6 +805,10 @@
 				<div
 					class:message-enter={m.id === animatedMessageId}
 					class:message-target-highlight={m.id === highlightMessageId}
+					class:message-group-end-no-reactions={
+						(index === messages.length - 1 || !groupedFlags[index + 1]) &&
+						m.reactions.length === 0
+					}
 				>
 					<Message
 						message={m}
@@ -955,6 +959,12 @@
 	}
 	:global(html[data-ui-flat]) .return-recent {
 		box-shadow: none;
+	}
+
+	/* Leave a line below reaction-free group ends for the floating button,
+	   so it cannot overlap the next group's nickname/time row. */
+	.message-group-end-no-reactions {
+		margin-bottom: 30px;
 	}
 
 	.message-target-highlight {
