@@ -266,12 +266,7 @@
 					{name}
 				</button>
 
-				<span class="time">
-					{formatTime(message.created_at)}
-					{#if message.edited_at}
-						<span class="edited">· editado</span>
-					{/if}
-				</span>
+
 			{/if}
 
 			{#if message.reply_to}
