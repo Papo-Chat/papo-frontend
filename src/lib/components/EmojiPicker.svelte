@@ -50,6 +50,7 @@
 
 	let cardEl: HTMLElement | null = null;
 	let filterEl: HTMLInputElement | null = null;
+	let focusFrame: number | null = null;
 	let filter = $state('');
 	let tab = $state<'emoji' | 'gif'>('emoji');
 	let gifs = $state<GiphyGif[]>([]);
@@ -146,11 +147,27 @@
 		}
 	}
 
+	function focusSearchAfterRender(): void {
+		if (isMobileUi()) return;
+
+		void tick().then(() => {
+			if (focusFrame !== null) cancelAnimationFrame(focusFrame);
+			focusFrame = requestAnimationFrame(() => {
+				focusFrame = requestAnimationFrame(() => {
+					focusFrame = null;
+					if (open && !isMobileUi()) {
+						filterEl?.focus({ preventScroll: true });
+					}
+				});
+			});
+		});
+	}
+
 	function selectTab(next: 'emoji' | 'gif'): void {
 		tab = next;
 		filter = '';
 		if (next === 'gif' && gifs.length === 0) void loadGifs();
-		if (!isMobileUi()) void tick().then(() => filterEl?.focus());
+		focusSearchAfterRender();
 	}
 
 	function customEmojiSrc(opt: Extract<EmojiOption, { kind: 'custom' }>): string {
@@ -168,18 +185,27 @@
 		}, 280);
 	}
 
-	// Fresh start each time the picker opens.
+	// Fresh start each time the picker opens; focus only after the input has
+	// mounted and the trigger's native click focus has completed.
 	$effect(() => {
 		if (open) {
 			filter = '';
 			tab = 'emoji';
 			gifsError = '';
-			if (!isMobileUi()) void tick().then(() => filterEl?.focus());
+			focusSearchAfterRender();
+		} else if (focusFrame !== null) {
+			cancelAnimationFrame(focusFrame);
+			focusFrame = null;
 		}
+
 		return () => {
 			if (gifDebounce) {
 				clearTimeout(gifDebounce);
 				gifDebounce = null;
+			}
+			if (focusFrame !== null) {
+				cancelAnimationFrame(focusFrame);
+				focusFrame = null;
 			}
 		};
 	});
