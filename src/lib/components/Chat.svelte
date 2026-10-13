@@ -810,7 +810,7 @@
 						message={m}
 						groupFirst={index === 0 || !groupedFlags[index]}
 						grouped={groupedFlags[index]}
-						groupLast={index === messages.length - 1 || !groupedFlags[index + 1]}
+						isLastMessage={index === messages.length - 1}
 						onReply={(msg) => onReply?.(msg)}
 					/>
 				</div>
