@@ -368,7 +368,8 @@
 		position: relative;
 		display: inline-flex;
 		align-items: center;
-		margin-left: 2px;
+		margin-left: 3px;
+		margin-top: 4px
 	}
 
 	.add-react {
