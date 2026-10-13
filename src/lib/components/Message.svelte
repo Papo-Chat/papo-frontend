@@ -236,7 +236,11 @@
 	onpointerleave={onLeave}
 >
 	{#if grouped}
-
+		<div class="avatar-spacer" aria-hidden="true">
+			<span class="grouped-time" title={formatTime(message.created_at, true)}>
+				{formatTime(message.created_at, true)}
+			</span>
+		</div>
 	{:else}
 		<Avatar
 			user={author}
