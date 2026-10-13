@@ -26,6 +26,7 @@
 		message,
 		grouped = false,
 		groupLast = true,
+		groupFirst = false,
 		onReply
 	} = $props<{
 		message: MessageWithAttachment;
@@ -35,6 +36,7 @@
 		// Última mensagem do grupo: único ponto onde o botão de adicionar
 		// reação aparece.
 		groupLast?: boolean;
+		groupFirst?:boolean;
 		onReply?: (message: MessageWithAttachment) => void;
 	}>();
 
@@ -370,12 +372,12 @@
 			</div>
 			{#if message.embeds.length}
 				{#each message.embeds as embed (embed.id)}
-					<EmbedCard embed={embed} grouped = {!groupLast} />
+					<EmbedCard embed={embed} grouped = {!groupLast && !groupFirst} />
 				{/each}
 			{/if}
 		{:else if message.embeds.length}
 			{#each message.embeds as embed (embed.id)}
-				<EmbedCard embed={embed} grouped = {!groupLast} />
+				<EmbedCard embed={embed} grouped = {!groupLast && !groupFirst} />
 			{/each}
 		{/if}
 
@@ -416,7 +418,7 @@
 				</button>
 			</div>
 		{:else}
-			{#if message.reactions.length && (canReply && groupLast)}
+			{#if groupLast && (message.reactions.length || canReply)}
 				<Reactions
 					messageId={message.id}
 					channelId={message.channel_id}
