@@ -52,6 +52,7 @@
 
 	let inputEl: HTMLTextAreaElement | null = null;
 	let fileInput: HTMLInputElement | null = null;
+	let focusRequestedChannelId: string | null = null;
 
 	let files = $state<File[]>([]);
 	let progress = $state(0);
@@ -396,16 +397,34 @@
 		closeMentions();
 		closeEmojiAutocomplete();
 		resetInputHeight();
+	});
 
-		if (nextChannel && !isMobileUi()) {
-			void tick().then(() => inputEl?.focus());
-		}
+	// Focus after the channel has finished loading and the textarea is enabled.
+	// Tracking disabled matters because channels initially render while their
+	// message store is still being initialized.
+	$effect(() => {
+		const activeChannelId = channelId ?? null;
+		const isDisabled = disabled;
+		const mobile = isMobileUi();
+		if (!activeChannelId || isDisabled || mobile) return;
+		if (focusRequestedChannelId === activeChannelId) return;
+
+		focusRequestedChannelId = activeChannelId;
+		void tick().then(() => {
+			if (
+				channelId === activeChannelId &&
+				!disabled &&
+				!isMobileUi()
+			) {
+				inputEl?.focus({ preventScroll: true });
+			}
+		});
 	});
 
 	$effect(() => {
 		const pickerOpen = desktopEmojiOpen;
 		if (pickerOpen || isMobileUi()) return;
-		void tick().then(() => inputEl?.focus());
+		void tick().then(() => inputEl?.focus({ preventScroll: true }));
 	});
 
 	$effect(() => {
