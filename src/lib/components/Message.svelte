@@ -25,7 +25,7 @@
 	let {
 		message,
 		grouped = false,
-		groupLast = true,
+		isLastMessage = false,
 		groupFirst = false,
 		onReply
 	} = $props<{
@@ -33,10 +33,9 @@
 		// Mensagem do mesmo autor dentro da janela de agrupamento: sem
 		// avatar/nome/hora (estilo Discord).
 		grouped?: boolean;
-		// Última mensagem do grupo: único ponto onde o botão de adicionar
-		// reação aparece.
-		groupLast?: boolean;
-		groupFirst?:boolean;
+		// Mantém o botão de reação sempre visível na mensagem mais recente.
+		isLastMessage?: boolean;
+		groupFirst?: boolean;
 		onReply?: (message: MessageWithAttachment) => void;
 	}>();
 
@@ -431,7 +430,7 @@
 			</div>
 		{/if}
 		{#if canReply}
-			<div class="message-reaction-add" class:always-visible={groupLast}>
+			<div class="message-reaction-add" class:always-visible={isLastMessage}>
 				<Reactions
 					messageId={message.id}
 					channelId={message.channel_id}
@@ -570,6 +569,10 @@
 		margin-top: 4px;
 	}
 
+	.message-reactions :global(.reactions) {
+		margin-top: 0;
+	}
+
 	.message-reaction-add {
 		position: absolute;
 		top: 0;
@@ -579,6 +582,13 @@
 		pointer-events: none;
 		transform: translateY(-50%);
 		transition: opacity 120ms ease;
+	}
+
+	.message-reaction-add :global(.reactions) {
+		width: auto;
+		margin-top: 0;
+		flex-wrap: nowrap;
+		gap: 0;
 	}
 
 	.message:hover .message-reaction-add,
