@@ -808,7 +808,7 @@
 				>
 					<Message
 						message={m}
-						groupFirst={groupedFlags[index] && !groupedFlags[index - 1]}
+						groupFirst={index === 0 || !groupedFlags[index]}
 						grouped={groupedFlags[index]}
 						groupLast={index === messages.length - 1 || !groupedFlags[index + 1]}
 						onReply={(msg) => onReply?.(msg)}

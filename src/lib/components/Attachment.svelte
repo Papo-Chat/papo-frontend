@@ -149,7 +149,7 @@
 	<!-- Imagem: thumbnail inline; o clique abre o original em lightbox (in-app). -->
 	<button
 		type="button"
-		class="attachment-image {!grouped ? 'bubblegrouped': ''}"
+		class="attachment-image {grouped ? 'bubblegrouped': ''}"
 		class:tiled
 		aria-label={`Abrir ${name} em tela cheia`}
 		onclick={openLightbox}
