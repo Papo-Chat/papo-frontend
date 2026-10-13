@@ -417,15 +417,29 @@
 					Cancelar
 				</button>
 			</div>
-		{:else}
-			<!--{#if message.reactions.length || canReply}
+		{/if}
+
+		{#if message.reactions.length}
+			<div class="message-reactions">
 				<Reactions
 					messageId={message.id}
 					channelId={message.channel_id}
 					reactions={message.reactions}
 					userReactions={message.user_reactions}
+					showAdd={false}
 				/>
-			{/if} -->
+			</div>
+		{/if}
+		{#if canReply}
+			<div class="message-reaction-add" class:always-visible={groupLast}>
+				<Reactions
+					messageId={message.id}
+					channelId={message.channel_id}
+					reactions={[]}
+					userReactions={[]}
+					showAdd
+				/>
+			</div>
 		{/if}
 	</div>
 </article>
@@ -540,12 +554,49 @@
 	}
 
 	.content {
+		position: relative;
 		flex: 1;
 		width: 100%;
 		max-width: 100%;
 		min-width: 0;
 		overflow-x: clip;
 		overflow-y: visible;
+	}
+
+	.message-reactions {
+		display: flex;
+		width: 100%;
+		min-width: 0;
+		margin-top: 4px;
+	}
+
+	.message-reaction-add {
+		position: absolute;
+		top: 0;
+		right: 8px;
+		z-index: 6;
+		opacity: 0;
+		pointer-events: none;
+		transform: translateY(-50%);
+		transition: opacity 120ms ease;
+	}
+
+	.message:hover .message-reaction-add,
+	.message:focus-within .message-reaction-add,
+	.message-reaction-add.always-visible {
+		opacity: 1;
+		pointer-events: auto;
+	}
+
+	@media (hover: none), (pointer: coarse) {
+		.message-reaction-add {
+			opacity: 0;
+			pointer-events: none;
+		}
+		.message-reaction-add.always-visible {
+			opacity: 1;
+			pointer-events: auto;
+		}
 	}
 
 	.bubble.giphy-bubble {
