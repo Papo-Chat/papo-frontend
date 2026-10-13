@@ -11,11 +11,18 @@
 	import EmojiPicker from './EmojiPicker.svelte';
 	import ReactionUsersPopover from './ReactionUsersPopover.svelte';
 
-	let { reactions, userReactions, messageId, channelId } = $props<{
+	let {
+		reactions,
+		userReactions,
+		messageId,
+		channelId,
+		showAdd = true
+	} = $props<{
 		reactions: MessageReactionSummary[];
 		userReactions: MessageUserReaction[];
 		messageId: string;
 		channelId: string;
+		showAdd?: boolean;
 	}>();
 
 	const reactionKey = (emojiId: string | null, unicode: string | null) =>
@@ -320,20 +327,22 @@
 		</span>
 	{/each}
 
-	<div class="reaction-add-wrap">
-		<button
-			class="react add-react"
-			title="Adicionar reação"
-			aria-label="Adicionar reação"
-			onclick={() => (emojiOpen = !emojiOpen)}
-		>
-			<Icon name="smiley" variant="light" />
-		</button>
+	{#if showAdd}
+		<div class="reaction-add-wrap">
+			<button
+				class="react add-react"
+				title="Adicionar reação"
+				aria-label="Adicionar reação"
+				onclick={() => (emojiOpen = !emojiOpen)}
+			>
+				<Icon name="smiley" variant="light" />
+			</button>
 
-		{#if emojiOpen}
-			<EmojiPicker bind:open={emojiOpen} {onPick} />
-		{/if}
-	</div>
+			{#if emojiOpen}
+				<EmojiPicker bind:open={emojiOpen} {onPick} />
+			{/if}
+		</div>
+	{/if}
 </div>
 
 <style>
