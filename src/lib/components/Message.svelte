@@ -25,7 +25,7 @@
 	let {
 		message,
 		grouped = false,
-		isLastMessage = false,
+		groupLast = false,
 		groupFirst = false,
 		onReply
 	} = $props<{
@@ -33,8 +33,8 @@
 		// Mensagem do mesmo autor dentro da janela de agrupamento: sem
 		// avatar/nome/hora (estilo Discord).
 		grouped?: boolean;
-		// Mantém o botão de reação sempre visível na mensagem mais recente.
-		isLastMessage?: boolean;
+		// Última mensagem do grupo: mantém o botão de reação visível.
+		groupLast?: boolean;
 		groupFirst?: boolean;
 		onReply?: (message: MessageWithAttachment) => void;
 	}>();
@@ -229,6 +229,8 @@
 
 <article
 	class="message"
+	class:grouped-message={grouped}
+	class:group-last-message={groupLast}
 	data-message-id={message.id}
 	bind:this={messageEl}
 	onpointerenter={onEnter}
@@ -302,17 +304,8 @@
 				{/if}
 			{/if}
 
-			{#if showActions || isPinned || (isLastMessage && canReply)}
+			{#if showActions || isPinned}
 				<div class="message-actions" role="toolbar">
-					{#if canReply && (showActions || isLastMessage)}
-						<Reactions
-							messageId={message.id}
-							channelId={message.channel_id}
-							reactions={[]}
-							userReactions={[]}
-							showAdd
-						/>
-					{/if}
 					{#if isPinned}
 						<button
 							class="act-btn pinned-action"
@@ -438,6 +431,17 @@
 				/>
 			</div>
 		{/if}
+		{#if canReply}
+			<div class="message-reaction-add" class:always-visible={groupLast}>
+				<Reactions
+					messageId={message.id}
+					channelId={message.channel_id}
+					reactions={[]}
+					userReactions={[]}
+					showAdd
+				/>
+			</div>
+		{/if}
 	</div>
 </article>
 
@@ -452,6 +456,16 @@
 		padding: 1px 8px;
 		border-radius: 10px;
 		position: relative;
+	}
+
+	/* Espaço vertical na linha superior de cada grupo, alinhando avatar e meta. */
+	.message:not(.grouped-message) > :global(.avatar) {
+		margin-top: 5px;
+	}
+
+	.message:not(.grouped-message) .meta {
+		margin-top: 5px;
+		margin-bottom: 7px;
 	}
 
 	.message.gold-highlight {
@@ -571,6 +585,44 @@
 		margin-top: 0;
 	}
 
+	/* Botão flutuante abaixo do conteúdo, sem entrar no fluxo da mensagem. */
+	.message-reaction-add {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		z-index: 6;
+		opacity: 0;
+		pointer-events: none;
+		transform: translateY(2px);
+		transition: opacity 120ms ease, transform 120ms ease;
+	}
+
+	.message-reaction-add :global(.reactions) {
+		width: auto;
+		margin-top: 0;
+		flex-wrap: nowrap;
+		gap: 0;
+	}
+
+	.message:hover .message-reaction-add,
+	.message:focus-within .message-reaction-add,
+	.message-reaction-add.always-visible {
+		opacity: 1;
+		pointer-events: auto;
+		transform: translateY(0);
+	}
+
+	@media (hover: none), (pointer: coarse) {
+		.message-reaction-add {
+			opacity: 0;
+			pointer-events: none;
+		}
+
+		.message-reaction-add.always-visible {
+			opacity: 1;
+			pointer-events: auto;
+		}
+	}
 
 	.bubble.giphy-bubble {
 		display: inline-flex;
