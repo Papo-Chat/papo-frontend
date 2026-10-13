@@ -430,18 +430,19 @@
 					showAdd={canReply && (showActions || groupLast)}
 				/>
 			</div>
-		{:else if canReply && (showActions || groupLast)}
-			<div class="message-reaction-add-float">
-				<Reactions
-					messageId={message.id}
-					channelId={message.channel_id}
-					reactions={[]}
-					userReactions={[]}
-					showAdd
-				/>
-			</div>
 		{/if}
 	</div>
+	{#if !message.reactions.length && canReply && (showActions || groupLast)}
+		<div class="message-reaction-add-float">
+			<Reactions
+				messageId={message.id}
+				channelId={message.channel_id}
+				reactions={[]}
+				userReactions={[]}
+				showAdd
+			/>
+		</div>
+	{/if}
 </article>
 
 <style>
