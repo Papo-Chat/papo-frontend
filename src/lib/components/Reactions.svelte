@@ -277,7 +277,7 @@
 	}
 </script>
 
-<div class="reactions" role="list">
+<div class="reactions" class:add-only={showAdd && reactions.length === 0} role={reactions.length ? 'list' : undefined}>
 	{#each reactions as r (r.unicode ?? r.emoji_id)}
 		<span
 			class="reaction-group"
@@ -355,6 +355,13 @@
 	button.react i {
 		font-size: 16px;
 		line-height: 1;
+	}
+
+	.reactions.add-only {
+		width: auto;
+		margin: 0;
+		flex-wrap: nowrap;
+		gap: 0;
 	}
 
 	.reaction-add-wrap {
