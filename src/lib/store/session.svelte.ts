@@ -17,6 +17,7 @@ import * as dmsStore from '../store/dms.svelte';
 import * as blocksStore from '../store/blocks.svelte';
 import * as notificationsStore from '../store/notifications.svelte';
 import * as emojisStore from '../store/emojis.svelte';
+import * as webhooksStore from '../store/webhooks.svelte';
 import * as serverStore from '../store/server.svelte';
 import * as websocketStore from '../store/websocket.svelte';
 import * as voiceStore from '../store/voice.svelte';
@@ -196,6 +197,7 @@ export function clearLocalSession(): void {
 	usersReset();
 	rolesReset();
 	emojisStore.reset();
+	webhooksStore.reset();
 }
 
 export async function setStatus(status: 'away' | 'busy' | null): Promise<void> {

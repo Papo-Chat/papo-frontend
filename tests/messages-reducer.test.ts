@@ -137,6 +137,27 @@ describe('wsMessageToMsg', () => {
 		const m = wsMessageToMsg(ev);
 		expect(m.attachments).toHaveLength(1);
 	});
+
+	// Webhook envia author_id vazio + webhook_id/external_author (MessageOutbound).
+	it('carries webhook attribution and normalizes empty author_id to null', () => {
+		const ev = wsMsg('m1', {
+			author_id: '',
+			webhook_id: 'w1',
+			external_author: { source: 'papo', id: 'w1', name: 'Bot', avatar_url: '/webhooks/w1/avatar' }
+		});
+		const m = wsMessageToMsg(ev);
+		expect(m.author_id).toBeNull();
+		expect(m.webhook_id).toBe('w1');
+		expect(m.external_author?.name).toBe('Bot');
+		expect(m.external_author?.avatar_url).toBe('/webhooks/w1/avatar');
+	});
+
+	it('human messages keep author_id and have no webhook attribution', () => {
+		const m = wsMessageToMsg(wsMsg('m1'));
+		expect(m.author_id).toBe('u1');
+		expect(m.webhook_id).toBeNull();
+		expect(m.external_author).toBeNull();
+	});
 });
 
 // ── applyEvent(message): append / dedupe / sort ──────────

@@ -197,7 +197,9 @@ export function wsMessageToMsg(m: WsMessage): MessageWithAttachment {
 	return {
 		id: m.id,
 		channel_id: m.channel_id,
-		author_id: m.author_id,
+		// Webhook envia author_id vazio: normaliza para null (mesma forma do
+		// REST) para não quebrar agrupamento/lookup de autor.
+		author_id: m.author_id || null,
 		content: m.content,
 		created_at: m.created_at,
 		edited_at: null,
@@ -205,7 +207,9 @@ export function wsMessageToMsg(m: WsMessage): MessageWithAttachment {
 		attachments: m.attachments ?? [],
 		embeds: [],
 		reactions: [],
-		user_reactions: []
+		user_reactions: [],
+		webhook_id: m.webhook_id ?? null,
+		external_author: m.external_author ?? null
 	};
 }
 

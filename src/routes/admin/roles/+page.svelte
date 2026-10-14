@@ -54,6 +54,7 @@
 					manage_server: false,
 					manage_channels: false,
 					manage_roles: false,
+					manage_webhooks: false,
 					ban_members: false,
 					pin_message: false,
 					everyone_message: false,

@@ -46,6 +46,22 @@ export function embedVideoUrl(embedId: string): string {
 	return `${apiBase()}/embeds/${encodeURIComponent(embedId)}/video`;
 }
 
+// GET /webhooks/:webhook_id/avatar — avatar persistente do webhook (público,
+// sem cookie, como o avatar de usuário).
+export function webhookAvatarUrl(webhookId: string): string {
+	return `${apiBase()}/webhooks/${encodeURIComponent(webhookId)}/avatar`;
+}
+
+// Resolve o avatar_url de um external_author: caminhos do backend (ex.:
+// /webhooks/<id>/avatar do avatar persistente) são resolvidos contra a origem
+// da API; URLs absolutas externas (CDN de origem) passam intactas.
+export function resolveExternalAvatarUrl(url: string): string {
+	if (url.startsWith('/')) {
+		return `${apiBase()}${url}`;
+	}
+	return url;
+}
+
 // GET /attachments/:file_id — full attachment download.
 export function attachmentUrl(id: string): string {
 	return `${apiBase()}/attachments/${encodeURIComponent(id)}`;

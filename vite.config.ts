@@ -28,6 +28,7 @@ const apiPrefixes = [
 	'/messages',
 	'/roles',
 	'/emojis',
+	'/webhooks',
 	'/attachments',
 	'/media',
 	'/embeds',

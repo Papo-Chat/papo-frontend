@@ -260,6 +260,23 @@ export interface CreateEmojiRequest {
 	image_blob: string;
 }
 
+// ── webhooks ───────────────────────────────────────────
+
+export interface CreateWebhookRequest {
+	channel_id: string;
+	name: string;
+}
+
+// Identidade persistente do webhook. Campos ausentes preservam o valor atual;
+// display_name "" remove o nickname; avatar "" remove o avatar.
+export interface UpdateWebhookIdentityRequest {
+	display_name?: string | null;
+	// base64 de um GIF, JPEG/JPG, PNG ou WEBP de até 2MB (mesmas regras do
+	// avatar de usuário).
+	avatar?: string;
+	avatar_format?: string;
+}
+
 // ── search ─────────────────────────────────────────────
 
 export interface SearchRequest {

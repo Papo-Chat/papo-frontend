@@ -1,4 +1,10 @@
-import type { DirectConversation, Embed, MessageAttachment, VoiceState } from './models';
+import type {
+	DirectConversation,
+	Embed,
+	ExternalAuthor,
+	MessageAttachment,
+	VoiceState
+} from './models';
 
 // ── shared ─────────────────────────────────────────────
 
@@ -32,7 +38,8 @@ export type VoiceErrorCode =
 // ── outbound (server → client, 27 types, F24) ──────────
 
 // message — F1: no reactions/embeds/user_reactions (embeds chegam depois, por
-// message_embeds_update).
+// message_embeds_update). webhook_id/external_author presentes somente em
+// mensagens enviadas por webhook (author_id vazio nesse caso).
 export interface WsMessage {
 	type: 'message';
 	id: string;
@@ -42,6 +49,8 @@ export interface WsMessage {
 	created_at: string;
 	reply_to: string | null;
 	attachments?: MessageAttachment[];
+	webhook_id?: string | null;
+	external_author?: ExternalAuthor | null;
 }
 
 // message_edit

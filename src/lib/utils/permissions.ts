@@ -24,6 +24,7 @@ export function myRolePermissions(roles: Role[], isOwner: boolean): RolePermissi
 			manage_server: true,
 			manage_channels: true,
 			manage_roles: true,
+			manage_webhooks: true,
 			ban_members: true,
 			pin_message: true,
 			everyone_message: true,
@@ -35,6 +36,7 @@ export function myRolePermissions(roles: Role[], isOwner: boolean): RolePermissi
 			acc.manage_server = acc.manage_server || role.permissions.manage_server;
 			acc.manage_channels = acc.manage_channels || role.permissions.manage_channels;
 			acc.manage_roles = acc.manage_roles || role.permissions.manage_roles;
+			acc.manage_webhooks = acc.manage_webhooks || role.permissions.manage_webhooks;
 			acc.ban_members = acc.ban_members || role.permissions.ban_members;
 			acc.pin_message = acc.pin_message || role.permissions.pin_message;
 			acc.everyone_message = acc.everyone_message || role.permissions.everyone_message;
@@ -45,6 +47,7 @@ export function myRolePermissions(roles: Role[], isOwner: boolean): RolePermissi
 			manage_server: false,
 			manage_channels: false,
 			manage_roles: false,
+			manage_webhooks: false,
 			ban_members: false,
 			pin_message: false,
 			everyone_message: false,
