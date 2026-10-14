@@ -52,13 +52,18 @@
 	const canManageServer = $derived((!server && !!me) || can('manage_server', adminCtx));
 	const canManageChannels = $derived(can('manage_channels', adminCtx));
 	const canManageRoles = $derived(can('manage_roles', adminCtx));
-	const canOpenAdmin = $derived(canManageServer || canManageChannels || canManageRoles);
+	const canManageWebhooks = $derived(can('manage_webhooks', adminCtx));
+	const canOpenAdmin = $derived(
+		canManageServer || canManageChannels || canManageRoles || canManageWebhooks
+	);
 	const adminRoute = $derived(
 		canManageServer
 			? '/admin/server'
 			: canManageChannels
 				? '/admin/channels'
-				: '/admin/roles'
+				: canManageRoles
+					? '/admin/roles'
+					: '/admin/webhooks'
 	);
 
 	function closeDrawer(): void {

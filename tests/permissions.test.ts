@@ -16,6 +16,7 @@ function allFalse(): RolePermissions {
 		manage_server: false,
 		manage_channels: false,
 		manage_roles: false,
+		manage_webhooks: false,
 		ban_members: false,
 		pin_message: false,
 		everyone_message: false,
@@ -57,6 +58,7 @@ describe('myRolePermissions', () => {
 			manage_server: true,
 			manage_channels: true,
 			manage_roles: true,
+			manage_webhooks: true,
 			ban_members: true,
 			pin_message: true,
 			everyone_message: true,
@@ -80,11 +82,25 @@ describe('myRolePermissions', () => {
 			manage_server: true,
 			manage_channels: true,
 			manage_roles: false,
+			manage_webhooks: false,
 			ban_members: false,
 			pin_message: true,
 			everyone_message: true,
 			send_attachment: false
 		});
+	});
+
+	// manage_webhooks é independente de manage_channels/manage_roles (o
+	// backend aplica RequireManageWebhooks; a união espelha isso).
+	it('manage_webhooks unions independently from the other manage_* flags', () => {
+		const perms = myRolePermissions([makeRole('r1', { manage_webhooks: true })], false);
+		expect(perms.manage_webhooks).toBe(true);
+		expect(perms.manage_channels).toBe(false);
+		expect(perms.manage_roles).toBe(false);
+		expect(
+			can('manage_webhooks', { roles: [makeRole('r1', { manage_webhooks: true })], isOwner: false })
+		).toBe(true);
+		expect(can('manage_webhooks', { roles: [], isOwner: false })).toBe(false);
 	});
 });
 

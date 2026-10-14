@@ -24,6 +24,7 @@ import type {
 	CreateEmojiRequest,
 	CreateRoleRequest,
 	CreateServerRequest,
+	CreateWebhookRequest,
 	DropConnectionRequest,
 	DropConnectionResponse,
 	DirectConversation,
@@ -52,6 +53,7 @@ import type {
 	UpdateAvatarRequest,
 	UpdateBannerRequest,
 	UpdateRoleRequest,
+	UpdateWebhookIdentityRequest,
 	PatchServerRequest,
 	ReplaceServerRequest,
 	UpdateUserRequest,
@@ -68,7 +70,9 @@ import type {
 	AuditLogFilters,
 	Emoji,
 	AuditLogEntry,
-	ICEServer
+	ICEServer,
+	Webhook,
+	WebhookList
 } from './types';
 
 // ── ApiError (RFC 7807) ─────────────────────────────────
@@ -843,6 +847,27 @@ export const emojis = {
 	}
 };
 
+// ── webhooks ───────────────────────────────────────────
+
+export const webhooks = {
+	list(): Promise<Webhook[]> {
+		return request<WebhookList>('/webhooks').then((res) => res.webhooks);
+	},
+	// O token em texto puro aparece somente nesta resposta (única vez).
+	create(req: CreateWebhookRequest): Promise<Webhook & { token: string }> {
+		return request<Webhook & { token: string }>('/webhooks', { method: 'POST', body: req });
+	},
+	updateIdentity(id: string, req: UpdateWebhookIdentityRequest): Promise<Webhook> {
+		return request<Webhook>(`/webhooks/${encodeURIComponent(id)}`, {
+			method: 'PATCH',
+			body: req
+		});
+	},
+	revoke(id: string): Promise<void> {
+		return request<void>(`/webhooks/${encodeURIComponent(id)}`, { method: 'DELETE' });
+	}
+};
+
 // ── search ─────────────────────────────────────────────
 
 export const search = {
@@ -891,6 +916,7 @@ export const api = {
 	embeds,
 	roles,
 	emojis,
+	webhooks,
 	search,
 	admin,
 	voice

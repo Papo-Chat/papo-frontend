@@ -14,6 +14,7 @@
 	import { formatTime } from '$lib/utils/time';
 	import Icon from './Icon.svelte';
 	import Avatar from './Avatar.svelte';
+	import WebhookAvatar from './WebhookAvatar.svelte';
 	import CompactMessageContent from './CompactMessageContent.svelte';
 
 	let {
@@ -85,6 +86,7 @@
 			{#if pinned.length}
 				{#each pinned as m (m.id)}
 					{@const author = usersStore.state.byId.get(m.author_id ?? '')}
+					{@const external = m.webhook_id ? (m.external_author ?? null) : null}
 					<div
 							class="popover-item pin-item"
 							role="button"
@@ -102,10 +104,16 @@
 								}
 							}}
 						>
-							<Avatar user={author} userId={m.author_id} size={34} />
+							{#if external}
+								<WebhookAvatar avatarUrl={external.avatar_url ?? null} size={34} />
+							{:else}
+								<Avatar user={author} userId={m.author_id} size={34} />
+							{/if}
 							<div class="pin-main">
 								<div class="meta">
-									<span class="name">{author?.nickname || author?.username || 'Usuário'}</span>
+									<span class="name">
+										{external?.name || author?.nickname || author?.username || 'Usuário'}
+									</span>
 									<span class="time">{formatTime(m.created_at)}</span>
 								</div>
 								<CompactMessageContent message={m} pinned />

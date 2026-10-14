@@ -17,12 +17,14 @@
 	const canManageServer = $derived(!server && !!me ? true : can('manage_server', ctx));
 	const canManageChannels = $derived(can('manage_channels', ctx));
 	const canManageRoles = $derived(can('manage_roles', ctx));
+	const canManageWebhooks = $derived(can('manage_webhooks', ctx));
 	const canManageUsers = $derived(canManageServer || canManageRoles);
 
 	const nav = $derived([
 		...(canManageServer ? [{ to: '/admin/server', label: 'Servidor', icon: 'server' }] : []),
 		...(canManageChannels ? [{ to: '/admin/channels', label: 'Canais', icon: 'chat' }] : []),
 		...(canManageRoles ? [{ to: '/admin/roles', label: 'Roles', icon: 'shield-check' }] : []),
+		...(canManageWebhooks ? [{ to: '/admin/webhooks', label: 'Webhooks', icon: 'webhook' }] : []),
 		...(canManageServer ? [{ to: '/admin/emojis', label: 'Emojis', icon: 'smiley' }] : []),
 		...(canManageUsers ? [{ to: '/admin/users', label: 'Usuários', icon: 'users-three' }] : []),
 		...(canManageServer ? [{ to: '/admin/audit', label: 'Auditoria', icon: 'magnifying-glass' }] : [])
@@ -32,6 +34,7 @@
 		if (pathname.startsWith('/admin/server')) return canManageServer;
 		if (pathname.startsWith('/admin/channels')) return canManageChannels;
 		if (pathname.startsWith('/admin/roles')) return canManageRoles;
+		if (pathname.startsWith('/admin/webhooks')) return canManageWebhooks;
 		if (pathname.startsWith('/admin/emojis')) return canManageServer;
 		if (pathname.startsWith('/admin/users')) return canManageUsers;
 		if (pathname.startsWith('/admin/audit')) return canManageServer;

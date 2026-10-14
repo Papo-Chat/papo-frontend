@@ -4,6 +4,7 @@ export interface RolePermissions {
 	manage_server: boolean;
 	manage_channels: boolean;
 	manage_roles: boolean;
+	manage_webhooks: boolean;
 	ban_members: boolean;
 	pin_message: boolean;
 	everyone_message: boolean;
@@ -182,6 +183,11 @@ export interface Message {
 	created_at: string;
 	edited_at: string | null;
 	reply_to: string | null;
+	// Presente somente em mensagens enviadas por webhook (author_id é null
+	// nesse caso). external_author é a identidade de exibição (nunca um
+	// usuário do Papo).
+	webhook_id?: string | null;
+	external_author?: ExternalAuthor | null;
 }
 
 export interface MessageWithAttachment extends Message {
@@ -332,6 +338,37 @@ export interface Emoji {
 export interface EmojiList {
 	emojis: Emoji[];
 	has_more: boolean;
+}
+
+// ── webhooks ───────────────────────────────────────────
+
+// Identidade de exibição de uma mensagem de webhook. Não é um usuário do Papo
+// e nunca determina autorização. avatar_url pode ser uma URL absoluta externa
+// (CDN de origem) ou um caminho do backend (avatar persistente do webhook,
+// ex.: /webhooks/<id>/avatar).
+export interface ExternalAuthor {
+	source: string;
+	id: string;
+	name: string;
+	avatar_url?: string | null;
+	profile_url?: string | null;
+}
+
+// Webhook de canal (tabela webhooks). O token em texto puro aparece somente na
+// resposta de criação; display_name null significa "usar o name". O avatar
+// persistente é servido por GET /webhooks/:webhook_id/avatar (público).
+export interface Webhook {
+	id: string;
+	channel_id: string;
+	name: string;
+	display_name: string | null;
+	created_by: string;
+	created_at: string;
+	revoked_at?: string | null;
+}
+
+export interface WebhookList {
+	webhooks: Webhook[];
 }
 
 // ── notifications ──────────────────────────────────────

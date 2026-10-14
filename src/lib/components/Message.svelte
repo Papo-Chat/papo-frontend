@@ -14,6 +14,7 @@
 	import { isImageMime } from '$lib/utils/text';
 	import { isGiphyMarker } from '$lib/utils/giphy';
 	import Avatar from './Avatar.svelte';
+	import WebhookAvatar from './WebhookAvatar.svelte';
 	import Reactions from './Reactions.svelte';
 	import EmbedCard from './EmbedCard.svelte';
 	import Attachment from './Attachment.svelte';
@@ -44,6 +45,10 @@
 	const me = $derived(meId());
 	const isGiphyMessage = $derived(!!message.content && isGiphyMarker(message.content) !== null);
 	const author = $derived(usersStore.state.byId.get(message.author_id ?? ''));
+	// Mensagem de webhook: author_id é null e a identidade de exibição vem de
+	// external_author (nickname/avatar do webhook ou autoria temporária).
+	const isWebhookMessage = $derived(!!message.webhook_id);
+	const externalAuthor = $derived(isWebhookMessage ? (message.external_author ?? null) : null);
 	const channel = $derived(channelsStore.state.byId.get(message.channel_id));
 	const isDirectMessage = $derived(!!dmsStore.state.byId.get(message.channel_id));
 	const isOwner = $derived(!!me && serverState.server?.owner_id === me);
@@ -82,9 +87,16 @@
 		authorCanEveryone && /(^|\s)@everyone\b/i.test(message.content ?? '')
 	);
 
-	const name = $derived(author?.nickname || author?.username || 'Usuário');
+	const name = $derived(
+		externalAuthor?.name ||
+			author?.nickname ||
+			author?.username ||
+			(isWebhookMessage ? 'Webhook' : 'Usuário')
+	);
 	const msgReply = $derived(messagesStore.getMessage(message.channel_id, message.reply_to));
 	const replyAuthor = $derived(usersStore.state.byId.get(msgReply?.author_id ?? ''));
+	// Preview de resposta a mensagem de webhook: identidade vem do external_author.
+	const replyExternal = $derived(msgReply?.webhook_id ? (msgReply.external_author ?? null) : null);
 	const mentionsMe = $derived(!!me && (message.content ?? '').includes(`@mention(<@${me}>)`));
 	const replyPreviewText = $derived(
 		msgReply?.content
@@ -242,6 +254,12 @@
 				{formatTime(message.created_at, true)}
 			</span>
 		</div>
+	{:else if isWebhookMessage}
+		<WebhookAvatar
+			avatarUrl={externalAuthor?.avatar_url ?? null}
+			size={39}
+			ariaLabel={`Mensagem enviada por webhook: ${name}`}
+		/>
 	{:else}
 		<Avatar
 			user={author}
@@ -256,16 +274,20 @@
 	<div class="content">
 		<div class="meta">
 			{#if !grouped}
-				<button
-					class="name"
-					style={roleColor ? `color:${roleColor}` : undefined}
-					aria-label={author ? `Ver perfil de ${name}` : undefined}
-					onclick={() => {
-						if (author) openProfile(author);
-					}}
-				>
-					{name}
-				</button>
+				{#if isWebhookMessage}
+					<span class="name name-static">{name}</span>
+				{:else}
+					<button
+						class="name"
+						style={roleColor ? `color:${roleColor}` : undefined}
+						aria-label={author ? `Ver perfil de ${name}` : undefined}
+						onclick={() => {
+							if (author) openProfile(author);
+						}}
+					>
+						{name}
+					</button>
+				{/if}
 
 				<span class="time">
 					{formatTime(message.created_at)}
@@ -276,15 +298,20 @@
 			{/if}
 
 			{#if message.reply_to}
-				{#if replyAuthor}
+				{#if replyAuthor || replyExternal}
 					<button
 						class="reply-from"
 						type="button"
 						aria-label="Ir para a mensagem original"
 						onclick={jumpToReply}
 					>
-						<Avatar user={replyAuthor} userId={msgReply?.author_id ?? null} size={18} />
-						{replyAuthor.nickname || replyAuthor.username}
+						{#if replyExternal}
+							<WebhookAvatar avatarUrl={replyExternal.avatar_url ?? null} size={18} />
+							{replyExternal.name}
+						{:else}
+							<Avatar user={replyAuthor} userId={msgReply?.author_id ?? null} size={18} />
+							{replyAuthor?.nickname || replyAuthor?.username}
+						{/if}
 
 						{#if replyPreviewText}
 							<span class="reply-preview-text">
@@ -631,6 +658,10 @@
 		padding: 0;
 
 		flex-shrink: 0;
+	}
+	/* Nome de webhook: texto estático (webhook não tem perfil). */
+	.name.name-static {
+		cursor: default;
 	}
 	@keyframes message-enter {
 		to {
