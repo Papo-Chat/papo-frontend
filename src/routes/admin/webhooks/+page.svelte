@@ -34,6 +34,9 @@
 	let removeAvatar = $state(false);
 	// Busting de cache do preview do avatar (o endpoint serve com max-age).
 	let avatarBust = $state(0);
+	// Revogação exige confirmação em dois passos (sem window.confirm, padrão
+	// do projeto): o primeiro clique arma o botão, o segundo executa.
+	let confirmRevokeId = $state<string | null>(null);
 
 	const webhooks = $derived(webhooksStore.state.list);
 	const hookChannels = $derived(
@@ -85,6 +88,7 @@
 		editName = w.display_name ?? '';
 		selectedAvatarFile = null;
 		removeAvatar = false;
+		confirmRevokeId = null;
 		error = null;
 	}
 
@@ -107,7 +111,7 @@
 			} else if (selectedAvatarFile) {
 				const image = await fileToBase64(selectedAvatarFile, 'avatar');
 				req.avatar = image.base64;
-				req.avatar_format = mimeToFormat(image.mime).toLowerCase();
+				req.avatar_format = mimeToFormat(image.mime);
 			}
 			await webhooksStore.updateIdentity(id, req);
 			avatarBust += 1;
@@ -122,7 +126,11 @@
 
 	async function revoke(w: Webhook): Promise<void> {
 		if (saving) return;
-		if (!window.confirm(`Revogar o webhook "${w.name}"? O token deixará de funcionar.`)) return;
+		if (confirmRevokeId !== w.id) {
+			confirmRevokeId = w.id;
+			return;
+		}
+		confirmRevokeId = null;
 		saving = true;
 		error = null;
 		try {
@@ -214,7 +222,7 @@
 
 	{#if loadError}
 		<div class="webhook-error" role="alert">{loadError}</div>
-	{:else if !webhooks.length && !creating}
+	{:else if !webhooks.length && !creating && !webhooksStore.state.loading}
 		<div class="webhooks-empty">
 			<Icon name="webhook" variant="duotone" size={34} />
 			<strong>Nenhum webhook ativo</strong>
@@ -251,7 +259,7 @@
 						</button>
 						<button class="admin-btn danger" onclick={() => revoke(w)} disabled={saving}>
 							<Icon name="trash" variant="light" />
-							Revogar
+							{confirmRevokeId === w.id ? 'Confirmar revogação' : 'Revogar'}
 						</button>
 					</div>
 
