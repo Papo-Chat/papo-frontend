@@ -14,6 +14,7 @@
 	import { PUBLIC_GIPHY_API_KEY } from '$lib/env';
 	import { isMobileUi } from '$lib/store/performance.svelte';
 	import Icon from './Icon.svelte';
+	import ReactionEmoji from './ReactionEmoji.svelte';
 
 	let {
 		open = $bindable(false),
@@ -381,7 +382,7 @@
 						{#each custom as opt (`c-${opt.name}`)}
 							<button class="emoji custom" title={opt.name} onclick={() => pick(opt)}>
 								{#if opt.image_blob}
-									<img src={customEmojiSrc(opt)} alt={opt.name} />
+									<ReactionEmoji unicode={null} emojiId={opt.id} />
 								{:else}
 									<span class="custom-name">{opt.name}</span>
 								{/if}

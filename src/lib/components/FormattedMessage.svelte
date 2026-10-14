@@ -310,13 +310,26 @@
 		border-radius: 4px;
 	}
 
-	:global(.full-emoji) {
-		display: inline;
+	:global(.full-emoji-wrapper) {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		width: 3em;
 		height: 3em;
-		vertical-align: baseline;
+		flex: 0 0 3em;
+		vertical-align: middle;
 		margin: 0 1px;
 		border-radius: 4px;
+	}
+
+	:global(.full-emoji-wrapper > img.full-emoji) {
+		display: block;
+		width: auto !important;
+		height: auto !important;
+		max-width: 100%;
+		max-height: 100%;
+		object-fit: contain;
+		flex: none;
 	}
 	:global(.message-mention) { display: inline; padding: 0.06em 0.3em; border: 0; border-radius: 5px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--link); font: inherit; font-weight: 650; cursor: pointer; }
 	:global(.message-mention:hover) { background: color-mix(in srgb, var(--accent) 24%, transparent); text-decoration: underline; }
