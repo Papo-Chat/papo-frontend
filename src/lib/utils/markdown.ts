@@ -211,11 +211,17 @@ function makeRenderer(
 					// shortcode literal, como o componente original.
 					const url = urlFn(t.emoji);
 					if (url) {
-						return `<img
-							class="${hasText || options.light ? 'inline-emoji' : 'full-emoji'}"
+						const emojiClass = hasText || options.light ? 'inline-emoji' : 'full-emoji';
+
+						const img = `<img
+							class="${emojiClass}"
 							src="${url}"
 							alt="${t.name}"
 							aria-hidden="true" />`;
+
+						return emojiClass === 'full-emoji'
+							? `<span class="full-emoji-wrapper">${img}</span>`
+							: img;
 					}
 					return `:${t.name}:`;
 				}
