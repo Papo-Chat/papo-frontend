@@ -175,18 +175,23 @@
 	{/if}
 
 	{#if issuedToken}
-		<div class="issued-token" role="status">
-			<strong>Token de acesso de "{issuedToken.name}"</strong>
-			<p class="token-warning">
-				Este token aparece <em>uma única vez</em>. Guarde-o agora; não é possível recuperá-lo
-				depois.
-			</p>
-			<div class="token-row">
-				<code class="token-value">{issuedToken.token}</code>
-				<button class="admin-btn" onclick={copyToken}>
-					<Icon name={tokenCopied ? 'check' : 'copy'} variant="light" />
-					{tokenCopied ? 'Copiado' : 'Copiar'}
-				</button>
+		<div class="admin-card issued-token" role="status">
+			<div class="admin-card-head">
+				<Icon name="key" variant="duotone" size={16} />
+				Token de acesso de "{issuedToken.name}"
+			</div>
+			<div class="admin-card-body">
+				<p class="token-warning">
+					Este token aparece <em>uma única vez</em>. Guarde-o agora; não é possível recuperá-lo
+					depois.
+				</p>
+				<div class="token-row">
+					<input class="admin-input token-value" readonly value={issuedToken.token} aria-label="Token do webhook" />
+					<button class="admin-btn" onclick={copyToken}>
+						<Icon name={tokenCopied ? 'check' : 'copy'} variant="light" />
+						{tokenCopied ? 'Copiado' : 'Copiar'}
+					</button>
+				</div>
 			</div>
 		</div>
 	{/if}
@@ -222,105 +227,121 @@
 
 	{#if loadError}
 		<div class="webhook-error" role="alert">{loadError}</div>
-	{:else if !webhooks.length && !creating && !webhooksStore.state.loading}
-		<div class="webhooks-empty">
-			<Icon name="webhook" variant="duotone" size={34} />
-			<strong>Nenhum webhook ativo</strong>
-			<p>Crie um webhook para integrações enviarem mensagens a um canal.</p>
-		</div>
 	{:else}
-		<ul class="webhooks-list">
-			{#each webhooks as w (w.id)}
-				<li class="webhook-item">
-					<div class="webhook-main">
-						<span class="webhook-avatar-wrap">
-							<WebhookAvatar
-								avatarUrl={editingId === w.id ? avatarPreviewUrl(w.id) : webhookAvatarUrl(w.id)}
-								size={36}
-							/>
-						</span>
-						<div class="webhook-info">
-							<div class="webhook-title">
-								<strong>{w.name}</strong>
-								{#if w.display_name}
-									<span class="webhook-display-name">exibe como “{w.display_name}”</span>
-								{/if}
-							</div>
-							<div class="webhook-meta">
-								<span>canal: {channelName(w.channel_id)}</span>
-								<span>criado em {formatTime(w.created_at)}</span>
-							</div>
-						</div>
-					</div>
-					<div class="webhook-controls">
-						<button class="admin-btn ghost" onclick={() => openIdentity(w)} disabled={saving}>
-							<Icon name="identification-card" variant="light" />
-							Identidade
-						</button>
-						<button class="admin-btn danger" onclick={() => revoke(w)} disabled={saving}>
-							<Icon name="trash" variant="light" />
-							{confirmRevokeId === w.id ? 'Confirmar revogação' : 'Revogar'}
-						</button>
-					</div>
-
-					{#if editingId === w.id}
-						<div class="identity-editor">
-							<label class="identity-field">
-								<span>Nickname de exibição</span>
-								<input
-									class="admin-input"
-									placeholder={w.name}
-									bind:value={editName}
-									maxlength="100"
-									aria-label="Nickname de exibição do webhook"
-								/>
-								<small>Vazio usa o nome do webhook.</small>
-							</label>
-							<label class="identity-field">
-								<span>Avatar</span>
-								<input
-									type="file"
-									accept="image/gif,image/jpeg,image/png,image/webp"
-									onchange={onAvatarSelect}
-									aria-label="Imagem do avatar do webhook"
-									aria-describedby="webhook-avatar-limit"
-								/>
-								<small id="webhook-avatar-limit">Máximo: 512 × 512 px, 2MB.</small>
-								{#if removeAvatar}
-									<small class="identity-remove">Avatar será removido ao salvar.</small>
-								{:else}
-									<button
-										type="button"
-										class="admin-btn ghost small"
-										onclick={() => (removeAvatar = true)}
-									>
-										Remover avatar atual
+		<div class="admin-card webhooks-card">
+			<div class="admin-card-head">
+				<Icon name="webhooks-logo" variant="duotone" size={16} />
+				Webhooks ({webhooks.length})
+			</div>
+			<div class="admin-card-body">
+				{#if webhooksStore.state.loading && webhooks.length === 0}
+					<div class="empty">Carregando webhooks…</div>
+				{:else if webhooks.length === 0}
+					<div class="empty">Nenhum webhook ativo. Crie um webhook para integrações enviarem mensagens a um canal.</div>
+				{:else}
+					<ul class="webhooks-list">
+						{#each webhooks as w (w.id)}
+							<li class="webhook-item">
+								<div class="webhook-main">
+									<span class="webhook-avatar-wrap">
+										<WebhookAvatar
+											avatarUrl={editingId === w.id ? avatarPreviewUrl(w.id) : webhookAvatarUrl(w.id)}
+											size={36}
+										/>
+									</span>
+									<div class="webhook-info">
+										<div class="webhook-title">
+											<strong>{w.name}</strong>
+											{#if w.display_name}
+												<span class="webhook-display-name">exibe como “{w.display_name}”</span>
+											{/if}
+										</div>
+										<div class="webhook-meta">
+											<span>canal: {channelName(w.channel_id)}</span>
+											<span>criado em {formatTime(w.created_at)}</span>
+										</div>
+									</div>
+								</div>
+								<div class="webhook-controls">
+									<button class="admin-btn ghost small" onclick={() => openIdentity(w)} disabled={saving}>
+										<Icon name="identification-card" variant="light" size={14} />
+										Identidade
 									</button>
+									<button
+										class="admin-btn ghost small danger"
+										class:armed={confirmRevokeId === w.id}
+										onclick={() => revoke(w)}
+										disabled={saving}
+									>
+										<Icon name="trash" variant="light" size={14} />
+										{confirmRevokeId === w.id ? 'Confirmar revogação' : 'Revogar'}
+									</button>
+								</div>
+
+								{#if editingId === w.id}
+									<div class="identity-editor">
+										<label class="identity-field">
+											<span>Nickname de exibição</span>
+											<input
+												class="admin-input"
+												placeholder={w.name}
+												bind:value={editName}
+												maxlength="100"
+												aria-label="Nickname de exibição do webhook"
+											/>
+											<small>Vazio usa o nome do webhook.</small>
+										</label>
+										<label class="identity-field">
+											<span>Avatar</span>
+											<input
+												type="file"
+												accept="image/gif,image/jpeg,image/png,image/webp"
+												onchange={onAvatarSelect}
+												aria-label="Imagem do avatar do webhook"
+												aria-describedby="webhook-avatar-limit"
+											/>
+											<small id="webhook-avatar-limit">Máximo: 512 × 512 px, 2MB.</small>
+											{#if removeAvatar}
+												<small class="identity-remove">Avatar será removido ao salvar.</small>
+											{:else}
+												<button
+													type="button"
+													class="admin-btn ghost small"
+													onclick={() => (removeAvatar = true)}
+												>
+													Remover avatar atual
+												</button>
+											{/if}
+										</label>
+										<div class="identity-actions">
+											<button class="admin-btn" onclick={() => saveIdentity(w.id)} disabled={saving}>
+												{saving ? 'Salvando…' : 'Salvar identidade'}
+											</button>
+											<button
+												class="admin-btn ghost"
+												onclick={() => (editingId = null)}
+												disabled={saving}
+											>
+												Cancelar
+											</button>
+										</div>
+									</div>
 								{/if}
-							</label>
-							<div class="identity-actions">
-								<button class="admin-btn" onclick={() => saveIdentity(w.id)} disabled={saving}>
-									{saving ? 'Salvando…' : 'Salvar identidade'}
-								</button>
-								<button
-									class="admin-btn ghost"
-									onclick={() => (editingId = null)}
-									disabled={saving}
-								>
-									Cancelar
-								</button>
-							</div>
-						</div>
-					{/if}
-				</li>
-			{/each}
-		</ul>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</div>
+		</div>
 	{/if}
 </div>
 
 <style>
 	.webhooks-page {
-		max-width: 860px;
+		padding: 4px 0 8px;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
 	}
 
 	.webhooks-head {
@@ -328,11 +349,18 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 12px;
-		margin-bottom: 14px;
+		margin-bottom: 12px;
 	}
 
 	.webhooks-head h2 {
 		margin: 0;
+		font-size: 20px;
+	}
+
+	.webhooks-actions {
+		display: flex;
+		align-items: center;
+		gap: 10px;
 	}
 
 	.new-webhook {
@@ -340,56 +368,54 @@
 		flex-wrap: wrap;
 		gap: 10px;
 		align-items: center;
-		padding: 12px;
-		border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
-		border-radius: 12px;
-		margin-bottom: 14px;
+		margin-bottom: 12px;
+	}
+
+	.new-webhook .admin-input {
+		min-width: 180px;
 	}
 
 	.issued-token {
-		border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
-		border-radius: 12px;
-		padding: 12px;
-		margin-bottom: 14px;
+		margin-bottom: 12px;
 	}
 
 	.token-warning {
-		margin: 6px 0 10px;
+		margin: 0 0 10px;
 		font-size: 13px;
-		opacity: 0.85;
+		color: var(--muted);
+		line-height: 1.45;
 	}
 
 	.token-row {
 		display: flex;
-		gap: 10px;
+		gap: 8px;
 		align-items: center;
-		flex-wrap: wrap;
 	}
 
 	.token-value {
+		min-width: 0;
 		flex: 1;
-		min-width: 220px;
 		font-family: ui-monospace, monospace;
-		font-size: 13px;
-		word-break: break-all;
-		padding: 8px 10px;
-		border-radius: 8px;
-		background: rgba(0, 0, 0, 0.22);
+		font-size: 11px;
 	}
 
-	.webhooks-empty {
-		display: grid;
-		justify-items: center;
-		gap: 6px;
-		padding: 34px 12px;
+	.webhooks-card {
+		flex: 1 1 auto;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.webhooks-card .admin-card-body {
+		flex: 1;
+		min-height: 0;
+	}
+
+	.empty {
+		padding: 18px;
+		color: var(--muted-soft);
+		font-size: 13px;
 		text-align: center;
-		opacity: 0.9;
-	}
-
-	.webhooks-empty p {
-		margin: 0;
-		font-size: 13px;
-		opacity: 0.75;
 	}
 
 	.webhooks-list {
@@ -397,15 +423,16 @@
 		margin: 0;
 		padding: 0;
 		display: grid;
-		gap: 10px;
+		gap: 8px;
 	}
 
 	.webhook-item {
 		display: grid;
 		gap: 10px;
-		padding: 12px;
-		border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+		padding: 10px 12px;
 		border-radius: 12px;
+		background: rgba(255, 255, 255, 0.32);
+		border: 1px solid rgba(255, 255, 255, 0.42);
 	}
 
 	.webhook-main {
@@ -425,17 +452,21 @@
 		align-items: baseline;
 	}
 
+	.webhook-title strong {
+		font-size: 14px;
+	}
+
 	.webhook-display-name {
-		font-size: 12.5px;
-		opacity: 0.75;
+		font-size: 12px;
+		color: var(--muted);
 	}
 
 	.webhook-meta {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 12px;
-		font-size: 12.5px;
-		opacity: 0.72;
+		font-size: 12px;
+		color: var(--muted);
 		margin-top: 3px;
 	}
 
@@ -449,8 +480,9 @@
 		display: grid;
 		gap: 12px;
 		padding: 12px;
-		border: 1px dashed var(--border, rgba(255, 255, 255, 0.18));
-		border-radius: 10px;
+		border-radius: 12px;
+		background: rgba(255, 255, 255, 0.22);
+		border: 1px dashed rgba(86, 143, 177, 0.28);
 	}
 
 	.identity-field {
@@ -459,12 +491,19 @@
 		font-size: 13px;
 	}
 
+	.identity-field span {
+		font-size: 12px;
+		font-weight: 700;
+		color: var(--link-muted);
+	}
+
 	.identity-field small {
-		opacity: 0.7;
+		color: var(--muted-soft);
+		font-size: 11px;
 	}
 
 	.identity-remove {
-		color: #e5484d;
+		color: #c43a46;
 	}
 
 	.identity-actions {
@@ -473,32 +512,70 @@
 		flex-wrap: wrap;
 	}
 
-	.admin-btn.small {
-		justify-self: start;
-		padding: 4px 10px;
-		font-size: 12.5px;
+	.admin-btn.ghost.small {
+		height: 32px;
+		padding: 0 10px;
+		font-size: 12px;
 	}
 
-	.admin-btn.danger {
-		background: #b3261e;
-		color: #fff;
+	.admin-btn.ghost.danger {
+		color: #c43a46;
+	}
+
+	.admin-btn.ghost.danger:hover {
+		background: rgba(240, 61, 94, 0.14);
+		color: #f03d5e;
+	}
+
+	.admin-btn.ghost.danger.armed {
+		background: rgba(240, 61, 94, 0.16);
+		border-color: rgba(240, 61, 94, 0.4);
+		color: #f03d5e;
+	}
+
+	.webhook-error,
+	.webhook-success {
+		margin-bottom: 10px;
+		padding: 8px 12px;
+		border-radius: 10px;
+		font-size: 12px;
 	}
 
 	.webhook-error {
-		color: #ffb3b3;
-		background: rgba(179, 38, 30, 0.18);
-		border: 1px solid rgba(229, 72, 77, 0.5);
-		border-radius: 10px;
-		padding: 10px 12px;
-		margin-bottom: 12px;
+		background: rgba(220, 40, 40, 0.1);
+		color: #c43a46;
 	}
 
 	.webhook-success {
-		color: #b7efc5;
-		background: rgba(18, 122, 63, 0.18);
-		border: 1px solid rgba(49, 168, 96, 0.5);
-		border-radius: 10px;
-		padding: 10px 12px;
-		margin-bottom: 12px;
+		background: rgba(36, 201, 130, 0.1);
+		color: #199966;
+	}
+
+	:global([data-theme='dark']) .webhook-item {
+		background: rgba(119, 194, 235, 0.06);
+		border-color: rgba(182, 224, 250, 0.14);
+	}
+
+	:global([data-theme='dark']) .identity-editor {
+		background: rgba(119, 194, 235, 0.05);
+		border-color: rgba(182, 224, 250, 0.18);
+	}
+
+	@media (max-width: 560px) {
+		.new-webhook {
+			align-items: stretch;
+		}
+		.new-webhook .admin-input {
+			min-width: 0;
+			flex: 1 1 100%;
+		}
+		.token-row {
+			align-items: stretch;
+			flex-direction: column;
+		}
+		.token-row .admin-btn {
+			width: 100%;
+			justify-content: center;
+		}
 	}
 </style>
