@@ -11,6 +11,7 @@
 	import NotificationsPopover from './NotificationsPopover.svelte';
 	import PinsPopover from './PinsPopover.svelte';
 	import SearchMessagePopover from './SearchMessagePopover.svelte';
+	import FormattedMessage from './FormattedMessage.svelte';
 
 	let {
 		channel,
@@ -213,7 +214,7 @@
 					<Icon name="x" variant="light" size={18} />
 				</button>
 			</div>
-			<p class="topic-full">{channel.topic}</p>
+			<p class="topic-full"><FormattedMessage content={channel.topic}/></p>
 		</section>
 	</div>
 {/if}
