@@ -6,6 +6,7 @@ import * as serverStore from '$lib/store/server.svelte';
 import * as rolesStore from '$lib/store/roles.svelte';
 import * as messagesStore from '$lib/store/messages.svelte';
 import { channelAccess } from '$lib/utils/permissions';
+import type { Channel } from '$lib/types';
 
 // Fallback para o ID do canal a partir da URL durante a hidratação.
 function channelIdFromPathname(pathname: string): string | null {
@@ -54,7 +55,7 @@ export async function load({
 		roles: myRoles,
 		isOwner: !!me && server?.owner_id === me
 	};
-	const canReadChannel = (channel: (typeof channelsStore.state.byId extends Map<string, infer C> ? C : never)) =>
+	const canReadChannel = (channel: Channel) =>
 		channelAccess(channel, accessContext).read;
 
 	// 3. Só abre o canal solicitado se o usuário puder lê-lo.
