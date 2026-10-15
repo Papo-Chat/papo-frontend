@@ -221,7 +221,7 @@ function makeRenderer(
 
 						return emojiClass === 'full-emoji'
 							? `<span class="full-emoji-wrapper">${img}</span>`
-							: img;
+							: `<span class="inline-emoji-wrapper">${img}</span>`;
 					}
 					return `:${t.name}:`;
 				}

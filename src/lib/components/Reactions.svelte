@@ -309,7 +309,7 @@
 					}
 				}}
 			>
-				<ReactionEmoji unicode={r.unicode} emojiId={r.emoji_id} />
+				<ReactionEmoji isPick={false} unicode={r.unicode} emojiId={r.emoji_id} />
 				{r.count}
 			</button>
 

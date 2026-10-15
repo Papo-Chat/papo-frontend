@@ -301,11 +301,24 @@
 		color: var(--link);
 	}
 
-	:global(.inline-emoji) {
-		display: inline;
+	:global(.inline-emoji-wrapper > img.inline-emoji) {
+		display: block;
+		width: auto !important;
+		height: auto !important;
+		max-width: 100%;
+		max-height: 100%;
+		object-fit: contain;
+		flex: none;
+	}
+
+	:global(.inline-emoji-wrapper) {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		width: 1.6em;
 		height: 1.6em;
-		vertical-align: baseline;
+		flex: 0 0 1.6em;
+		vertical-align: middle;
 		margin: 0 1px;
 		border-radius: 4px;
 	}

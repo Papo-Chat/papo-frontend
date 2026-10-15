@@ -382,7 +382,7 @@
 						{#each custom as opt (`c-${opt.name}`)}
 							<button class="emoji custom" title={opt.name} onclick={() => pick(opt)}>
 								{#if opt.image_blob}
-									<ReactionEmoji unicode={null} emojiId={opt.id} />
+									<ReactionEmoji isPick={true} unicode={null} emojiId={opt.id} />
 								{:else}
 									<span class="custom-name">{opt.name}</span>
 								{/if}

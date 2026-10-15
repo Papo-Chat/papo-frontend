@@ -194,7 +194,7 @@
     >
         <div class="reaction-users-head">
             <span class="reaction-users-emoji" aria-hidden="true">
-                <ReactionEmoji {unicode} {emojiId} />
+                <ReactionEmoji isPick={false} {unicode} {emojiId} />
             </span>
             <span class="reaction-users-count">{countText}</span>
         </div>

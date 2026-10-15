@@ -48,7 +48,7 @@
 			<div class="compact-reactions" aria-label="Reações">
 				{#each message.reactions as reaction (reaction.unicode ?? reaction.emoji_id)}
 					<span class="compact-reaction">
-						<ReactionEmoji unicode={reaction.unicode} emojiId={reaction.emoji_id} />
+						<ReactionEmoji isPick={false} unicode={reaction.unicode} emojiId={reaction.emoji_id} />
 						<span>{reaction.count}</span>
 					</span>
 				{/each}
