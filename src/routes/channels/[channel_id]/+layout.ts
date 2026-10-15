@@ -1,29 +1,13 @@
 // Guard do canal: sessão, servidor, canais e validação do channel_id.
-//
-// Vive todo aqui, num único load, porque:
-//
-//   1. o channel_id só existe no segmento [channel_id]; o código que dele
-//      depende fica na rota que o define;
-//
-//   2. os loads do SvelteKit rodam em paralelo por nível da hierarquia
-//      (runtime/client: branch_promises = loaders.map(async ... => load_node))
-//      — um load que depende do efeito colateral de outro load ("o parent
-//      carrega os canais" / "o child lê a store") cria race condition em
-//      navegações completas. Carregar e consumir precisa estar no mesmo load.
-//
-// Não usa `$app/state.page` dentro do load: durante a hidratação o $app/state
-// .page pode existir temporariamente com url="a:" / params={} (estado
-// intermediário) — o parâmetro é lido do LoadEvent que o SvelteKit passa ao
-// load.
 import { redirect } from '@sveltejs/kit';
 import { load as sessionLoad, state as sessionState } from '$lib/store/session.svelte';
 import * as channelsStore from '$lib/store/channels.svelte';
 import * as serverStore from '$lib/store/server.svelte';
+import * as rolesStore from '$lib/store/roles.svelte';
 import * as messagesStore from '$lib/store/messages.svelte';
+import { channelAccess } from '$lib/utils/permissions';
 
-// Fallback para o ID do canal a partir da URL, caso `params.channel_id`
-// esteja vazio no LoadEvent (defesa extra contra o estado intermediário de
-// hidratação).
+// Fallback para o ID do canal a partir da URL durante a hidratação.
 function channelIdFromPathname(pathname: string): string | null {
 	const m = pathname.match(/^\/channels\/([^/]+)/);
 	return m ? m[1] : null;
@@ -36,7 +20,7 @@ export async function load({
 	params: { channel_id?: string | undefined };
 	url: { pathname: string };
 }): Promise<void> {
-	// 1. Sessão (só se ainda não foi carregada — o bootstrap raiz já fez).
+	// 1. Sessão.
 	if (!sessionState.userId) {
 		try {
 			await sessionLoad();
@@ -50,44 +34,50 @@ export async function load({
 		return;
 	}
 
-	// 2. Servidor (para Rail/Sidebar) — só se ainda não carregado.
+	// 2. Servidor e canais.
 	if (!serverStore.state.loaded) {
 		await serverStore.load();
 	}
-
-	// 3. Canais — só se ainda não carregados.
 	if (!channelsStore.state.loaded) {
 		await channelsStore.load();
 	}
+	// As roles são necessárias para aplicar a mesma regra de acesso da sidebar.
+	if (!rolesStore.state.loaded) {
+		await rolesStore.load();
+	}
 
-	// 4. Resolver o canal da URL (id exato, depois nome) — LoadEvent `params`,
-	// com fallback na URL.
+	const me = sessionState.userId;
+	const server = serverStore.state.server;
+	const myRoleIds = new Set(sessionState.roles.map((role) => role.id));
+	const myRoles = rolesStore.state.list.filter((role) => myRoleIds.has(role.id));
+	const accessContext = {
+		roles: myRoles,
+		isOwner: !!me && server?.owner_id === me
+	};
+	const canReadChannel = (channel: (typeof channelsStore.state.byId extends Map<string, infer C> ? C : never)) =>
+		channelAccess(channel, accessContext).read;
+
+	// 3. Só abre o canal solicitado se o usuário puder lê-lo.
 	const channelId = params.channel_id ?? channelIdFromPathname(url.pathname);
-
 	const channel = channelsStore.resolve(channelId);
-	if (channel) {
+	if (channel && canReadChannel(channel)) {
 		channelsStore.setOpen(channel.id);
-
-		// Start fetching the latest window immediately, but do not make route
-		// navigation wait for message history. Chat.svelte defers its initial
-		// scroll positioning while this store is loading, and the page-level
-		// setLatest() call is deduped by the store's in-flight request map.
+		// Carrega as mensagens sem bloquear a navegação.
 		void messagesStore.setLatest(channel.id);
 		return;
 	}
 
-	// 5. Param inválido / não encontrado: cai no canal "home".
-	const home = channelsStore.homeChannel();
+	// 4. Canal inválido ou sem permissão: redireciona para o primeiro canal
+	// acessível, priorizando canais de texto como no comportamento de home.
+	const home = channelsStore.homeChannel(canReadChannel);
 	if (home) {
 		channelsStore.setOpen(home.id);
-		// Redireção idempotente: se já estamos no home, só define o open
-		// e termina (segunda defesa contra loop de redirect).
 		if (channelId !== home.id) {
 			redirect(307, `/channels/${home.id}`);
 		}
 		return;
 	}
 
-	// 6. Sem canais: administração.
+	// 5. Não há canal acessível.
 	redirect(307, '/admin/server');
 }
