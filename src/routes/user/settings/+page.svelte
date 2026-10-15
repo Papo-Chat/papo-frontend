@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as settingsStore from '$lib/store/settings.svelte';
+	import * as klipyStore from '$lib/store/klipy.svelte';
 	import * as channelsStore from '$lib/store/channels.svelte';
 	import { state as sessionState } from '$lib/store/session.svelte';
 	import {
@@ -15,6 +16,10 @@
 	import { isValidPassword, minPasswordLength } from '$lib/utils/password';
 
 	let config: UserConfig | null = $state(null);
+	let klipyApiKey = $state('');
+	let klipyKeySaved = $state(false);
+	let klipyKeyError = $state('');
+	let klipyKeyTimer: ReturnType<typeof setTimeout> | null = null;
 	let seededVersion = $state(-1);
 	let saving = $state(false);
 	let saved = $state(false);
@@ -60,6 +65,36 @@
 		};
 		seededVersion = version;
 	});
+
+	$effect(() => {
+		const userId = sessionState.userId;
+		if (!userId) {
+			klipyStore.reset();
+			klipyApiKey = '';
+			return;
+		}
+		klipyStore.loadForUser(userId);
+		klipyApiKey = klipyStore.state.apiKey;
+	});
+
+	function saveKlipyApiKey(): void {
+		const userId = sessionState.userId;
+		if (!userId) {
+			klipyKeyError = 'Entre novamente para salvar sua chave.';
+			return;
+		}
+		klipyKeyError = '';
+		klipyKeySaved = false;
+		try {
+			klipyStore.setApiKey(userId, klipyApiKey);
+			klipyApiKey = klipyStore.state.apiKey;
+			klipyKeySaved = true;
+			if (klipyKeyTimer) clearTimeout(klipyKeyTimer);
+			klipyKeyTimer = setTimeout(() => (klipyKeySaved = false), 2200);
+		} catch (err) {
+			klipyKeyError = err instanceof Error ? err.message : 'Não foi possível salvar a chave localmente.';
+		}
+	}
 
 	async function refreshSoundInfo(): Promise<void> {
 		if (!sessionState.userId) return;
@@ -374,6 +409,40 @@
 				</label>
 			</div>
 		</div>
+
+	<div class="admin-card">
+		<div class="admin-card-head">
+			<Icon name="key" variant="duotone" size={16} />
+			Integrações
+		</div>
+		<div class="admin-card-body">
+			<div class="admin-field">
+				<label for="set-klipy-key">Chave de API da KLIPY</label>
+				<input
+					id="set-klipy-key"
+					class="admin-input"
+					type="password"
+					bind:value={klipyApiKey}
+					autocomplete="off"
+					spellcheck="false"
+					placeholder="Cole sua chave de API"
+				/>
+				<span class="hint">
+					O preview de GIFs só é ativado quando você informa sua própria chave. Ela fica neste navegador,
+					separada por conta, e é enviada diretamente à API da KLIPY — não ao backend do Papo.
+					Deixe vazio e salve para remover a chave.
+				</span>
+			</div>
+			<div class="password-actions">
+				<button class="admin-btn" type="button" onclick={saveKlipyApiKey}>
+					<Icon name="floppy-disk" variant="light" />
+					Salvar chave
+				</button>
+				{#if klipyKeySaved}<span class="channel-saved">Chave salva neste navegador.</span>{/if}
+				{#if klipyKeyError}<span class="settings-error" role="alert">{klipyKeyError}</span>{/if}
+			</div>
+		</div>
+	</div>
 
 	<div class="admin-card">
 		<div class="admin-card-head">
