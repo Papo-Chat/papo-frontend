@@ -65,12 +65,12 @@
 	// autor, dentro da janela de 10min e sem reply_to próprio.
 	function sameAuthorWindow(a: MessageWithAttachment, b: MessageWithAttachment): boolean {
 		if (b.reply_to) return false;
-		const noAuthor = (a.author_id == null || b.author_id == null) && (a.external_author == null || b.external_author == null);
+		const noAuthor = (a.author_id == null || b.author_id == null) && (a.webhook_id == null || b.webhook_id == null);
 		if (noAuthor) return false;
 
-		const sameAuthor = (a.author_id == b.author_id) || (a.external_author == b.external_author);
+		const sameAuthor = (a.author_id == b.author_id) || (a.webhook_id == b.webhook_id);
 		if (!sameAuthor) return false;
-		
+
 		const ta = Date.parse(a.created_at);
 		const tb = Date.parse(b.created_at);
 		if (Number.isNaN(ta) || Number.isNaN(tb)) return false;
