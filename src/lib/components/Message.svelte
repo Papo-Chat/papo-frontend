@@ -13,10 +13,6 @@
 	import { channelAccess, can } from '$lib/store/roles.svelte';
 	import { formatTime } from '$lib/utils/time';
 	import { isImageMime } from '$lib/utils/text';
-	import { isGiphyMarker } from '$lib/utils/giphy';
-	import { parseKlipyLink } from '$lib/utils/klipy';
-	import * as klipyStore from '$lib/store/klipy.svelte';
-	import KlipyLinkPreview from './KlipyLinkPreview.svelte';
 	import Avatar from './Avatar.svelte';
 	import WebhookAvatar from './WebhookAvatar.svelte';
 	import Reactions from './Reactions.svelte';
@@ -47,19 +43,6 @@
 	// ── autor + permissões (fonte: stores, sem sample) ───────────────
 
 	const me = $derived(meId());
-	const isGiphyMessage = $derived(!!message.content && isGiphyMarker(message.content) !== null);
-	const klipyApiKey = $derived(
-		klipyStore.state.userId === sessionState.userId ? klipyStore.state.apiKey : ''
-	);
-	const klipyLink = $derived(
-		message.content && message.attachments.length === 0 ? parseKlipyLink(message.content) : null
-	);
-	let resolvedKlipyUrl = $state('');
-	const isResolvedKlipyLink = $derived(!!klipyLink && resolvedKlipyUrl === klipyLink.url);
-
-	function handleKlipyResolved(success: boolean): void {
-		resolvedKlipyUrl = success && klipyLink ? klipyLink.url : '';
-	}
 	const author = $derived(usersStore.state.byId.get(message.author_id ?? ''));
 	// Mensagem de webhook: author_id é null e a identidade de exibição vem de
 	// external_author (nickname/avatar do webhook ou autoria temporária).
@@ -133,9 +116,7 @@
 	const mentionsMe = $derived(!!me && (message.content ?? '').includes(`@mention(<@${me}>)`));
 	const replyPreviewText = $derived(
 		msgReply?.content
-			? isGiphyMarker(msgReply.content)
-				? 'GIF'
-				: msgReply.content
+			? msgReply.content
 			: msgReply?.attachments.length
 				? 'Anexo'
 				: ''
@@ -416,14 +397,6 @@
 				</div>
 			{/if}
 		</div>
-		{#if klipyLink && klipyApiKey && !isEditing}
-			<KlipyLinkPreview
-				slug={klipyLink.slug}
-				link={klipyLink.url}
-				apiKey={klipyApiKey}
-				onResolved={handleKlipyResolved}
-			/>
-		{/if}
 		{#if isEditing}
 			<div class="bubble">
 				<form
@@ -444,8 +417,8 @@
 				</form>
 				<button class="confirm-btn" type="button" onclick={doEdit}> Enviar </button>
 			</div>
-		{:else if message.content && !isResolvedKlipyLink}
-			<div class="bubble {goldHighlight ? 'pinned' : ''}" class:giphy-bubble={isGiphyMessage}>
+		{:else if message.content}
+			<div class="bubble {goldHighlight ? 'pinned' : ''}">
 				<FormattedMessage content={message.content} allowEveryoneHighlight={authorCanEveryone} />
 			</div>
 			{#if message.embeds.length}
@@ -453,7 +426,7 @@
 					<EmbedCard embed={embed} />
 				{/each}
 			{/if}
-		{:else if message.embeds.length && !isResolvedKlipyLink}
+		{:else if message.embeds.length}
 			{#each message.embeds as embed (embed.id)}
 				<EmbedCard embed={embed} />
 			{/each}
@@ -677,15 +650,6 @@
 		margin-top: 0;
 		flex-wrap: nowrap;
 		gap: 0;
-	}
-
-	.bubble.giphy-bubble {
-		display: inline-flex;
-		align-self: flex-start;
-		width: fit-content;
-		max-width: 100%;
-		box-sizing: border-box;
-		padding: 8px;
 	}
 
 	.meta {

@@ -4,7 +4,6 @@
 	import { openProfile } from '$lib/store/ui.svelte';
 	import { emojiUrl } from '$lib/store/emojis.svelte';
 	import { renderMessageMarkdown } from '$lib/utils/markdown';
-	import { isGiphyMarker, resolveGiphyGif, type GiphyResolvedGif } from '$lib/utils/giphy';
 
 	let {
 		content,
@@ -17,10 +16,6 @@
 	}>();
 
 	let el: HTMLDivElement | null = null;
-	const giphyId = $derived(isGiphyMarker(content));
-	let giphy = $state<GiphyResolvedGif | null>(null);
-	let giphyLoading = $state(false);
-	let giphyError = $state('');
 
 	// Shared reactive index from the emoji store. Avoid rebuilding a full
 	// name -> emoji Map for every mounted message.
@@ -29,7 +24,7 @@
 	const mentionIds = $derived([...content.matchAll(/@mention\(<@([0-9a-fA-F-]{16,})>\)/g)].map((m) => m[1]));
 	const mentionMap = $derived(new Map(mentionIds.map((id) => { const u = usersStore.state.byId.get(id); return [id, u?.nickname || u?.username || 'usuário'] as const; })));
 	$effect(() => { if (mentionIds.length) void usersStore.ensureSummaries(mentionIds).catch(() => {}); });
-	const html = $derived(giphyId ? '' : renderMessageMarkdown(content, nameMap, emojiUrl, { mentions: mentionMap, highlightEveryone: allowEveryoneHighlight }));
+	const html = $derived(renderMessageMarkdown(content, nameMap, emojiUrl, { mentions: mentionMap, highlightEveryone: allowEveryoneHighlight }));
 
 	function handleMentionClick(event: MouseEvent): void {
 		const target = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-mention-user-id]');
@@ -82,92 +77,15 @@
 	}
 
 	$effect(() => {
-		if (!giphyId) {
-			giphy = null;
-			giphyError = '';
-			giphyLoading = false;
-			return;
-		}
-
-		let cancelled = false;
-		giphy = null;
-		giphyError = '';
-		giphyLoading = true;
-		void resolveGiphyGif(giphyId)
-			.then((resolved) => {
-				if (!cancelled) giphy = resolved;
-			})
-			.catch(() => {
-				if (!cancelled) giphyError = 'Não foi possível carregar este GIF.';
-			})
-			.finally(() => {
-				if (!cancelled) giphyLoading = false;
-			});
-
-		return () => {
-			cancelled = true;
-		};
-	});
-
-	$effect(() => {
-		if (!el || giphyId) return;
+		if (!el) return;
 		el.innerHTML = html;
 		applyTextHighlight(el, highlightText);
 	});
 </script>
 
-{#if giphyId}
-	<div
-		class="giphy-message"
-		style={giphy ? `--giphy-width: ${Math.min(giphy.width || 420, 420)}px` : undefined}
-	>
-		{#if giphy}
-			<img
-				src={giphy.url}
-				alt={giphy.title}
-				loading="lazy"
-			/>
-			<div class="giphy-attribution">Powered by GIPHY</div>
-		{:else if giphyLoading}
-			<div class="giphy-status">Carregando GIF…</div>
-		{:else}
-			<div class="giphy-status">{giphyError || 'GIF indisponível.'}</div>
-		{/if}
-	</div>
-{:else}
-	<div class="msg-text" bind:this={el} onclick={handleMentionClick}></div>
-{/if}
+<div class="msg-text" bind:this={el} onclick={handleMentionClick}></div>
 
 <style>
-	.giphy-message {
-		display: inline-flex;
-		width: min(var(--giphy-width, 420px), calc(100vw - 112px));
-		max-width: min(420px, 100%);
-		min-width: 0;
-		flex-direction: column;
-		align-items: stretch;
-	}
-
-	.giphy-message img {
-		display: block;
-		width: 100%;
-		height: auto;
-		border-radius: 10px;
-	}
-
-	.giphy-attribution {
-		margin-top: 4px;
-		text-align: right;
-		font-size: 10px;
-		font-weight: 700;
-		color: var(--muted-soft);
-	}
-
-	.giphy-status {
-		font-size: 12px;
-		color: var(--muted-soft);
-	}
-
 	.msg-text {
 		width: 100%;
 		min-width: 0;

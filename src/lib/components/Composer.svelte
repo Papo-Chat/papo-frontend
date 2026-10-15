@@ -643,12 +643,13 @@
 		});
 	}
 
-	async function onPickGif(gif: { id: string }): Promise<void> {
-		if (disabled || sending || !gif.id) return;
+	async function onPickGif(gif: { id: string; pageUrl: string }): Promise<void> {
+		if (disabled || sending || !gif.pageUrl) return;
 		error = null;
 		sending = true;
 		try {
-			await onSend?.(`giphy:${gif.id}`);
+			// Envia o page URL real do GIPHY; o backend resolve e faz o embed do GIF.
+			await onSend?.(gif.pageUrl);
 			desktopEmojiOpen = false;
 			mobileEmojiOpen = false;
 			mobileActionsOpen = false;

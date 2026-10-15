@@ -21,7 +21,6 @@ import * as webhooksStore from '../store/webhooks.svelte';
 import * as serverStore from '../store/server.svelte';
 import * as websocketStore from '../store/websocket.svelte';
 import * as voiceStore from '../store/voice.svelte';
-import * as klipyStore from '../store/klipy.svelte';
 import type { RoleSummary } from '../types';
 import { prepareNotificationSound } from '../utils/notification-sound';
 import {
@@ -137,7 +136,6 @@ export async function load(): Promise<void> {
 			throw new Error('stale session');
 		}
 		state.userId = me.id;
-		klipyStore.loadForUser(me.id);
 		state.username = me.username;
 		state.avatarBlob = me.avatar_blob;
 		state.avatarFormat = me.avatar_format;
@@ -190,7 +188,6 @@ export function clearLocalSession(): void {
 	state.loaded = false;
 	// Full reset of every user-specific store (logout / 401 / account switch).
 	settingsReset();
-	klipyStore.reset();
 	notificationsStore.reset();
 	channelsStore.reset();
 	serverStore.reset();

@@ -212,7 +212,7 @@ export interface PinnedMessageList {
 // ── embeds ─────────────────────────────────────────────
 
 export type EmbedSourceType = 'link' | 'custom';
-export type EmbedFetchMethod = 'opengraph' | 'oembed' | 'manual';
+export type EmbedFetchMethod = 'opengraph' | 'oembed' | 'manual' | 'gif';
 
 // Mídia do embed (thumbnail, imagem, vídeo, ícone do footer, avatar do autor).
 // A referência interna (sha256) não é exposta: a imagem da thumbnail é lida por

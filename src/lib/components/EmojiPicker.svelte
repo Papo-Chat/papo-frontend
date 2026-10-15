@@ -34,6 +34,7 @@
 	type GiphyApiItem = {
 		id?: string;
 		title?: string;
+		url?: string;
 		images?: {
 			original?: GiphyImage;
 			fixed_width_small?: GiphyImage;
@@ -44,6 +45,7 @@
 		id: string;
 		title: string;
 		url: string;
+		pageUrl: string;
 		previewUrl: string;
 		width: number;
 		height: number;
@@ -105,6 +107,7 @@
 			id: String(item.id),
 			title: String(item.title || 'GIF'),
 			url: String(original.url),
+			pageUrl: item.url ? String(item.url) : `https://giphy.com/gifs/${item.id}`,
 			previewUrl: String(preview.url),
 			width: Number(preview.width) || 160,
 			height: Number(preview.height) || 120
