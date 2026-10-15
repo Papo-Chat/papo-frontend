@@ -25,6 +25,7 @@
 	const canOpenAdmin = $derived(
 		canManageServer || canManageChannels || canManageRoles || canManageWebhooks
 	);
+
 	const activeDmId = $derived(page.url.pathname.match(/^\/dm\/([^/]+)/)?.[1] ?? null);
 	let loggingOut = $state(false);
 
@@ -35,7 +36,8 @@
 				? '/admin/channels'
 				: canManageRoles
 					? '/admin/roles'
-					: '/admin/webhooks'
+					: canManageWebhooks ?
+					'/admin/webhooks' : ''
 	);
 
 

@@ -24,7 +24,7 @@
 		...(canManageServer ? [{ to: '/admin/server', label: 'Servidor', icon: 'server' }] : []),
 		...(canManageChannels ? [{ to: '/admin/channels', label: 'Canais', icon: 'chat' }] : []),
 		...(canManageRoles ? [{ to: '/admin/roles', label: 'Roles', icon: 'shield-check' }] : []),
-		...(canManageWebhooks ? [{ to: '/admin/webhooks', label: 'Webhooks', icon: 'webhook' }] : []),
+		...(canManageWebhooks ? [{ to: '/admin/webhooks', label: 'Webhooks', icon: 'webhooks-logo' }] : []),
 		...(canManageServer ? [{ to: '/admin/emojis', label: 'Emojis', icon: 'smiley' }] : []),
 		...(canManageUsers ? [{ to: '/admin/users', label: 'Usuários', icon: 'users-three' }] : []),
 		...(canManageServer ? [{ to: '/admin/audit', label: 'Auditoria', icon: 'magnifying-glass' }] : [])

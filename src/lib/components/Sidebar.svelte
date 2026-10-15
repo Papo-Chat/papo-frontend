@@ -63,7 +63,8 @@
 				? '/admin/channels'
 				: canManageRoles
 					? '/admin/roles'
-					: '/admin/webhooks'
+					: canManageWebhooks ?
+					'/admin/webhooks' : ''
 	);
 
 	function closeDrawer(): void {

@@ -17,11 +17,13 @@ function allowedRoutes(): string[] {
 	const manageChannels = can('manage_channels', ctx);
 	const manageRoles = can('manage_roles', ctx);
 	const manageUsers = manageServer || manageRoles;
+	const manageWebhooks = can('manage_webhooks', ctx);
 
 	return [
 		...(manageServer ? ['/admin/server', '/admin/emojis', '/admin/audit'] : []),
 		...(manageChannels ? ['/admin/channels'] : []),
 		...(manageRoles ? ['/admin/roles'] : []),
+		...(manageWebhooks ? ['/admin/webhooks'] : []),
 		...(manageUsers ? ['/admin/users'] : [])
 	];
 }
