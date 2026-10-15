@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { openWebhookProfile, closeProfile, type WebhookProfileTarget } from '$lib/store/ui.svelte';
+	import { closeProfile } from '$lib/store/ui.svelte';
 	import * as webhooksStore from '$lib/store/webhooks.svelte';
 	import WebhookAvatar from './WebhookAvatar.svelte';
 
