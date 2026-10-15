@@ -17,6 +17,7 @@ import * as usersStore from '../store/users.svelte';
 import * as rolesStore from '../store/roles.svelte';
 import * as channelsStore from '../store/channels.svelte';
 import * as messagesStore from '../store/messages.svelte';
+import * as webhooksStore from '../store/webhooks.svelte';
 import * as dmsStore from '../store/dms.svelte';
 import * as notificationsStore from '../store/notifications.svelte';
 import * as emojisStore from '../store/emojis.svelte';
@@ -231,6 +232,13 @@ export function disconnect(): void {
 export function dispatchEvent(event: WsOutbound): void {
 	switch (event.type) {
 		case 'message':
+			if (event.webhook_id && event.external_author) {
+				webhooksStore.observeMessageIdentity(
+					event.webhook_id,
+					event.external_author,
+					event.created_at
+				);
+			}
 			messagesStore.applyEvent(messagesStore.state, event);
 			channelsStore.handleMessage(event);
 			break;
