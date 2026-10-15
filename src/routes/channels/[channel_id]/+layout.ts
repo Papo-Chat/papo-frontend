@@ -56,7 +56,7 @@ export async function load({
 		isOwner: !!me && server?.owner_id === me
 	};
 	const canReadChannel = (channel: Channel) =>
-		channelAccess(channel, accessContext).read;
+		channel.type !== 'category' && channelAccess(channel, accessContext).read;
 
 	// 3. Só abre o canal solicitado se o usuário puder lê-lo.
 	const channelId = params.channel_id ?? channelIdFromPathname(url.pathname);
