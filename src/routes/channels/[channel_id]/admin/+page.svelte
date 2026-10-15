@@ -172,12 +172,12 @@
                 <div class="admin-card-body">
                     <div class="admin-field">
                         <label for="ca-topic">Tópico</label>
-                        <input
+                        <textarea
                             id="ca-topic"
                             class="admin-input"
                             bind:value={topic}
-                            placeholder="Descrição do canal"
-                        />
+                            placeholder="Descrição do canal">
+                        </textarea>
                     </div>
 
                     <div class="admin-field">
