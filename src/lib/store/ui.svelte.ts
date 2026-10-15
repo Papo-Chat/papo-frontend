@@ -4,6 +4,14 @@
 // flags).
 import type { UserSummary } from '../types';
 
+export interface WebhookProfileTarget {
+	webhookId: string;
+	fallbackName: string;
+	avatarUrl: string | null;
+	profileUrl: string | null;
+	usePersistentIdentity: boolean;
+}
+
 export const state = $state({
 	channelsDrawerOpen: false,
 	railDrawerOpen: false,
@@ -14,6 +22,7 @@ export const state = $state({
 	pinsPopoverOpen: false,
 	profileOpen: false,
 	profileUser: null as UserSummary | null,
+	profileWebhook: null as WebhookProfileTarget | null,
 	// Scroll/highlight target for "go to message" (search/notifications/pins
 	// clicks). The channel page reads it once, loads the message into the
 	// window if needed, scrolls + highlights, then clears it.
@@ -23,13 +32,21 @@ export const state = $state({
 });
 
 export function openProfile(user: UserSummary): void {
+	state.profileWebhook = null;
 	state.profileUser = user;
+	state.profileOpen = true;
+}
+
+export function openWebhookProfile(target: WebhookProfileTarget): void {
+	state.profileUser = null;
+	state.profileWebhook = target;
 	state.profileOpen = true;
 }
 
 export function closeProfile(): void {
 	state.profileOpen = false;
 	state.profileUser = null;
+	state.profileWebhook = null;
 }
 
 // Set a message the channel page should scroll to / highlight.
