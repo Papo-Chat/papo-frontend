@@ -7,6 +7,8 @@ import { api } from '../api';
 import { currentSessionEpoch, isCurrentSessionEpoch } from '../utils/session-epoch';
 import type { ExternalAuthor, UpdateWebhookIdentityRequest, Webhook } from '../types';
 
+const MAX_IDENTITY_SNAPSHOTS = 200;
+
 interface WebhookIdentitySnapshot {
 	name: string;
 	createdAt: string;
@@ -98,7 +100,14 @@ export function observeMessageIdentity(
 
 	const current = state.identitySnapshots.get(webhookId);
 	if (current && current.createdAt >= createdAt) return;
+	// Refresh insertion order and cap the cache for long-lived/mobile sessions.
+	state.identitySnapshots.delete(webhookId);
 	state.identitySnapshots.set(webhookId, { name: author.name, createdAt });
+	while (state.identitySnapshots.size > MAX_IDENTITY_SNAPSHOTS) {
+		const oldestId = state.identitySnapshots.keys().next().value;
+		if (!oldestId) break;
+		state.identitySnapshots.delete(oldestId);
+	}
 }
 
 // Reads SvelteMap-backed values so existing messages rerender when an identity
