@@ -3,8 +3,10 @@
 	import Rail from '$lib/components/Rail.svelte';
 	import MemberDirectory from '$lib/components/MemberDirectory.svelte';
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
+	import WebhookProfileCard from '$lib/components/WebhookProfileCard.svelte';
 
 	const profileUser = $derived(state.profileOpen ? state.profileUser : null);
+	const profileWebhook = $derived(state.profileOpen ? state.profileWebhook : null);
 </script>
 
 <div class="app-shell dm-shell">
@@ -37,6 +39,20 @@
 	{#if profileUser}
 		<ProfileCard
 			user={profileUser}
+			bind:open={state.profileOpen}
+			onOpenChange={(open) => {
+				if (!open) closeProfile();
+			}}
+		/>
+	{/if}
+
+	{#if profileWebhook}
+		<WebhookProfileCard
+			webhookId={profileWebhook.webhookId}
+			fallbackName={profileWebhook.fallbackName}
+			avatarUrl={profileWebhook.avatarUrl}
+			profileUrl={profileWebhook.profileUrl}
+			usePersistentIdentity={profileWebhook.usePersistentIdentity}
 			bind:open={state.profileOpen}
 			onOpenChange={(open) => {
 				if (!open) closeProfile();
