@@ -689,8 +689,10 @@
 	.webhook-name {
 		display: inline-flex;
 		align-items: center;
-		max-width: min(100%, 440px);
+		min-width: 0;
+		max-width: min(45vw, 320px);
 		text-align: left;
+		white-space: nowrap;
 		text-overflow: ellipsis;
 		overflow: hidden;
 	}
