@@ -1,8 +1,9 @@
 <script lang="ts">
 	import type { MessageAttachment, MessageWithAttachment, RoleSummary } from '$lib/types';
-	import { openProfile, setScrollTarget } from '$lib/store/ui.svelte';
+	import { openProfile, openWebhookProfile, setScrollTarget } from '$lib/store/ui.svelte';
 	import { meId, state as sessionState } from '$lib/store/session.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
+	import * as webhooksStore from '$lib/store/webhooks.svelte';
 	import * as channelsStore from '$lib/store/channels.svelte';
 	import * as dmsStore from '$lib/store/dms.svelte';
 	import * as messagesStore from '$lib/store/messages.svelte';
@@ -87,12 +88,29 @@
 		authorCanEveryone && /(^|\s)@everyone\b/i.test(message.content ?? '')
 	);
 
-	const name = $derived(
-		externalAuthor?.name ||
-			author?.nickname ||
-			author?.username ||
-			(isWebhookMessage ? 'Webhook' : 'Usuário')
+	const webhookName = $derived(
+		message.webhook_id
+			? externalAuthor?.source === 'webhook'
+				? webhooksStore.displayName(message.webhook_id, externalAuthor.name)
+				: externalAuthor?.name || 'Webhook'
+			: 'Webhook'
 	);
+	const name = $derived(
+		isWebhookMessage
+			? webhookName
+			: author?.nickname || author?.username || 'Usuário'
+	);
+
+	function openCurrentWebhookProfile(): void {
+		if (!message.webhook_id) return;
+		openWebhookProfile({
+			webhookId: message.webhook_id,
+			fallbackName: name,
+			avatarUrl: externalAuthor?.avatar_url ?? null,
+			profileUrl: externalAuthor?.profile_url ?? null,
+			usePersistentIdentity: externalAuthor?.source === 'webhook'
+		});
+	}
 	const msgReply = $derived(messagesStore.getMessage(message.channel_id, message.reply_to));
 	const replyAuthor = $derived(usersStore.state.byId.get(msgReply?.author_id ?? ''));
 	// Preview de resposta a mensagem de webhook: identidade vem do external_author.
@@ -258,7 +276,8 @@
 		<WebhookAvatar
 			avatarUrl={externalAuthor?.avatar_url ?? null}
 			size={39}
-			ariaLabel={`Mensagem enviada por webhook: ${name}`}
+			ariaLabel={`Ver perfil do aplicativo ${name}`}
+			onClick={openCurrentWebhookProfile}
 		/>
 	{:else}
 		<Avatar
@@ -275,7 +294,15 @@
 		<div class="meta">
 			{#if !grouped}
 				{#if isWebhookMessage}
-					<span class="name name-static">{name}</span>
+					<button
+						class="name webhook-name"
+						type="button"
+						aria-label={`Ver perfil do aplicativo ${name}`}
+						onclick={openCurrentWebhookProfile}
+					>
+						{name}
+					</button>
+					<span class="webhook-app-badge" aria-label="Aplicativo">APP</span>
 				{:else}
 					<button
 						class="name"
@@ -659,9 +686,39 @@
 
 		flex-shrink: 0;
 	}
-	/* Nome de webhook: texto estático (webhook não tem perfil). */
-	.name.name-static {
-		cursor: default;
+	.webhook-name {
+		display: inline-flex;
+		align-items: center;
+		max-width: min(100%, 440px);
+		text-align: left;
+		text-overflow: ellipsis;
+		overflow: hidden;
+	}
+
+	.webhook-app-badge {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		padding: 2px 5px;
+		border: 1px solid rgba(31, 126, 190, 0.32);
+		border-radius: 4px;
+		background: rgba(10, 126, 204, 0.1);
+		color: var(--accent, #1687d9);
+		font-size: 9px;
+		font-weight: 800;
+		letter-spacing: 0.045em;
+		line-height: 1.2;
+	}
+
+	:global([data-theme='dark']) .webhook-app-badge {
+		border-color: rgba(90, 190, 255, 0.32);
+		background: rgba(55, 166, 230, 0.14);
+		color: #7dcfff;
+	}
+
+	:global(html[data-ui-flat]) .webhook-app-badge {
+		box-shadow: none;
 	}
 	@keyframes message-enter {
 		to {
