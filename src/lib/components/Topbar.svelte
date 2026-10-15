@@ -12,6 +12,7 @@
 	import PinsPopover from './PinsPopover.svelte';
 	import SearchMessagePopover from './SearchMessagePopover.svelte';
 	import FormattedMessage from './FormattedMessage.svelte';
+	import LightFormattedMessage from './LightFormattedMessage.svelte';
 
 	let {
 		channel,
@@ -109,13 +110,14 @@
 			{/if}
 		</div>
 		{#if channel.topic}
+
 			<button
 				class="topic-preview"
 				onclick={openTopic}
 				aria-label="Ver tópico completo"
 				title="Clique para ver o tópico completo"
 			>
-				{channel.topic}
+				<LightFormattedMessage content={channel.topic}/>
 			</button>
 		{/if}
 	</div>
