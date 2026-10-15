@@ -29,7 +29,6 @@ describe('resolveExternalAvatarUrl', () => {
 	});
 });
 
-
 describe('webhook display identity', () => {
 	afterEach(() => webhooksStore.reset());
 
