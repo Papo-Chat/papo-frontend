@@ -68,7 +68,7 @@
 		const noAuthor = (a.author_id == null || b.author_id == null) && (a.webhook_id == null || b.webhook_id == null);
 		if (noAuthor) return false;
 
-		const sameAuthor = (a.author_id == b.author_id) || (a.webhook_id == b.webhook_id);
+		const sameAuthor = a.external_author ? (a.webhook_id == b.webhook_id) : (a.author_id == b.author_id);
 		if (!sameAuthor) return false;
 
 		const ta = Date.parse(a.created_at);
