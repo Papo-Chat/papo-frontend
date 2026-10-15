@@ -1,25 +1,22 @@
 <script lang="ts">
-	// Avatar de webhook: imagem servida por GET /webhooks/:id/avatar (avatar
-	// persistente) ou avatar_url externo do external_author. Webhook não é
-	// usuário: nunca abre perfil, então o elemento é sempre um span estático.
-	// Sem avatar persistente o endpoint devolve 404 — cai no ícone fallback.
-
+	// Webhook avatars stay lightweight. The optional action makes only clickable
+	// instances keyboard-accessible buttons; passive avatars remain spans.
 	import { resolveExternalAvatarUrl } from '$lib/utils/media';
 	import Icon from './Icon.svelte';
 
 	let {
 		avatarUrl = null,
 		size = 39,
-		ariaLabel = 'Webhook'
+		ariaLabel = 'Webhook',
+		onClick = null
 	} = $props<{
 		avatarUrl?: string | null;
 		size?: number;
 		ariaLabel?: string;
+		onClick?: (() => void) | null;
 	}>();
 
 	const src = $derived(avatarUrl ? resolveExternalAvatarUrl(avatarUrl) : '');
-	// URL que falhou ao carregar (404/erro de rede). Compara com src para que
-	// uma nova URL (ex.: avatar recém-carregado) volte a tentar a imagem.
 	let failedSrc = $state('');
 	const showImage = $derived(!!src && src !== failedSrc);
 	const iconSize = $derived(size * 0.5);
@@ -30,13 +27,29 @@
 	}
 </script>
 
-<span class="avatar webhook-avatar" style={ringStyle} aria-label={ariaLabel}>
+{#snippet content()}
 	{#if showImage}
 		<img class="avatar-image" src={src} alt="" onerror={onError} />
 	{:else}
 		<Icon name="webhook" variant="duotone" size={iconSize} />
 	{/if}
-</span>
+{/snippet}
+
+{#if onClick}
+	<button
+		type="button"
+		class="avatar webhook-avatar"
+		style={ringStyle}
+		aria-label={ariaLabel}
+		onclick={onClick}
+	>
+		{@render content()}
+	</button>
+{:else}
+	<span class="avatar webhook-avatar" style={ringStyle} aria-label={ariaLabel}>
+		{@render content()}
+	</span>
+{/if}
 
 <style>
 	.webhook-avatar {
@@ -50,6 +63,24 @@
 		border: 2px solid rgba(255, 255, 255, 0.84);
 		background: linear-gradient(135deg, #1c7ed6, #22b8cf);
 		color: #fff;
+		transition:
+			transform 0.18s var(--ease),
+			box-shadow 0.18s var(--ease);
+	}
+
+	button.webhook-avatar {
+		cursor: pointer;
+		margin: 0;
+		padding: 0;
+	}
+
+	button.webhook-avatar:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 8px 18px rgba(17, 58, 86, 0.22);
+	}
+
+	button.webhook-avatar:active {
+		transform: scale(0.96);
 	}
 
 	.avatar-image {
@@ -58,5 +89,11 @@
 		display: block;
 		object-fit: cover;
 		image-rendering: auto;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.webhook-avatar {
+			transition: none;
+		}
 	}
 </style>
