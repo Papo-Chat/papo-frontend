@@ -233,7 +233,11 @@ export function dispatchEvent(event: WsOutbound): void {
 	switch (event.type) {
 		case 'message':
 			if (event.webhook_id && event.external_author) {
-				webhooksStore.observeMessageIdentity(event.webhook_id, event.external_author, event.created_at);
+				webhooksStore.observeMessageIdentity(
+					event.webhook_id,
+					event.external_author,
+					event.created_at
+				);
 			}
 			messagesStore.applyEvent(messagesStore.state, event);
 			channelsStore.handleMessage(event);
