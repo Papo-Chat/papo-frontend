@@ -334,7 +334,7 @@
 					{#if selected.type !== 'category'}
 						<div class="admin-field">
 							<label for="ch-topic">Tópico</label>
-							<input id="ch-topic" class="admin-input" bind:value={editTopic} />
+							<textarea id="ch-topic" class="admin-input" bind:value={editTopic} />
 						</div>
 					{/if}
 
