@@ -98,7 +98,12 @@
 
 			{#if safeProfileUrl}
 				<div class="webhook-profile-actions">
-					<a class="profile-action primary" href={safeProfileUrl} target="_blank" rel="noopener noreferrer">
+					<a
+						class="profile-action primary"
+						href={safeProfileUrl}
+						target="_blank"
+						rel="noopener noreferrer"
+					>
 						<i class="ph-light ph-arrow-square-out" aria-hidden="true"></i>
 						Abrir perfil externo
 					</a>
