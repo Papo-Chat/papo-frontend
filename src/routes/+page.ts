@@ -13,6 +13,8 @@ import { redirect } from '@sveltejs/kit';
 import { load as sessionLoad, state as sessionState } from '$lib/store/session.svelte';
 import * as channelsStore from '$lib/store/channels.svelte';
 import * as serverStore from '$lib/store/server.svelte';
+import * as rolesStore from '$lib/store/roles.svelte';
+import { channelAccess } from '$lib/utils/permissions';
 import * as messagesStore from '$lib/store/messages.svelte';
 
 export async function load(): Promise<void> {
@@ -39,14 +41,22 @@ export async function load(): Promise<void> {
 
 	// 3. Canais.
 	await channelsStore.load();
-	const home = channelsStore.homeChannel();
+	const myRoleIds = new Set(sessionState.roles.map((role) => role.id));
+	const myRoles = rolesStore.state.list.filter((role) => myRoleIds.has(role.id));
+	const accessContext = {
+		roles: myRoles,
+		isOwner: server.owner_id === sessionState.userId
+	};
+	const home = channelsStore.homeChannel(
+		(channel) => channel.type !== 'category' && channelAccess(channel, accessContext).read
+	);
 	if (!home) {
 		// Nenhum canal: mandar para a administração (criar canal).
 		redirect(307, '/admin/server');
 		return;
 	}
 
-	// 4. Canal "home": primeiro canal de texto (fallback: qualquer canal).
+	// 4. Canal "home": primeiro canal acessível, priorizando canais de texto.
 	channelsStore.setOpen(home.id);
 	// History is part of bootstrap, not a component-mount side effect. This is
 	// especially important immediately after registration, when the first
