@@ -13,6 +13,7 @@
 
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
+import * as webhooksStore from './webhooks.svelte';
 import type { ChannelMessagesState, MessagesState } from './messages.types';
 import type {
 	Embed,
@@ -829,6 +830,18 @@ async function _fetchPage(
 		// Discard if the channel was evicted/refreshed while in flight (P0.4).
 		if (!ch2 || ch2.requestGeneration !== gen) {
 			return;
+		}
+
+		// Keep a tiny nickname snapshot per webhook, preferring the newest
+		// message in the loaded window. Older pages cannot overwrite it.
+		for (const message of messages) {
+			if (message.webhook_id && message.external_author) {
+				webhooksStore.observeMessageIdentity(
+					message.webhook_id,
+					message.external_author,
+					message.created_at
+				);
+			}
 		}
 
 		// Embed image_data is intentionally loaded by EmbedCard only when the
