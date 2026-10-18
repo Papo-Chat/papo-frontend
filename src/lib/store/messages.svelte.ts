@@ -1087,67 +1087,104 @@ export async function gotoMessage(
 ): Promise<boolean> {
 	await ensureLoaded(channelId);
 
-	const ch = state.channels.get(channelId);
-	if (!ch) {
-		return false;
-	}
-	if (ch.byId.has(messageId)) {
-		return true;
-	}
+	let ch = state.channels.get(channelId);
+	if (!ch) return false;
+	if (ch.byId.has(messageId)) return true;
 
-	// Direction: is the target newer than the window's newest message?
-	const ids = ch.ids;
-	const newest =
-		ids.length > 0 ? ch.byId.get(ids[ids.length - 1]) ?? null : null;
+	// Use the target timestamp to fetch a nearby window directly. This avoids
+	// paging through every intervening message for old notifications, pins,
+	// and search results.
+	if (createdAt) {
+		await waitForChannelIdle(channelId);
+		ch = state.channels.get(channelId);
+		if (!ch) return false;
+		if (ch.byId.has(messageId)) return true;
 
-	const targetIsNewer =
-		newest !== null &&
-		((createdAt && createdAt > newest.created_at) ||
-			(createdAt === newest.created_at && messageId > newest.id));
+		const generation = ++requestSerial;
+		state.channels.set(channelId, {
+			...ch,
+			requestGeneration: generation,
+			windowMode: 'historical',
+			loading: true
+		});
 
-	if (targetIsNewer) {
-		while (true) {
-			await waitForChannelIdle(channelId);
+		try {
+			// `since` is a strict boundary in the API, so fetch messages both
+			// newer and older than the target timestamp.
+			const [newerPage, olderPage] = await Promise.all([
+				api.messages.list(channelId, { since: createdAt, order: 'asc', limit: MAX_WINDOW }),
+				api.messages.list(channelId, { since: createdAt, last_id: messageId, order: 'desc', limit: MAX_WINDOW })
+			]);
 			const current = state.channels.get(channelId);
-			if (!current || !current.hasMoreNewer || !current.cursorNewer) return false;
+			if (!current || current.requestGeneration !== generation) return false;
+
+			const newById = new SvelteMap<string, MessageWithAttachment>();
+			for (const raw of [...olderPage.messages, ...newerPage.messages]) {
+				const message = coerceMessage(raw);
+				const merged = mergeFetchedMessage(current.byId.get(message.id), message, current);
+				if (merged) newById.set(message.id, merged);
+			}
+
+			const ids = sortedIds(newById);
+			const oldest = ids.length ? newById.get(ids[0]) : undefined;
+			const newest = ids.length ? newById.get(ids[ids.length - 1]) : undefined;
+			state.channels.set(channelId, {
+				...current,
+				byId: newById,
+				ids,
+				loaded: true,
+				windowMode: 'historical',
+				hasMoreOlder: olderPage.has_more || olderPage.messages.length > 0,
+				hasMoreNewer: newerPage.has_more || newerPage.messages.length > 0,
+				cursorOlder: oldest ? { since: oldest.created_at, last_id: oldest.id } : null,
+				cursorNewer: newest ? { since: newest.created_at, last_id: newest.id } : null
+			});
+			for (const message of [...olderPage.messages, ...newerPage.messages]) {
+				if (newById.has(message.id)) applyPendingEmbeds(state, message.id);
+			}
+			if (newById.has(messageId)) return true;
+		} catch {
+			// Fall back to keyset navigation when direct timestamp lookup fails.
+		} finally {
+			const current = state.channels.get(channelId);
+			if (current?.requestGeneration === generation) {
+				state.channels.set(channelId, { ...current, loading: false });
+			}
+		}
+	}
+
+	// Fallback for callers without a timestamp or when the timestamp cannot
+	// locate the exact ID.
+	while (true) {
+		await waitForChannelIdle(channelId);
+		const current = state.channels.get(channelId);
+		if (!current) return false;
+		if (current.byId.has(messageId)) return true;
+
+		const newest = current.ids.length
+			? current.byId.get(current.ids[current.ids.length - 1]) ?? null
+			: null;
+		const targetIsNewer = !!createdAt && !!newest &&
+			(createdAt > newest.created_at || (createdAt === newest.created_at && messageId > newest.id));
+
+		if (targetIsNewer) {
+			if (!current.hasMoreNewer || !current.cursorNewer) return false;
 			const before = cursorKey(current.cursorNewer);
 			await loadMoreNewer(channelId);
 			const next = state.channels.get(channelId);
 			if (next?.byId.has(messageId)) return true;
 			if (!next?.hasMoreNewer || cursorKey(next.cursorNewer) === before) return false;
-			await new Promise<void>((resolve) => setTimeout(resolve, 0));
+		} else {
+			if (!current.hasMoreOlder || !current.cursorOlder) return false;
+			const before = cursorKey(current.cursorOlder);
+			await loadMoreOlder(channelId);
+			const next = state.channels.get(channelId);
+			if (next?.byId.has(messageId)) return true;
+			if (!next?.hasMoreOlder || cursorKey(next.cursorOlder) === before) return false;
 		}
-	}
-
-	// Page towards older until the message appears or the history is exhausted.
-	while (true) {
-		await waitForChannelIdle(channelId);
-		const c = state.channels.get(channelId);
-		if (!c || !c.hasMoreOlder || !c.cursorOlder) {
-			return false;
-		}
-		const cursor = c.cursorOlder;
-		const before = cursorKey(cursor);
-		// Navigating up → historical window.
-		state.channels.set(channelId, { ...c, windowMode: 'historical' });
-		try {
-			await _fetchPage(channelId, {
-				since: cursor.since,
-				last_id: cursor.last_id,
-				order: 'desc'
-			});
-		} catch {
-			return false;
-		}
-		const c2 = state.channels.get(channelId);
-		if (c2 && c2.byId.has(messageId)) {
-			return true;
-		}
-		if (!c2?.hasMoreOlder || cursorKey(c2.cursorOlder) === before) return false;
 		await new Promise<void>((resolve) => setTimeout(resolve, 0));
 	}
 }
-
 export function send(payload: {
 	channel_id: string;
 	content: string | null;
