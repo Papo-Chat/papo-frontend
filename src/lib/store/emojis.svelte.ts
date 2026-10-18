@@ -7,6 +7,16 @@ import { nextCursor } from '../utils/keyset';
 import { blobToUrl, revokeBlobKey } from '../utils/media';
 import type { Emoji, KeysetCursor } from '../types';
 
+// Server-side rate limit on /emojis: on servers with many emojis, walking every
+// 25-item page back-to-back trips it. Space the pages apart while streaming the
+// full list in (loadAll is detached/progressive, so the delay never blocks the
+// shell/composer). Kept small enough to still fill the picker quickly.
+const PAGE_BACKOFF_MS = 1000;
+
+function sleep(ms: number): Promise<void> {
+	return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
 export const state = $state({
 	byId: new SvelteMap<string, Emoji>(),
 	byName: new SvelteMap<string, Emoji>(),
@@ -78,7 +88,17 @@ export async function loadAll(): Promise<void> {
 	let hasMore = true;
 
 	try {
+		let firstPage = true;
 		while (hasMore) {
+			// Back off between page requests to stay under the server rate
+			// limit. The first page loads immediately so the picker starts
+			// filling right away. Abort if a newer load/reset superseded us.
+			if (!firstPage) {
+				await sleep(PAGE_BACKOFF_MS);
+				if (state.loadGeneration !== gen) return;
+			}
+			firstPage = false;
+
 			const res = await api.emojis.list(
 				cursor ? { since: cursor.since, last_id: cursor.last_id } : undefined
 			);
