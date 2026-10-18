@@ -141,6 +141,11 @@ export interface MessageAttachment {
 	original_file_name: string;
 	size_bytes: number;
 	thumbnail_id: string | null;
+	// Geometria da thumbnail gerada no upload (null quando não há thumbnail).
+	// Permite reservar o box da imagem antes do download: a mídia entra na
+	// tela já com a altura final, sem empurrar o conteúdo (tranco no scroll).
+	thumbnail_width: number | null;
+	thumbnail_height: number | null;
 	created_at: string;
 	moderation_status: string;
 }

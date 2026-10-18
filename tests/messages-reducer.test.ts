@@ -130,6 +130,8 @@ describe('wsMessageToMsg', () => {
 					original_file_name: 'x.txt',
 					size_bytes: 10,
 					thumbnail_id: null,
+					thumbnail_width: null,
+					thumbnail_height: null,
 					created_at: '2024-01-01T00:00:00Z',
 					moderation_status: 'ok'
 				}
@@ -469,6 +471,8 @@ describe('applyEvent(attachment_moderation_update)', () => {
 						original_file_name: 'x.png',
 						size_bytes: 100,
 						thumbnail_id: null,
+						thumbnail_width: null,
+						thumbnail_height: null,
 						created_at: '2024-01-01T00:00:00Z',
 						moderation_status: 'pending'
 					}

@@ -566,7 +566,8 @@
 		display: grid;
 		width: min(560px, 100%);
 		max-width: 100%;
-		height: clamp(220px, 42vw, 360px);
+		/* Mosaico tem altura fixa (sem pop-in) e nunca passa de metade do chat. */
+		height: min(clamp(220px, 42vw, 360px), var(--chat-media-max-height, 45dvh));
 		gap: 4px;
 		margin: 3px 0;
 		overflow: hidden;
@@ -602,7 +603,7 @@
 	@media (max-width: 700px) {
 		.attachment-grid {
 			width: 100%;
-			height: clamp(180px, 58vw, 300px);
+			height: min(clamp(180px, 58vw, 300px), var(--chat-media-max-height, 45dvh));
 			gap: 3px;
 			border-radius: 10px;
 		}

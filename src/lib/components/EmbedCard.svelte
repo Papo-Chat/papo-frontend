@@ -2,7 +2,13 @@
 	import type { Embed } from '$lib/types';
 	import { getEmbed, ensureEmbed } from '$lib/store/messages.svelte';
 	import { onMount } from 'svelte';
-	import { blobToUrl, embedVideoUrl, mimeToFormat } from '$lib/utils/media';
+	import {
+		blobToUrl,
+		embedMediaBox,
+		embedVideoUrl,
+		MEDIA_PRELOAD_MARGIN,
+		mimeToFormat
+	} from '$lib/utils/media';
 	import {
 		embedDirectVideoUrl,
 		embedHost,
@@ -19,15 +25,20 @@
 
 	let { embed } = $props<{ embed: Embed }>();
 	let cardEl: HTMLElement | null = null;
+	let embedFailed = $state(false);
 
 	onMount(() => {
 		if (!cardEl) return;
 		// O base64 do card (image_data / author_image_data) só existe no embed
 		// resolvido: sem thumbnail nem ícone de autor não há nada a buscar, e o
-		// card só é buscado quando se aproxima do viewport.
+		// card é buscado ainda fora da tela, para o bitmap chegar antes de
+		// entrar no viewport (sem tranco no scroll).
 		if (!embed.thumbnail && !embed.author?.media) return;
 
-		const load = () => void ensureEmbed(embed.id).catch(() => {});
+		const load = () =>
+			void ensureEmbed(embed.id).catch(() => {
+				embedFailed = true;
+			});
 		if (!('IntersectionObserver' in window)) {
 			load();
 			return;
@@ -38,7 +49,7 @@
 				observer.disconnect();
 				load();
 			},
-			{ rootMargin: '320px' }
+			{ rootMargin: MEDIA_PRELOAD_MARGIN }
 		);
 		observer.observe(cardEl);
 		return () => observer.disconnect();
@@ -52,6 +63,12 @@
 			? blobToUrl(resolved.image_data, mimeToFormat(resolved.thumbnail?.mime_type ?? ''))
 			: ''
 	);
+
+	// O bitmap exibido é o blob da thumbnail do embed (handlers/embeds.go monta
+	// image_data a partir de ThumbnailFilePath). As dimensões dela vêm no
+	// resumo do embed, que já chega no payload da mensagem: reservar o box com
+	// elas evita o salto de layout quando o base64 chega do GET /embeds/:id.
+	const imageBox = $derived(embedMediaBox(embed.thumbnail) ?? embedMediaBox(embed.image));
 
 	// Ícone do autor (author_media): substitui o selo de letra da linha de topo.
 	const authorIconUrl = $derived(
@@ -241,8 +258,16 @@
 				</button>
 			{/if}
 		</div>
-	{:else if imageUrl}
-		<img class="embed-image" src={imageUrl} alt="" loading="lazy" />
+	{:else if imageUrl || (imageBox && !embedFailed)}
+		<img
+			class="embed-image"
+			class:pending={!imageUrl}
+			src={imageUrl || undefined}
+			alt=""
+			decoding="async"
+			width={imageBox?.width}
+			height={imageBox?.height}
+		/>
 	{/if}
 
 	{#if footerText}
@@ -503,7 +528,11 @@
 	.embed-media {
 		display: grid;
 		place-items: center;
-		width: 100%;
+		/* Todas as mídias deste wrapper são 16:9 (iframes, pôsteres e vídeo):
+		 * limitar a largura já limita a altura a metade do chat sem cortar a
+		 * proporção. */
+		width: min(100%, calc(var(--chat-media-max-height, 45dvh) * 16 / 9));
+		margin-inline: auto;
 		margin-top: 13px;
 		overflow: hidden;
 		border: 1px solid var(--line-strong);
@@ -574,12 +603,18 @@
 	.embed-image {
 		display: block;
 		width: 100%;
-		max-height: min(70dvh, 620px);
+		max-height: min(620px, var(--chat-media-max-height, 45dvh));
 		height: auto;
 		object-fit: contain;
 		margin-top: 13px;
 		border: 1px solid var(--line-strong);
 		border-radius: 14px;
+	}
+	/* Box reservado com as dimensões vindas do resumo do embed: a área da mídia
+	   já existe (com superfície) antes do base64 chegar do GET /embeds/:id,
+	   então o card não empurra nada durante o scroll. */
+	.embed-image.pending {
+		background: var(--media-surface);
 	}
 
 	.embed-footer {

@@ -1,6 +1,12 @@
 <script lang="ts">
 	import type { MessageAttachment } from '$lib/types';
-	import { attachmentUrl, attachmentThumbnailUrl, fetchMediaBlob } from '$lib/utils/media';
+	import {
+		attachmentUrl,
+		attachmentThumbnailUrl,
+		attachmentMediaBox,
+		fetchMediaBlob,
+		MEDIA_PRELOAD_MARGIN
+	} from '$lib/utils/media';
 	import { formatBytes, isImageMime } from '$lib/utils/text';
 
 	let { attachment, pinned = false, tiled = false} = $props<{
@@ -23,6 +29,43 @@
 	const isImage = isImageMime(attachment.mime_type);
 	const isRecordedAudioName = /^audio_.*\.(webm|ogg|wav|mp3|m4a|aac|opus)$/i.test(name);
 	const isAudio = attachment.mime_type.startsWith('audio/') || isRecordedAudioName;
+
+	// Imagem: o download só começa quando o box entra na margem do viewport
+	// (MEDIA_PRELOAD_MARGIN), bem antes de aparecer na tela. Download e
+	// decodificação acontecem fora da tela e o box já tem altura reservada
+	// (dimensões da thumbnail vindas da API), então rolar não dá tranco.
+
+	let imageBox: HTMLElement | undefined = $state();
+	let imageRequested = $state(false);
+	let imageShown = $state(false);
+
+	const mediaBox = $derived(attachmentMediaBox(attachment));
+
+	$effect(() => {
+		const el = imageBox;
+		if (!el) return;
+
+		if (typeof IntersectionObserver === 'undefined') {
+			imageRequested = true;
+			return;
+		}
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				if (!entries.some((entry) => entry.isIntersecting)) return;
+				observer.disconnect();
+				imageRequested = true;
+			},
+			{ rootMargin: MEDIA_PRELOAD_MARGIN, threshold: 0 }
+		);
+
+		observer.observe(el);
+		return () => observer.disconnect();
+	});
+
+	function handleImageSettled(): void {
+		imageShown = true;
+	}
 
 	let audioStarted = false; // plain: não renderiza nada
 
@@ -150,14 +193,36 @@
 		type="button"
 		class="attachment-image"
 		class:tiled
+		class:pending={!imageShown}
+		bind:this={imageBox}
 		aria-label={`Abrir ${name} em tela cheia`}
 		onclick={openLightbox}
 	>
-		<!-- Nos nao animamos gifs reprocessados, entao usamos o original -->
+		<!-- Nos nao animamos gifs reprocessados, entao usamos o original.
+		     Sem reserva de box: o bitmap exibido é o original e a API só traz
+		     a geometria da thumbnail (128px), que daria um tamanho errado. -->
 		{#if isImage.isGif}
-			<img src={fullUrl} alt={name} loading="lazy" class:pinned-attachment={pinned} />
+			<img
+				src={imageRequested ? fullUrl : undefined}
+				alt={name}
+				decoding="async"
+				class:revealed={imageShown}
+				class:pinned-attachment={pinned}
+				onload={handleImageSettled}
+				onerror={handleImageSettled}
+			/>
 		{:else}
-			<img src={thumbUrl} alt={name} loading="lazy" class:pinned-attachment={pinned} />
+			<img
+				src={imageRequested ? thumbUrl : undefined}
+				alt={name}
+				width={mediaBox?.width}
+				height={mediaBox?.height}
+				decoding="async"
+				class:revealed={imageShown}
+				class:pinned-attachment={pinned}
+				onload={handleImageSettled}
+				onerror={handleImageSettled}
+			/>
 		{/if}
 	</button>
 
@@ -317,7 +382,26 @@
 		width: auto;
 		max-width: 100%;
 		height: auto;
-		max-height: 360px;
+		/* Teto: 360px ou metade da altura visível do chat, o que for menor. Em
+		 * elemento substituído com width:auto o max-height reduz a largura na
+		 * mesma proporção (sem distorção e sem letterbox). */
+		max-height: min(360px, var(--chat-media-max-height, 45dvh));
+		border-radius: 10px;
+
+		/* Entrada suave: os pixels só aparecem depois de decodificados
+		 * (o box já estava reservado, então nada se move). */
+		opacity: 0;
+		transition: opacity 0.24s var(--ease);
+	}
+	.attachment-image img.revealed {
+		opacity: 1;
+	}
+
+	/* Box reservado (width/height da thumbnail vindos da API): a área da
+	 * mídia existe antes do download, então a imagem não empurra o conteúdo
+	 * abaixo quando entra no viewport. */
+	.attachment-image.pending {
+		background: var(--surface);
 		border-radius: 10px;
 	}
 
@@ -356,7 +440,9 @@
 	.attachment-video {
 		position: relative;
 		width: 100%;
-		max-width: min(480px, 100%);
+		/* Teto: 480px de largura ou a largura que mantém 16:9 dentro de metade
+		 * da altura visível do chat (o overlay é absoluto, segue a caixa). */
+		max-width: min(480px, 100%, calc(var(--chat-media-max-height, 45dvh) * 16 / 9));
 		border-radius: 10px;
 	}
 	.attachment-video video {

@@ -2,6 +2,8 @@
 // conversion (LRU-cached, F15), and binary resource fetching.
 
 import { PUBLIC_API_URL } from '../env';
+import type { EmbedMedia, MessageAttachment } from '../types/models';
+import { isImageMime } from './text';
 
 // Image format (PNG/JPEG/JPG/WEBP/GIF) ↔ MIME.
 const FORMAT_TO_MIME: Record<string, string> = {
@@ -70,6 +72,44 @@ export function attachmentUrl(id: string): string {
 // GET /attachments/:file_id/thumbnail — inline thumbnail.
 export function attachmentThumbnailUrl(id: string): string {
 	return `${apiBase()}/attachments/${encodeURIComponent(id)}/thumbnail`;
+}
+
+export interface MediaBox {
+	width: number;
+	height: number;
+}
+
+// Margem do IntersectionObserver que dispara o download de mídia: a mídia é
+// pedida ainda fora da tela, então baixa e decodifica antes de entrar no
+// viewport (sem pop-in e sem tranco no scroll). Vale para attachments e embeds.
+export const MEDIA_PRELOAD_MARGIN = '1024px 0px';
+
+// Geometria do bitmap que o frontend exibe inline (reserva de box antes do
+// download → o scroll não pula quando a mídia é decodificada).
+//
+// Para imagem comum o bitmap exibido é a própria thumbnail, então as
+// dimensões dela (attachment_thumbnails no backend) são exatas. Para GIF
+// exibe-se o original (a thumbnail reprocessada não anima) e a API só traz a
+// geometria da thumbnail → reservar por ela mudaria o tamanho final do GIF,
+// então não reservamos. null = sem reserva (a imagem entra com seu tamanho
+// natural, ainda assim baixada fora da tela).
+export function attachmentMediaBox(attachment: MessageAttachment): MediaBox | null {
+	const { thumbnail_width: width, thumbnail_height: height } = attachment;
+	if (attachment.thumbnail_id === null || width === null || height === null) return null;
+	if (width <= 0 || height <= 0) return null;
+	if (isImageMime(attachment.mime_type).isGif) return null;
+	return { width, height };
+}
+
+// Geometria declarada de uma mídia de embed (embed.thumbnail / embed.image).
+// O resumo do embed chega na resposta de mensagens, então a proporção está
+// disponível antes do GET /embeds/:id que traz o image_data (base64): é o que
+// permite reservar o box do card e o scroll não pular quando o embed chega.
+export function embedMediaBox(media?: EmbedMedia | null): MediaBox | null {
+	const width = media?.width;
+	const height = media?.height;
+	if (!width || !height || width <= 0 || height <= 0) return null;
+	return { width, height };
 }
 
 // Fetch a binary resource and return the Blob. The caller is responsible for

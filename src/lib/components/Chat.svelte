@@ -722,6 +722,24 @@
 		};
 	});
 
+	// Altura real do chat exposta como CSS custom property: é o referencial do
+	// teto da mídia inline (--chat-media-max-height). Percentual não resolve
+	// contra o container rolável, por isso a medição precisa ser explícita.
+	$effect(() => {
+		const list = listEl;
+		if (!list) return;
+
+		const write = (): void => {
+			list.style.setProperty('--chat-height', `${Math.round(list.clientHeight)}px`);
+		};
+		write();
+
+		if (typeof ResizeObserver === 'undefined') return;
+		const observer = new ResizeObserver(write);
+		observer.observe(list);
+		return () => observer.disconnect();
+	});
+
 	$effect(() => {
 		const count = messages.length;
 		const newer = hasMoreNewer;
@@ -876,6 +894,12 @@
 		overflow-y: auto;
 		overflow-x: hidden;
 		display: block;
+
+		/* Teto da mídia inline: imagem/vídeo de mensagem e mídia de embed nunca
+		 * podem ocupar mais da metade da área visível do chat. --chat-height é
+		 * medido no effect; o fallback (fora do chat: popovers de pins/busca) é
+		 * o viewport. */
+		--chat-media-max-height: calc(var(--chat-height, 100dvh) * 0.5);
 	}
 
 	.chat-content {
