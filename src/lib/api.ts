@@ -440,7 +440,7 @@ async function refreshSession(): Promise<void> {
 // ── users ──────────────────────────────────────────────
 
 export const users = {
-	list(q?: { since?: string; last_id?: string; order?: 'asc' | 'desc' }): Promise<UserList> {
+	list(q?: { since?: string; last_id?: string; order?: 'asc' | 'desc'; limit?: number }): Promise<UserList> {
 		return request<UserList>('/users', { query: q });
 	},
 	summaryBatch(ids: string[]): Promise<UserSummary[]> {
