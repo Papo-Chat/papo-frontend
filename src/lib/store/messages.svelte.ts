@@ -1100,55 +1100,63 @@ export async function gotoMessage(
 		if (!ch) return false;
 		if (ch.byId.has(messageId)) return true;
 
-		const generation = ++requestSerial;
-		state.channels.set(channelId, {
-			...ch,
-			requestGeneration: generation,
-			windowMode: 'historical',
-			loading: true
-		});
-
-		try {
-			// `since` is a strict boundary in the API, so fetch messages both
-			// newer and older than the target timestamp.
-			const [newerPage, olderPage] = await Promise.all([
-				api.messages.list(channelId, { since: createdAt, order: 'asc', limit: MAX_WINDOW }),
-				api.messages.list(channelId, { since: createdAt, last_id: messageId, order: 'desc', limit: MAX_WINDOW })
-			]);
-			const current = state.channels.get(channelId);
-			if (!current || current.requestGeneration !== generation) return false;
-
-			const newById = new SvelteMap<string, MessageWithAttachment>();
-			for (const raw of [...olderPage.messages, ...newerPage.messages]) {
-				const message = coerceMessage(raw);
-				const merged = mergeFetchedMessage(current.byId.get(message.id), message, current);
-				if (merged) newById.set(message.id, merged);
-			}
-
-			const ids = sortedIds(newById);
-			const oldest = ids.length ? newById.get(ids[0]) : undefined;
-			const newest = ids.length ? newById.get(ids[ids.length - 1]) : undefined;
+		const targetTime = Date.parse(createdAt);
+		if (!Number.isNaN(targetTime)) {
+			const justBeforeTarget = new Date(targetTime - 1).toISOString();
+			const nearbyLimit = Math.floor(MAX_WINDOW / 2);
+			const generation = ++requestSerial;
 			state.channels.set(channelId, {
-				...current,
-				byId: newById,
-				ids,
-				loaded: true,
+				...ch,
+				requestGeneration: generation,
 				windowMode: 'historical',
-				hasMoreOlder: olderPage.has_more || olderPage.messages.length > 0,
-				hasMoreNewer: newerPage.has_more || newerPage.messages.length > 0,
-				cursorOlder: oldest ? { since: oldest.created_at, last_id: oldest.id } : null,
-				cursorNewer: newest ? { since: newest.created_at, last_id: newest.id } : null
+				loading: true
 			});
-			for (const message of [...olderPage.messages, ...newerPage.messages]) {
-				if (newById.has(message.id)) applyPendingEmbeds(state, message.id);
-			}
-			if (newById.has(messageId)) return true;
-		} catch {
-			// Fall back to keyset navigation when direct timestamp lookup fails.
-		} finally {
-			const current = state.channels.get(channelId);
-			if (current?.requestGeneration === generation) {
-				state.channels.set(channelId, { ...current, loading: false });
+
+			try {
+				// since without last_id is exclusive, so move it back 1ms to
+				// include the target timestamp. The other query loads its older
+				// neighbours using the exact (created_at, id) cursor.
+				const [newerPage, olderPage] = await Promise.all([
+					api.messages.list(channelId, { since: justBeforeTarget, order: 'asc', limit: nearbyLimit }),
+					api.messages.list(channelId, { since: createdAt, last_id: messageId, order: 'desc', limit: nearbyLimit })
+				]);
+				const current = state.channels.get(channelId);
+				if (!current || current.requestGeneration !== generation) return false;
+
+				const newById = new SvelteMap<string, MessageWithAttachment>();
+				for (const raw of [...olderPage.messages, ...newerPage.messages]) {
+					const message = coerceMessage(raw);
+					const merged = mergeFetchedMessage(current.byId.get(message.id), message, current);
+					if (merged) newById.set(message.id, merged);
+				}
+
+				const ids = sortedIds(newById);
+				const oldest = ids.length ? newById.get(ids[0]) : undefined;
+				const newest = ids.length ? newById.get(ids[ids.length - 1]) : undefined;
+				const dropped = [...current.byId.values()].filter((message) => !newById.has(message.id));
+				releaseMessageResources(newById, dropped);
+				state.channels.set(channelId, {
+					...current,
+					byId: newById,
+					ids,
+					loaded: true,
+					windowMode: 'historical',
+					hasMoreOlder: olderPage.has_more,
+					hasMoreNewer: newerPage.has_more,
+					cursorOlder: oldest ? { since: oldest.created_at, last_id: oldest.id } : null,
+					cursorNewer: newest ? { since: newest.created_at, last_id: newest.id } : null
+				});
+				for (const raw of [...olderPage.messages, ...newerPage.messages]) {
+					if (newById.has(raw.id)) applyPendingEmbeds(state, raw.id);
+				}
+				if (newById.has(messageId)) return true;
+			} catch {
+				// Fall back to keyset navigation when direct timestamp lookup fails.
+			} finally {
+				const current = state.channels.get(channelId);
+				if (current?.requestGeneration === generation) {
+					state.channels.set(channelId, { ...current, loading: false });
+				}
 			}
 		}
 	}
