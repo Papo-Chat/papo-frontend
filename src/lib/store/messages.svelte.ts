@@ -1064,12 +1064,10 @@ export function setLatest(channelId: string): Promise<void> {
 	return _freshLoadTracked(channelId).catch(() => {});
 }
 
-// Navigate to a specific message: load pages until it is in the window.
+// Navigate to a specific message, using a bounded timestamp lookup first.
+// Notifications may provide an approximate timestamp, so always verify the
+// target ID and fall back to keyset pagination if it is not in the window.
 // Returns true when the message ends up in `byId` (the caller scrolls to it).
-// `createdAt` (the target's created_at, or a close approximation) picks the
-// direction: if the target is newer than the window's newest message, jump to
-// the newest first, then page towards older from the top. Otherwise page
-// towards older from `cursorOlder`.
 async function waitForChannelIdle(channelId: string): Promise<void> {
 	while (state.channels.get(channelId)?.loading) {
 		await new Promise<void>((resolve) => setTimeout(resolve, 20));
