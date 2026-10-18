@@ -1117,8 +1117,17 @@ export async function gotoMessage(
 				// include the target timestamp. The other query loads its older
 				// neighbours using the exact (created_at, id) cursor.
 				const [newerPage, olderPage] = await Promise.all([
-					api.messages.list(channelId, { since: justBeforeTarget, order: 'asc', limit: nearbyLimit }),
-					api.messages.list(channelId, { since: createdAt, last_id: messageId, order: 'desc', limit: nearbyLimit })
+					api.messages.list(channelId, {
+						since: justBeforeTarget,
+						order: 'asc',
+						limit: nearbyLimit
+					}),
+					api.messages.list(channelId, {
+						since: createdAt,
+						last_id: messageId,
+						order: 'desc',
+						limit: nearbyLimit
+					})
 				]);
 				const current = state.channels.get(channelId);
 				if (!current || current.requestGeneration !== generation) return false;
@@ -1133,7 +1142,9 @@ export async function gotoMessage(
 				const ids = sortedIds(newById);
 				const oldest = ids.length ? newById.get(ids[0]) : undefined;
 				const newest = ids.length ? newById.get(ids[ids.length - 1]) : undefined;
-				const dropped = [...current.byId.values()].filter((message) => !newById.has(message.id));
+				const dropped = [...current.byId.values()].filter(
+					(message) => !newById.has(message.id)
+				);
 				releaseMessageResources(newById, dropped);
 				state.channels.set(channelId, {
 					...current,
@@ -1172,8 +1183,11 @@ export async function gotoMessage(
 		const newest = current.ids.length
 			? current.byId.get(current.ids[current.ids.length - 1]) ?? null
 			: null;
-		const targetIsNewer = !!createdAt && !!newest &&
-			(createdAt > newest.created_at || (createdAt === newest.created_at && messageId > newest.id));
+		const targetIsNewer =
+			!!createdAt &&
+			!!newest &&
+			(createdAt > newest.created_at ||
+				(createdAt === newest.created_at && messageId > newest.id));
 
 		if (targetIsNewer) {
 			if (!current.hasMoreNewer || !current.cursorNewer) return false;
@@ -1193,6 +1207,7 @@ export async function gotoMessage(
 		await new Promise<void>((resolve) => setTimeout(resolve, 0));
 	}
 }
+
 export function send(payload: {
 	channel_id: string;
 	content: string | null;
