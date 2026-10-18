@@ -41,6 +41,18 @@
 
 	const mediaBox = $derived(attachmentMediaBox(attachment));
 
+	/* A caixa reservada fica no próprio botão (não num <img> sem src: esse
+	   estado "broken" faz o navegador desenhar o ícone de imagem quebrada).
+	   A fórmula reproduce o box final do bitmap — mesma proporção e os mesmos
+	   tetos da regra do <img> — por isso entrar na tela não move nada. A
+	   largura usa 100% do balão; dentro de um botão fit-content o percentual
+	   resolvia a zero, então o box tem que estar no botão. */
+	const mediaBoxStyle = $derived(
+		mediaBox && !tiled
+			? `width: min(${mediaBox.width}px, var(--image-cap-width), calc(var(--image-cap-height) * ${mediaBox.width} / ${mediaBox.height})); aspect-ratio: ${mediaBox.width} / ${mediaBox.height}`
+			: undefined
+	);
+
 	$effect(() => {
 		const el = imageBox;
 		if (!el) return;
@@ -193,36 +205,40 @@
 		type="button"
 		class="attachment-image"
 		class:tiled
+		class:sized={!!mediaBox && !tiled}
 		class:pending={!imageShown}
+		style={mediaBoxStyle}
 		bind:this={imageBox}
 		aria-label={`Abrir ${name} em tela cheia`}
 		onclick={openLightbox}
 	>
-		<!-- Nos nao animamos gifs reprocessados, entao usamos o original.
-		     Sem reserva de box: o bitmap exibido é o original e a API só traz
-		     a geometria da thumbnail (128px), que daria um tamanho errado. -->
-		{#if isImage.isGif}
-			<img
-				src={imageRequested ? fullUrl : undefined}
-				alt={name}
-				decoding="async"
-				class:revealed={imageShown}
-				class:pinned-attachment={pinned}
-				onload={handleImageSettled}
-				onerror={handleImageSettled}
-			/>
-		{:else}
-			<img
-				src={imageRequested ? thumbUrl : undefined}
-				alt={name}
-				width={mediaBox?.width}
-				height={mediaBox?.height}
-				decoding="async"
-				class:revealed={imageShown}
-				class:pinned-attachment={pinned}
-				onload={handleImageSettled}
-				onerror={handleImageSettled}
-			/>
+		{#if imageRequested}
+			<!-- Nos nao animamos gifs reprocessados, entao usamos o original.
+			     Sem reserva de box: o bitmap exibido é o original e a API só
+			     traz a geometria da thumbnail (128px), que daria um tamanho errado. -->
+			{#if isImage.isGif}
+				<img
+					src={fullUrl}
+					alt={name}
+					decoding="async"
+					class:revealed={imageShown}
+					class:pinned-attachment={pinned}
+					onload={handleImageSettled}
+					onerror={handleImageSettled}
+				/>
+			{:else}
+				<img
+					src={thumbUrl}
+					alt={name}
+					width={mediaBox?.width}
+					height={mediaBox?.height}
+					decoding="async"
+					class:revealed={imageShown}
+					class:pinned-attachment={pinned}
+					onload={handleImageSettled}
+					onerror={handleImageSettled}
+				/>
+			{/if}
 		{/if}
 	</button>
 
@@ -367,6 +383,13 @@
 		margin: 2px 0;
 		cursor: zoom-in;
 
+		/* Tetos da mídia: 360px de altura ou metade da altura visível do chat (o
+		 * que for menor) e a largura do balão. Usados pela caixa reservada do
+		 * botão e pelo <img>, para as duas medidas baterem. Contextos menores
+		 * (mensagem compacta) sobrescrevem as duas. */
+		--image-cap-width: 100%;
+		--image-cap-height: min(360px, var(--chat-media-max-height, 45dvh));
+
 		/* mesma responsividade da bubble (aero.css):
 		 * hover sobe 2px; press escala 0.995. */
 		transition: transform 0.22s var(--ease);
@@ -380,12 +403,11 @@
 	.attachment-image img {
 		display: block;
 		width: auto;
-		max-width: 100%;
+		max-width: var(--image-cap-width);
 		height: auto;
-		/* Teto: 360px ou metade da altura visível do chat, o que for menor. Em
-		 * elemento substituído com width:auto o max-height reduz a largura na
-		 * mesma proporção (sem distorção e sem letterbox). */
-		max-height: min(360px, var(--chat-media-max-height, 45dvh));
+		/* Em elemento substituído com width:auto o max-height reduz a largura
+		 * na mesma proporção (sem distorção e sem letterbox). */
+		max-height: var(--image-cap-height);
 		border-radius: 10px;
 
 		/* Entrada suave: os pixels só aparecem depois de decodificados
@@ -403,6 +425,16 @@
 	.attachment-image.pending {
 		background: var(--surface);
 		border-radius: 10px;
+	}
+
+	/* Caixa reservada no próprio botão (width + aspect-ratio inline): o <img>
+	 * preenche essa caixa exata, então trocar o espaço vazio pelo bitmap não
+	 * move o layout. object-fit protege se o arquivo diferir 1px das dimensões
+	 * declaradas (sem distorção). */
+	.attachment-image.sized img {
+		width: 100%;
+		height: 100%;
+		object-fit: contain;
 	}
 
 	/* Message image mosaics own the tile geometry. Fill the tile and crop

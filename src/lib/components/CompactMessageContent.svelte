@@ -103,9 +103,13 @@
 		color: var(--text-secondary);
 	}
 
-	:global(.compact-message .attachment-image img) {
-		max-width: 220px;
-		max-height: 130px;
+	/* Tetos da mídia na mensagem compacta. Attachment lê esses custom properties
+	 * tanto na caixa reservada do botão quanto no <img>, então a caixa reservada
+	 * continua batendo com o bitmap também aqui. O seletor precisa de um nível a
+	 * mais que a regra do próprio Attachment (que declara as mesmas variáveis). */
+	:global(.compact-message .compact-attachments .attachment-image) {
+		--image-cap-width: 220px;
+		--image-cap-height: 130px;
 	}
 
 	:global(.compact-message .attachment-media video) {

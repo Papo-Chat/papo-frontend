@@ -69,6 +69,9 @@
 	// resumo do embed, que já chega no payload da mensagem: reservar o box com
 	// elas evita o salto de layout quando o base64 chega do GET /embeds/:id.
 	const imageBox = $derived(embedMediaBox(embed.thumbnail) ?? embedMediaBox(embed.image));
+	const imageBoxStyle = $derived(
+		imageBox ? `aspect-ratio: ${imageBox.width} / ${imageBox.height}` : undefined
+	);
 
 	// Ícone do autor (author_media): substitui o selo de letra da linha de topo.
 	const authorIconUrl = $derived(
@@ -259,15 +262,21 @@
 			{/if}
 		</div>
 	{:else if imageUrl || (imageBox && !embedFailed)}
-		<img
-			class="embed-image"
-			class:pending={!imageUrl}
-			src={imageUrl || undefined}
-			alt=""
-			decoding="async"
-			width={imageBox?.width}
-			height={imageBox?.height}
-		/>
+		{#if imageUrl}
+			<img
+				class="embed-image"
+				src={imageUrl}
+				alt=""
+				decoding="async"
+				width={imageBox?.width}
+				height={imageBox?.height}
+			/>
+		{:else}
+			<!-- Placeholder com a caixa exata do bitmap: um <img> sem src entraria
+			     no estado "broken" e o navegador desenharia o ícone de imagem
+			     quebrada antes de o base64 chegar. -->
+			<span class="embed-image pending" style={imageBoxStyle} aria-hidden="true"></span>
+		{/if}
 	{/if}
 
 	{#if footerText}

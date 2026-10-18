@@ -374,28 +374,27 @@
 			return;
 		}
 
-		requestAnimationFrame(() => {
-			const list = listEl;
-			if (!list) {
-				loadingNewer = false;
-				return;
-			}
-
-			if (anchorId && anchorBefore != null) {
-				const anchorAfter = messageElement(anchorId)?.getBoundingClientRect().top;
-				if (anchorAfter != null) {
-					list.scrollTop += anchorAfter - anchorBefore;
-				}
-			}
-
-			lastScrollTop = list.scrollTop;
+		// Mesma razão de loadOlder: corrigir antes da pintura do frame.
+		const list = listEl;
+		if (!list) {
 			loadingNewer = false;
-			updateReturnRecent();
+			return;
+		}
 
-			if (!hasMoreNewer && distanceFromBottom() <= BOTTOM_THRESHOLD) {
-				clearUnreadAtBottom();
+		if (anchorId && anchorBefore != null) {
+			const anchorAfter = messageElement(anchorId)?.getBoundingClientRect().top;
+			if (anchorAfter != null) {
+				list.scrollTop += anchorAfter - anchorBefore;
 			}
-		});
+		}
+
+		lastScrollTop = list.scrollTop;
+		loadingNewer = false;
+		updateReturnRecent();
+
+		if (!hasMoreNewer && distanceFromBottom() <= BOTTOM_THRESHOLD) {
+			clearUnreadAtBottom();
+		}
 	}
 
 	function updateReturnRecent(): void {
@@ -525,22 +524,25 @@
 			return;
 		}
 
-		requestAnimationFrame(() => {
-			const list = listEl;
-			if (!list) {
-				loadingOlder = false;
-				return;
-			}
-
-			if (anchorId && anchorBefore != null) {
-				const anchorAfter = messageElement(anchorId)?.getBoundingClientRect().top;
-				if (anchorAfter != null) {
-					list.scrollTop += anchorAfter - anchorBefore;
-				}
-			}
-
+		// Compensação síncrona: depois de tick() o DOM já foi atualizado e o
+		// navegador ainda não pintou nada. Ajustar em requestAnimationFrame
+		// deixaria escapar um frame com o bloco antigo empurrado para cima
+		// (é o "tranco" ao rolar para trás); getBoundingClientRect() força o
+		// layout necessário para medir e corrigir antes da pintura.
+		const list = listEl;
+		if (!list) {
 			loadingOlder = false;
-		});
+			return;
+		}
+
+		if (anchorId && anchorBefore != null) {
+			const anchorAfter = messageElement(anchorId)?.getBoundingClientRect().top;
+			if (anchorAfter != null) {
+				list.scrollTop += anchorAfter - anchorBefore;
+			}
+		}
+
+		loadingOlder = false;
 	}
 
 	// Initial Discord-like positioning: first unread when there is an unread
