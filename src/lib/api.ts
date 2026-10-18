@@ -440,7 +440,7 @@ async function refreshSession(): Promise<void> {
 // ── users ──────────────────────────────────────────────
 
 export const users = {
-	list(q?: { since?: string; last_id?: string; order?: 'asc' | 'desc'; limit?: number }): Promise<UserList> {
+	list(q?: { since?: string; last_id?: string; order?: 'asc' | 'desc' }): Promise<UserList> {
 		return request<UserList>('/users', { query: q });
 	},
 	summaryBatch(ids: string[]): Promise<UserSummary[]> {
@@ -683,7 +683,7 @@ export const channels = {
 export const messages = {
 	list(
 		channelId: string,
-		q?: { since?: string; last_id?: string; order?: 'asc' | 'desc' }
+		q?: { since?: string; last_id?: string; order?: 'asc' | 'desc'; limit?: number }
 	): Promise<MessageList> {
 		return request<MessageList>(`/channels/${encodeURIComponent(channelId)}/messages`, {
 			query: q
