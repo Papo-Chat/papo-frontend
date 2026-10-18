@@ -12,6 +12,7 @@
 	import * as usersStore from '$lib/store/users.svelte';
 	import type { MessageWithAttachment } from '$lib/types';
 	import { formatTime } from '$lib/utils/time';
+	import { messageAuthorIdentity } from '$lib/utils/message-author';
 	import Icon from './Icon.svelte';
 	import Avatar from './Avatar.svelte';
 	import WebhookAvatar from './WebhookAvatar.svelte';
@@ -85,8 +86,10 @@
 		<div class="popover-body">
 			{#if pinned.length}
 				{#each pinned as m (m.id)}
-					{@const author = usersStore.state.byId.get(m.author_id ?? '')}
-					{@const external = m.webhook_id ? (m.external_author ?? null) : null}
+					{@const identity = messageAuthorIdentity(
+						m,
+						usersStore.state.byId.get(m.author_id ?? '')
+					)}
 					<div
 							class="popover-item pin-item"
 							role="button"
@@ -104,15 +107,15 @@
 								}
 							}}
 						>
-							{#if external}
-								<WebhookAvatar avatarUrl={external.avatar_url ?? null} size={34} />
+							{#if identity.isWebhook}
+								<WebhookAvatar avatarUrl={identity.avatarUrl} size={34} />
 							{:else}
-								<Avatar user={author} userId={m.author_id} size={34} />
+								<Avatar user={identity.user} userId={identity.userId} size={34} />
 							{/if}
 							<div class="pin-main">
 								<div class="meta">
 									<span class="name">
-										{external?.name || author?.nickname || author?.username || 'Usuário'}
+										{identity.name}
 									</span>
 									<span class="time">{formatTime(m.created_at)}</span>
 								</div>

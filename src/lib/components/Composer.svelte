@@ -13,9 +13,11 @@
 	import { state as sessionState } from '$lib/store/session.svelte';
 	import { state as serverState } from '$lib/store/server.svelte';
 	import { isMobileUi } from '$lib/store/performance.svelte';
+	import { messageAuthorIdentity } from '$lib/utils/message-author';
 	import Icon from './Icon.svelte';
 	import EmojiPicker from './EmojiPicker.svelte';
 	import Avatar from './Avatar.svelte';
+	import WebhookAvatar from './WebhookAvatar.svelte';
 	import FormattedMessage from './FormattedMessage.svelte';
 	import { onDestroy, tick } from 'svelte';
 
@@ -234,12 +236,11 @@
 	let recordingStartedAt = 0;
 	let recordingTimer: ReturnType<typeof setInterval> | null = null;
 
-	const replyAuthor = $derived(
-		usersStore.state.byId.get(replyTo?.author_id ?? '')
-	);
-
-	const replyToAuthorName = $derived(
-		replyAuthor?.nickname || replyAuthor?.username || ''
+	const replyToIdentity = $derived(
+		messageAuthorIdentity(
+			replyTo,
+			replyTo ? usersStore.state.byId.get(replyTo.author_id ?? '') : undefined
+		)
 	);
 
 	function addFiles(selected: File[]): void {
@@ -878,13 +879,18 @@
 				variant="light"
 			/>
 
-			<Avatar
-				user={replyAuthor}
-				size={20}
-			/>
+			{#if replyToIdentity.isWebhook}
+				<WebhookAvatar avatarUrl={replyToIdentity.avatarUrl} size={20} />
+			{:else}
+				<Avatar
+					user={replyToIdentity.user}
+					userId={replyToIdentity.userId}
+					size={20}
+				/>
+			{/if}
 
 			<span class="reply-name">
-				{replyToAuthorName}
+				{replyToIdentity.name}
 			</span>
 
 			<div class="reply-text">

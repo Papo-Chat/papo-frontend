@@ -4,6 +4,7 @@
 import { afterEach, describe, it, expect } from 'vitest';
 import * as webhooksStore from '../src/lib/store/webhooks.svelte';
 import { webhookAvatarUrl, resolveExternalAvatarUrl } from '../src/lib/utils/media';
+import { messageAuthorIdentity } from '../src/lib/utils/message-author';
 
 describe('webhookAvatarUrl', () => {
 	it('builds the public avatar endpoint path', () => {
@@ -79,5 +80,98 @@ describe('webhook display identity', () => {
 		});
 
 		expect(webhooksStore.displayName('w1')).toBe('Nickname atual');
+	});
+});
+
+// Autoria de exibição nas superfícies fora do chat (pins, busca, notificações,
+// prévia de resposta): mensagens de webhook têm author_id null, então nome e
+// avatar precisam vir de external_author/webhooksStore.
+describe('messageAuthorIdentity', () => {
+	afterEach(() => webhooksStore.reset());
+
+	const userSummary = {
+		id: 'u1',
+		username: 'joao',
+		nickname: 'João',
+		status: null,
+		status_message: null,
+		typing: null,
+		status_updated_at: null,
+		created_at: '2026-10-14T09:00:00Z',
+		roles: []
+	};
+
+	it('resolves a human message from the user summary', () => {
+		const identity = messageAuthorIdentity(
+			{ id: 'm1', author_id: 'u1', webhook_id: null, external_author: null },
+			userSummary
+		);
+
+		expect(identity.isWebhook).toBe(false);
+		expect(identity.userId).toBe('u1');
+		expect(identity.name).toBe('João');
+		expect(identity.avatarUrl).toBeNull();
+	});
+
+	it('falls back to the listing name while the author is still loading', () => {
+		const identity = messageAuthorIdentity(
+			{ id: 'm1', author_id: 'u1', webhook_id: null, external_author: null },
+			undefined,
+			'joao'
+		);
+
+		expect(identity.user).toBeNull();
+		expect(identity.name).toBe('joao');
+	});
+
+	it('uses the persistent webhook identity name and its avatar', () => {
+		webhooksStore.observeMessageIdentity(
+			'w1',
+			{ source: 'webhook', id: 'w1', name: 'Robô novo' },
+			'2026-10-14T11:00:00Z'
+		);
+
+		const identity = messageAuthorIdentity({
+			id: 'm1',
+			author_id: null,
+			webhook_id: 'w1',
+			external_author: { source: 'webhook', id: 'w1', name: 'Robô antigo', avatar_url: '/webhooks/w1/avatar' }
+		});
+
+		expect(identity.isWebhook).toBe(true);
+		expect(identity.userId).toBeNull();
+		expect(identity.name).toBe('Robô novo');
+		expect(identity.avatarUrl).toBe('/webhooks/w1/avatar');
+	});
+
+	it('keeps a per-message external alias untouched', () => {
+		webhooksStore.observeMessageIdentity(
+			'w1',
+			{ source: 'webhook', id: 'w1', name: 'Nome do webhook' },
+			'2026-10-14T12:00:00Z'
+		);
+
+		const identity = messageAuthorIdentity({
+			id: 'm1',
+			author_id: null,
+			webhook_id: 'w1',
+			external_author: { source: 'discord', id: 'ext-1', name: 'Autor do Discord' }
+		});
+
+		expect(identity.name).toBe('Autor do Discord');
+		expect(identity.avatarUrl).toBeNull();
+	});
+
+	it('degrades to the webhook icon when the snapshot is missing', () => {
+		const identity = messageAuthorIdentity({
+			id: 'm1',
+			author_id: null,
+			webhook_id: 'w1',
+			external_author: null
+		});
+
+		expect(identity.isWebhook).toBe(true);
+		expect(identity.name).toBe('Webhook');
+		expect(identity.avatarUrl).toBeNull();
 	});
 });

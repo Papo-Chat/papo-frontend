@@ -13,9 +13,11 @@
 	import * as dmsStore from '$lib/store/dms.svelte';
 	import * as channelsStore from '$lib/store/channels.svelte';
 	import { formatTime } from '$lib/utils/time';
+	import { messageAuthorIdentity } from '$lib/utils/message-author';
 	import type { NotificationSummary } from '$lib/types';
 	import Icon from './Icon.svelte';
 	import Avatar from './Avatar.svelte';
+	import WebhookAvatar from './WebhookAvatar.svelte';
 	import CompactMessageContent from './CompactMessageContent.svelte';
 
 	let el: HTMLElement | null = null;
@@ -121,7 +123,10 @@
 		<div class="popover-body" onscroll={onBodyScroll}>
 			{#if notificationsStore.state.items.length}
 				{#each notificationsStore.state.items as n (n.id)}
-					{@const author = usersStore.state.byId.get(n.author_id ?? '')}
+					{@const identity = messageAuthorIdentity(
+						n,
+						usersStore.state.byId.get(n.author_id ?? '')
+					)}
 					{@const cachedMessage = messagesStore.getMessage(n.channel_id, n.message_id)}
 					<div
 							class="popover-item notification-item {!n.read ? 'unread' : ''}"
@@ -140,10 +145,14 @@
 								}
 							}}
 						>
-							<Avatar user={author} userId={n.author_id} size={34} />
+							{#if identity.isWebhook}
+								<WebhookAvatar avatarUrl={identity.avatarUrl} size={34} />
+							{:else}
+								<Avatar user={identity.user} userId={identity.userId} size={34} />
+							{/if}
 							<div class="notification-main">
 								<div class="meta">
-									<span class="name">{author?.nickname || author?.username || 'Usuário'}</span>
+									<span class="name">{identity.name}</span>
 									<span class="time">{formatTime(n.created_at)}</span>
 									{#if !n.read}
 										<span class="unread-dot" aria-hidden="true"></span>

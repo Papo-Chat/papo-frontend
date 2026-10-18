@@ -383,6 +383,10 @@ export interface NotificationSummary {
 	message_id: string;
 	channel_id: string;
 	author_id: string | null;
+	// Identidade de exibição quando a mensagem notificada é de webhook
+	// (author_id é null nesse caso).
+	webhook_id?: string | null;
+	external_author?: ExternalAuthor | null;
 	// Truncated to 512 characters.
 	message_content: string;
 	read: boolean;
@@ -433,6 +437,10 @@ export interface SearchResult {
 	channel_name: string;
 	author_id: string | null;
 	author_username: string | null;
+	// Identidade de exibição quando o resultado é mensagem de webhook
+	// (author_id é null nesse caso).
+	webhook_id?: string | null;
+	external_author?: ExternalAuthor | null;
 	created_at: string;
 	score: number | null;
 }

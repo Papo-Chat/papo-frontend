@@ -8,9 +8,11 @@
     import * as messagesStore from '$lib/store/messages.svelte';
     import type { SearchRequest, SearchResult, UserSummary } from '$lib/types';
     import { formatTime } from '$lib/utils/time';
+    import { messageAuthorIdentity } from '$lib/utils/message-author';
     import { nextCursor, type KeysetCursor } from '$lib/utils/keyset';
     import Icon from './Icon.svelte';
     import Avatar from './Avatar.svelte';
+    import WebhookAvatar from './WebhookAvatar.svelte';
     import CompactMessageContent from './CompactMessageContent.svelte';
 
     let {
@@ -460,7 +462,7 @@
 
                         <div class="search-results">
                             {#each results as m (m.id)}
-                                {@const a = authorFor(m)}
+                                {@const identity = messageAuthorIdentity(m, authorFor(m), m.author_username)}
                                 <div
                                     class="popover-item search-result"
                                     role="button"
@@ -475,10 +477,14 @@
                                         }
                                     }}
                                 >
-                                    <Avatar user={a} userId={m.author_id} size={34} />
+                                    {#if identity.isWebhook}
+                                        <WebhookAvatar avatarUrl={identity.avatarUrl} size={34} />
+                                    {:else}
+                                        <Avatar user={identity.user} userId={identity.userId} size={34} />
+                                    {/if}
                                     <div class="search-result-main">
                                         <div class="meta search-result-meta">
-                                            <span class="name">{a?.nickname || a?.username || m.author_username}</span>
+                                            <span class="name">{identity.name}</span>
                                             {#if m.channel_name && !scopeChannelId}
                                                 <span class="channel-name">{m.channel_name}</span>
                                             {/if}
