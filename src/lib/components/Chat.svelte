@@ -362,9 +362,8 @@
 
 		loadingNewer = true;
 		const anchorId = messages.at(-1)?.id ?? null;
-		const anchorBefore = anchorId
-			? messageElement(anchorId)?.getBoundingClientRect().top ?? null
-			: null;
+		const anchorBeforeEl = anchorId ? messageElement(anchorId) : null;
+		const anchorBefore = anchorBeforeEl ? contentOffset(listEl, anchorBeforeEl) : null;
 
 		try {
 			await onLoadMoreNewer?.();
@@ -382,9 +381,9 @@
 		}
 
 		if (anchorId && anchorBefore != null) {
-			const anchorAfter = messageElement(anchorId)?.getBoundingClientRect().top;
-			if (anchorAfter != null) {
-				list.scrollTop += anchorAfter - anchorBefore;
+			const anchorAfterEl = messageElement(anchorId);
+			if (anchorAfterEl) {
+				list.scrollTop += contentOffset(list, anchorAfterEl) - anchorBefore;
 			}
 		}
 
@@ -504,6 +503,16 @@
 		return listEl?.querySelector<HTMLElement>(`[data-message-id="${id}"]`) ?? null;
 	}
 
+	// Posição do elemento dentro do conteúdo do scroller. Ao contrário de
+	// getBoundingClientRect().top, esse valor independe do scrollTop, então a
+	// diferença entre duas medições separadas por um fetch só reflete o que o
+	// layout mudou acima do elemento. Medindo pelo viewport, o scroll que o
+	// usuário faz (e o scroll anchoring nativo) durante o fetch entraria na
+	// conta e viraria sobre/subcompensação: o "empurrão" ao chegar uma página.
+	function contentOffset(list: HTMLElement, el: HTMLElement): number {
+		return el.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop;
+	}
+
 	async function loadOlder(): Promise<void> {
 		if (loadingOlder || !hasMoreOlder || !listEl) return;
 
@@ -514,7 +523,8 @@
 		// dropping newer messages, scrollHeight may barely change even though a
 		// full older page was prepended.
 		const anchorId = messages[0]?.id ?? null;
-		const anchorBefore = anchorId ? messageElement(anchorId)?.getBoundingClientRect().top ?? null : null;
+		const anchorBeforeEl = anchorId ? messageElement(anchorId) : null;
+		const anchorBefore = anchorBeforeEl ? contentOffset(listEl, anchorBeforeEl) : null;
 
 		try {
 			await onLoadMoreOlder?.();
@@ -536,9 +546,9 @@
 		}
 
 		if (anchorId && anchorBefore != null) {
-			const anchorAfter = messageElement(anchorId)?.getBoundingClientRect().top;
-			if (anchorAfter != null) {
-				list.scrollTop += anchorAfter - anchorBefore;
+			const anchorAfterEl = messageElement(anchorId);
+			if (anchorAfterEl) {
+				list.scrollTop += contentOffset(list, anchorAfterEl) - anchorBefore;
 			}
 		}
 
