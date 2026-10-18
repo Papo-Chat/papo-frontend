@@ -683,7 +683,7 @@ export const channels = {
 export const messages = {
 	list(
 		channelId: string,
-		q?: { since?: string; last_id?: string; order?: 'asc' | 'desc' }
+		q?: { since?: string; last_id?: string; order?: 'asc' | 'desc'; limit?: number }
 	): Promise<MessageList> {
 		return request<MessageList>(`/channels/${encodeURIComponent(channelId)}/messages`, {
 			query: q

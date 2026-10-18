@@ -12,6 +12,7 @@ import {
 	load,
 	loadMoreOlder,
 	loadMoreNewer,
+	gotoMessage,
 	react,
 	unreact,
 	edit,
@@ -885,3 +886,41 @@ function embed(id: string, overrides: Partial<Embed> = {}): Embed {
 		...overrides
 	};
 }
+
+describe('gotoMessage direct navigation', () => {
+	it('loads a window around a distant target instead of paging from the latest messages', async () => {
+		const targetTime = '2023-01-01T00:00:00.000Z';
+		const target = msg('target', { created_at: targetTime });
+		const older = msg('older', { created_at: '2022-12-31T23:59:00.000Z' });
+		const newer = msg('newer', { created_at: '2023-01-01T00:01:00.000Z' });
+		const latest = msg('latest', { created_at: '2024-01-01T00:00:00.000Z' });
+		const response = (items: MessageWithAttachment[], has_more: boolean) => ({
+			channel_id: 'ch1',
+			messages: items,
+			has_more
+		});
+
+		const listSpy = vi.spyOn(apiMessages, 'list').mockImplementation(async (_channelId, q) => {
+			if (!q) return response([latest], true);
+			if (q.order === 'asc') return response([target, newer], true);
+			return response([older], true);
+		});
+
+		await expect(gotoMessage('ch1', 'target', targetTime)).resolves.toBe(true);
+		expect(listSpy).toHaveBeenCalledTimes(3);
+		expect(listSpy).toHaveBeenNthCalledWith(2, 'ch1', {
+			since: '2022-12-31T23:59:59.999Z',
+			order: 'asc',
+			limit: 45
+		});
+		expect(listSpy).toHaveBeenNthCalledWith(3, 'ch1', {
+			since: targetTime,
+			last_id: 'target',
+			order: 'desc',
+			limit: 45
+		});
+		expect(globalState.channels.get('ch1')?.byId.has('target')).toBe(true);
+		expect(globalState.channels.get('ch1')?.ids).toContain('older');
+		expect(globalState.channels.get('ch1')?.ids).toContain('newer');
+	});
+});
