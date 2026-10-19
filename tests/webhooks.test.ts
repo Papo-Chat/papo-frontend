@@ -103,7 +103,7 @@ describe('messageAuthorIdentity', () => {
 
 	it('resolves a human message from the user summary', () => {
 		const identity = messageAuthorIdentity(
-			{ id: 'm1', author_id: 'u1', webhook_id: null, external_author: null },
+			{ author_id: 'u1', webhook_id: null, external_author: null },
 			userSummary
 		);
 
@@ -115,7 +115,7 @@ describe('messageAuthorIdentity', () => {
 
 	it('falls back to the listing name while the author is still loading', () => {
 		const identity = messageAuthorIdentity(
-			{ id: 'm1', author_id: 'u1', webhook_id: null, external_author: null },
+			{ author_id: 'u1', webhook_id: null, external_author: null },
 			undefined,
 			'joao'
 		);
@@ -132,10 +132,14 @@ describe('messageAuthorIdentity', () => {
 		);
 
 		const identity = messageAuthorIdentity({
-			id: 'm1',
 			author_id: null,
 			webhook_id: 'w1',
-			external_author: { source: 'webhook', id: 'w1', name: 'Robô antigo', avatar_url: '/webhooks/w1/avatar' }
+			external_author: {
+				source: 'webhook',
+				id: 'w1',
+				name: 'Robô antigo',
+				avatar_url: '/webhooks/w1/avatar'
+			}
 		});
 
 		expect(identity.isWebhook).toBe(true);
@@ -152,7 +156,6 @@ describe('messageAuthorIdentity', () => {
 		);
 
 		const identity = messageAuthorIdentity({
-			id: 'm1',
 			author_id: null,
 			webhook_id: 'w1',
 			external_author: { source: 'discord', id: 'ext-1', name: 'Autor do Discord' }
@@ -164,7 +167,6 @@ describe('messageAuthorIdentity', () => {
 
 	it('degrades to the webhook icon when the snapshot is missing', () => {
 		const identity = messageAuthorIdentity({
-			id: 'm1',
 			author_id: null,
 			webhook_id: 'w1',
 			external_author: null
