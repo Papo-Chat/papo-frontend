@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
 	import { ApiError } from '$lib/api';
@@ -34,12 +35,13 @@
 	let highlightMessageId: string | null = $state(null);
 	let lastHistoryDmId: string | null = null;
 
-	const typingIds = $derived(
-		dm ? usersStore.typingUsers(dm.id).filter((id) => id !== meId()) : []
-	);
+	const typingIds = $derived(dm ? usersStore.typingUsers(dm.id).filter((id) => id !== meId()) : []);
 	const typingNames = $derived(
 		typingIds
-			.map((id) => usersStore.state.byId.get(id)?.nickname || usersStore.state.byId.get(id)?.username || '')
+			.map(
+				(id) =>
+					usersStore.state.byId.get(id)?.nickname || usersStore.state.byId.get(id)?.username || ''
+			)
 			.filter(Boolean)
 	);
 	const typingText = $derived(
@@ -49,11 +51,6 @@
 				? `${typingNames.join(', ')} estão digitando`
 				: ''
 	);
-
-	function homePath(): string {
-		const home = channelsStore.homeChannel();
-		return home ? `/channels/${home.id}` : '/';
-	}
 
 	function highlight(id: string): void {
 		highlightMessageId = id;
@@ -115,7 +112,12 @@
 				(error.type.includes('dm-blocked') || error.detail.includes('direta'))
 			) {
 				dmsStore.drop(dm.id);
-				await goto(homePath());
+				const home = channelsStore.homeChannel();
+				if (home) {
+					await goto(resolve('/channels/[channel_id]', { channel_id: home.id }));
+				} else {
+					await goto(resolve('/'));
+				}
 			}
 			throw error;
 		}
@@ -151,8 +153,7 @@
 			onJumpToLastRead={() =>
 				dm.last_read_message
 					? messagesStore.gotoMessage(dm.id, dm.last_read_message, null)
-					: Promise.resolve(false)
-			}
+					: Promise.resolve(false)}
 			onLoadMoreOlder={() => messagesStore.loadMoreOlder(dm.id)}
 			onLoadMoreNewer={() => messagesStore.loadMoreNewer(dm.id)}
 			onReachLatest={(message) => {
@@ -168,10 +169,12 @@
 			<div class="typing-strip" role="status" aria-label={typingText}>
 				<span class="typing-avatars">
 					{#each typingIds as userId (userId)}
-						<Avatar user={usersStore.state.byId.get(userId)} userId={userId} size={18} />
+						<Avatar user={usersStore.state.byId.get(userId)} {userId} size={18} />
 					{/each}
 				</span>
-				<span class="typing-copy">{typingText}<span class="typing-dots" aria-hidden="true">...</span></span>
+				<span class="typing-copy"
+					>{typingText}<span class="typing-dots" aria-hidden="true">...</span></span
+				>
 			</div>
 		{/if}
 
@@ -220,8 +223,14 @@
 	}
 
 	@keyframes dm-typing-pulse {
-		0%, 20% { opacity: .28; }
-		60%, 100% { opacity: 1; }
+		0%,
+		20% {
+			opacity: 0.28;
+		}
+		60%,
+		100% {
+			opacity: 1;
+		}
 	}
 
 	.dm-loading {

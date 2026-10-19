@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { state, closeProfile } from '$lib/store/ui.svelte';
 	import * as channelsStore from '$lib/store/channels.svelte';
@@ -10,10 +11,12 @@
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
 	import WebhookProfileCard from '$lib/components/WebhookProfileCard.svelte';
 
+	let { children } = $props();
+
 	const channel = $derived(channelsStore.resolve(page.params.channel_id)!);
 
 	function selectChannel(id: string): void {
-		if (id !== channel.id) goto(`/channels/${id}`);
+		if (id !== channel.id) goto(resolve('/channels/[channel_id]', { channel_id: id }));
 	}
 
 	const profileUser = $derived(state.profileOpen ? state.profileUser : null);
@@ -58,7 +61,7 @@
 	<Sidebar openChannelId={channel.id} onSelectChannel={selectChannel} />
 
 	<main class="main">
-		<slot />
+		{@render children()}
 	</main>
 
 	<Members />

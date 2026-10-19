@@ -2,7 +2,10 @@
 	// Settings shell: same back-office chrome as admin, with its own
 	// nav (Configurações / Perfil / Aero).
 	import { state as serverState } from '$lib/store/server.svelte';
+	import type { Snippet } from 'svelte';
 	import Shell from '$lib/components/Shell.svelte';
+
+	let { children } = $props<{ children: Snippet }>();
 
 	const server = $derived(serverState.server);
 
@@ -22,5 +25,5 @@
 	backLabel="Voltar ao chat"
 	{nav}
 >
-	<slot />
+	{@render children()}
 </Shell>

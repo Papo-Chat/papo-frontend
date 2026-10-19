@@ -5,6 +5,8 @@
 	import ProfileCard from '$lib/components/ProfileCard.svelte';
 	import WebhookProfileCard from '$lib/components/WebhookProfileCard.svelte';
 
+	let { children } = $props();
+
 	const profileUser = $derived(state.profileOpen ? state.profileUser : null);
 	const profileWebhook = $derived(state.profileOpen ? state.profileWebhook : null);
 </script>
@@ -29,7 +31,7 @@
 	<Rail />
 
 	<main class="main">
-		<slot />
+		{@render children()}
 	</main>
 
 	{#if state.dmDirectoryOpen}

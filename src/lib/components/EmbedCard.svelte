@@ -100,17 +100,32 @@
 	// A descrição do card passa pelo mesmo renderizador do corpo da mensagem:
 	// sem isso `:emoji:`, markdown e `@mention(<@id>)` de uma ponte aparecem crus.
 	const description = $derived(embed.description ?? '');
-	const mentionIds = $derived([...description.matchAll(/@mention\(<@([0-9a-fA-F-]{16,})>\)/g)].map((m) => m[1]));
-	const mentionMap = $derived(new Map(mentionIds.map((id) => { const u = usersStore.state.byId.get(id); return [id, u?.nickname || u?.username || 'usuário'] as const; })));
-	$effect(() => { if (mentionIds.length) void usersStore.ensureSummaries(mentionIds).catch(() => {}); });
+	const mentionIds = $derived(
+		[...description.matchAll(/@mention\(<@([0-9a-fA-F-]{16,})>\)/g)].map((m) => m[1])
+	);
+	const mentionMap = $derived(
+		new Map(
+			mentionIds.map((id) => {
+				const u = usersStore.state.byId.get(id);
+				return [id, u?.nickname || u?.username || 'usuário'] as const;
+			})
+		)
+	);
+	$effect(() => {
+		if (mentionIds.length) void usersStore.ensureSummaries(mentionIds).catch(() => {});
+	});
 	const descriptionHtml = $derived(
 		description
-			? renderMessageMarkdown(description, emojisStore.state.byName, emojiUrl, { mentions: mentionMap })
+			? renderMessageMarkdown(description, emojisStore.state.byName, emojiUrl, {
+					mentions: mentionMap
+				})
 			: ''
 	);
 
 	function handleMentionClick(event: MouseEvent): void {
-		const target = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-mention-user-id]');
+		const target = (event.target as HTMLElement | null)?.closest<HTMLElement>(
+			'[data-mention-user-id]'
+		);
 		const id = target?.dataset.mentionUserId;
 		if (!id) return;
 		const known = usersStore.state.byId.get(id);
@@ -118,9 +133,12 @@
 			openProfile(known);
 			return;
 		}
-		void usersStore.ensureSummary(id).then((summary) => {
-			if (summary) openProfile(summary);
-		}).catch(() => {});
+		void usersStore
+			.ensureSummary(id)
+			.then((summary) => {
+				if (summary) openProfile(summary);
+			})
+			.catch(() => {});
 	}
 
 	// Vídeo direto (og:video / custom): o player usa o relay autenticado do
@@ -161,8 +179,13 @@
 	}
 </script>
 
-<div class="embed-card" class:has-video={flatVideoCard} bind:this={cardEl} style={color ? `--embed-color: ${color}` : undefined}>
-	{#if hasTopline}	
+<div
+	class="embed-card"
+	class:has-video={flatVideoCard}
+	bind:this={cardEl}
+	style={color ? `--embed-color: ${color}` : undefined}
+>
+	{#if hasTopline}
 		<header class="embed-topline">
 			{#if authorIconUrl}
 				<img class="source-mark source-icon" src={authorIconUrl} alt="" aria-hidden="true" />
@@ -181,6 +204,7 @@
 	{#if showAuthorLine}
 		<p class="embed-author">
 			{#if authorUrl}
+				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- URL externa do metadado do embed -->
 				<a href={authorUrl} target="_blank" rel="noopener noreferrer">{authorName}</a>
 			{:else}
 				{authorName}
@@ -191,6 +215,7 @@
 	{#if hasTitle}
 		<h3 class="embed-heading">
 			{#if embed.url}
+				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- URL externa do metadado do embed -->
 				<a href={embed.url} target="_blank" rel="noopener noreferrer">{title}</a>
 			{:else}
 				{title}
@@ -199,9 +224,13 @@
 	{/if}
 
 	{#if embed.description}
-		<!-- svelte-ignore [render-script-tag] -->
-		<!-- svelte-ignore [a11y-click-events-have-key-events] -->
-		<div class="embed-description" onclick={handleMentionClick}>{@html descriptionHtml}</div>
+		<!-- O clique apenas delega para os links/menções gerados pelo
+		     renderizador (elementos interativos próprios, já navegáveis pelo
+		     teclado); o contêiner em si não é interativo. -->
+		<div class="embed-description" role="presentation" onclick={handleMentionClick}>
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -- renderMessageMarkdown escapa todo texto -->
+			{@html descriptionHtml}
+		</div>
 	{/if}
 
 	{#if fields.length}
@@ -476,16 +505,26 @@
 
 	/* A descrição é renderizada como markdown: parágrafos do renderer não podem
 	   herdar a margem padrão dentro do card. */
-	.embed-description :global(p) { margin: 0; }
-	.embed-description :global(.message-blank-line) { height: 0.55em; }
-	.embed-description :global(a) { color: var(--link); }
+	.embed-description :global(p) {
+		margin: 0;
+	}
+	.embed-description :global(.message-blank-line) {
+		height: 0.55em;
+	}
+	.embed-description :global(a) {
+		color: var(--link);
+	}
 	.embed-description :global(blockquote) {
 		margin: 2px 0 6px;
 		padding-left: 8px;
 		border-left: 2px solid var(--line);
 		color: var(--muted-soft);
 	}
-	.embed-description :global(ul), .embed-description :global(ol) { margin: 2px 0; padding-left: 18px; }
+	.embed-description :global(ul),
+	.embed-description :global(ol) {
+		margin: 2px 0;
+		padding-left: 18px;
+	}
 	.embed-description :global(code) {
 		padding: 0.1em 0.35em;
 		border-radius: 5px;
@@ -648,6 +687,7 @@
 		overflow: hidden;
 		-webkit-box-orient: vertical;
 		-webkit-line-clamp: 2;
+		line-clamp: 2;
 	}
 
 	@media (max-width: 600px) {

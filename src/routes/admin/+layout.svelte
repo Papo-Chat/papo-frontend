@@ -5,7 +5,10 @@
 	import { state as sessionState, meId } from '$lib/store/session.svelte';
 	import * as rolesStore from '$lib/store/roles.svelte';
 	import { can } from '$lib/store/roles.svelte';
+	import type { Snippet } from 'svelte';
 	import Shell from '$lib/components/Shell.svelte';
+
+	let { children } = $props<{ children: Snippet }>();
 
 	const server = $derived(serverState.server);
 	const me = $derived(meId());
@@ -24,10 +27,14 @@
 		...(canManageServer ? [{ to: '/admin/server', label: 'Servidor', icon: 'server' }] : []),
 		...(canManageChannels ? [{ to: '/admin/channels', label: 'Canais', icon: 'chat' }] : []),
 		...(canManageRoles ? [{ to: '/admin/roles', label: 'Roles', icon: 'shield-check' }] : []),
-		...(canManageWebhooks ? [{ to: '/admin/webhooks', label: 'Webhooks', icon: 'webhooks-logo' }] : []),
+		...(canManageWebhooks
+			? [{ to: '/admin/webhooks', label: 'Webhooks', icon: 'webhooks-logo' }]
+			: []),
 		...(canManageServer ? [{ to: '/admin/emojis', label: 'Emojis', icon: 'smiley' }] : []),
 		...(canManageUsers ? [{ to: '/admin/users', label: 'Usuários', icon: 'users-three' }] : []),
-		...(canManageServer ? [{ to: '/admin/audit', label: 'Auditoria', icon: 'magnifying-glass' }] : [])
+		...(canManageServer
+			? [{ to: '/admin/audit', label: 'Auditoria', icon: 'magnifying-glass' }]
+			: [])
 	]);
 
 	function routeAllowed(pathname: string): boolean {
@@ -44,6 +51,8 @@
 	$effect(() => {
 		if (!sessionState.loaded || !rolesStore.state.loaded || !serverState.loaded) return;
 		if (routeAllowed(page.url.pathname)) return;
+		// nav destinations are static admin paths defined in the ui store's nav table
+		// eslint-disable-next-line svelte/no-navigation-without-resolve
 		void goto(nav[0]?.to ?? '/channels/geral', { replaceState: true });
 	});
 </script>
@@ -57,6 +66,6 @@
 		backLabel="Voltar ao chat"
 		{nav}
 	>
-		<slot />
+		{@render children()}
 	</Shell>
 {/if}

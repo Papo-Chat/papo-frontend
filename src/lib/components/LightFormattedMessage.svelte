@@ -11,8 +11,6 @@
 
 	let { content } = $props<{ content: string }>();
 
-	let el: HTMLSpanElement | null = null;
-
 	const nameMap = $derived(emojisStore.state.byName);
 
 	const mentionIds = $derived(
@@ -37,13 +35,12 @@
 			light: true
 		})
 	);
-
-	$effect(() => {
-		if (el) el.innerHTML = html;
-	});
 </script>
 
-<span class="light-formatted" bind:this={el}></span>
+<!-- renderMessageMarkdown escapa todo o texto e descarta HTML cru
+     (utils/markdown.ts). -->
+<!-- eslint-disable-next-line svelte/no-at-html-tags -- saída do renderizador é segura -->
+<span class="light-formatted">{@html html}</span>
 
 <style>
 	.light-formatted {

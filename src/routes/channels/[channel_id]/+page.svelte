@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
 
@@ -22,19 +23,14 @@
 
 	// Resolve o canal da URL (id exato, depois nome).
 	const channel = $derived(
-		channelsStore.resolve(page.params.channel_id) ??
-			channelsStore.homeChannel()
+		channelsStore.resolve(page.params.channel_id) ?? channelsStore.homeChannel()
 	);
 
-	const ch = $derived(
-		channel && messagesStore.getChannel(channel.id)
-	);
+	const ch = $derived(channel && messagesStore.getChannel(channel.id));
 
 	const messages = $derived(
 		ch
-			? (ch.ids
-					.map((id) => ch.byId.get(id) ?? null)
-					.filter(Boolean) as MessageWithAttachment[])
+			? (ch.ids.map((id) => ch.byId.get(id) ?? null).filter(Boolean) as MessageWithAttachment[])
 			: []
 	);
 
@@ -60,9 +56,7 @@
 		typingIds
 			.map(
 				(id) =>
-					usersStore.state.byId.get(id)?.nickname ||
-					usersStore.state.byId.get(id)?.username ||
-					''
+					usersStore.state.byId.get(id)?.nickname || usersStore.state.byId.get(id)?.username || ''
 			)
 			.filter(Boolean)
 	);
@@ -107,7 +101,6 @@
 		});
 	});
 
-
 	// Consome scroll target global: load the message into the window (paging
 	// towards older if it isn't visible yet), then scroll + highlight.
 	$effect(() => {
@@ -126,19 +119,17 @@
 
 		const { messageId, createdAt } = target;
 
-		void messagesStore
-			.gotoMessage(channel.id, messageId, createdAt)
-			.then((found) => {
-				if (!found) return;
+		void messagesStore.gotoMessage(channel.id, messageId, createdAt).then((found) => {
+			if (!found) return;
 
-				highlightMessageId = messageId;
+			highlightMessageId = messageId;
 
-				queueMicrotask(() => {
-					setTimeout(() => {
-						highlightMessageId = null;
-					}, 2500);
-				});
+			queueMicrotask(() => {
+				setTimeout(() => {
+					highlightMessageId = null;
+				}, 2500);
 			});
+		});
 	});
 
 	function SendMsg(
@@ -171,10 +162,6 @@
 		replyTo = null;
 	}
 
-	function onSearchQueryChange(q: string): void {
-		searchQuery = q;
-	}
-
 	function onSearchOpenChange(open: boolean): void {
 		searchOpen = open;
 	}
@@ -189,35 +176,26 @@
 				uiState.voiceChatDrawerOpen = true;
 			}
 
-			void messagesStore
-				.gotoMessage(channel.id, msgId, result.created_at)
-				.then((found) => {
-					if (!found) return;
-					highlightMessageId = msgId;
-					queueMicrotask(() => {
-						setTimeout(() => {
-							highlightMessageId = null;
-						}, 2500);
-					});
+			void messagesStore.gotoMessage(channel.id, msgId, result.created_at).then((found) => {
+				if (!found) return;
+				highlightMessageId = msgId;
+				queueMicrotask(() => {
+					setTimeout(() => {
+						highlightMessageId = null;
+					}, 2500);
 				});
+			});
 			return;
 		}
 
 		// Outro canal: navega e destaca ali.
 		setScrollTarget(msgId, result.created_at);
-		goto(`/channels/${result.channel_id}`);
+		goto(resolve('/channels/[channel_id]', { channel_id: result.channel_id }));
 	}
 </script>
 
 {#if channel}
-	<Topbar
-		{channel}
-		{searchQuery}
-		{searchOpen}
-		{onSearchQueryChange}
-		{onSearchOpenChange}
-		{onSearchResult}
-	/>
+	<Topbar {channel} {searchQuery} {searchOpen} {onSearchOpenChange} {onSearchResult} />
 
 	{#if channel.type === 'voice'}
 		<div class="voice-content">
@@ -240,8 +218,7 @@
 				onJumpToLastRead={() =>
 					channel.last_read_message
 						? messagesStore.gotoMessage(channel.id, channel.last_read_message, null)
-						: Promise.resolve(false)
-				}
+						: Promise.resolve(false)}
 				onLoadMoreOlder={() => messagesStore.loadMoreOlder(channel.id)}
 				onLoadMoreNewer={() => messagesStore.loadMoreNewer(channel.id)}
 				onReachLatest={(message) => {
@@ -253,36 +230,31 @@
 		</div>
 	{:else}
 		{#key channel.id}<Chat
-			{messages}
-			channelId={channel.id}
-			{loading}
-			{hasMoreNewer}
-			{hasMoreOlder}
-			{highlightMessageId}
-			{onReply}
-			onJumpToLatest={() => messagesStore.setLatest(channel.id)}
-			onJumpToLastRead={() =>
-				channel.last_read_message
-					? messagesStore.gotoMessage(channel.id, channel.last_read_message, null)
-					: Promise.resolve(false)
-			}
-			onLoadMoreOlder={() => messagesStore.loadMoreOlder(channel.id)}
-			onLoadMoreNewer={() => messagesStore.loadMoreNewer(channel.id)}
-			onReachLatest={(message) => {
-				if (message) {
-					channelsStore.markReadLocal(channel.id, message.id, message.created_at);
-				}
-			}}
-			lastReadMessageId={channel.last_read_message}
-		/>{/key}
+				{messages}
+				channelId={channel.id}
+				{loading}
+				{hasMoreNewer}
+				{hasMoreOlder}
+				{highlightMessageId}
+				{onReply}
+				onJumpToLatest={() => messagesStore.setLatest(channel.id)}
+				onJumpToLastRead={() =>
+					channel.last_read_message
+						? messagesStore.gotoMessage(channel.id, channel.last_read_message, null)
+						: Promise.resolve(false)}
+				onLoadMoreOlder={() => messagesStore.loadMoreOlder(channel.id)}
+				onLoadMoreNewer={() => messagesStore.loadMoreNewer(channel.id)}
+				onReachLatest={(message) => {
+					if (message) {
+						channelsStore.markReadLocal(channel.id, message.id, message.created_at);
+					}
+				}}
+				lastReadMessageId={channel.last_read_message}
+			/>{/key}
 
 		<div class="composer-area">
 			{#if typingIds.length > 0}
-				<div
-					class="typing-strip"
-					role="status"
-					aria-label="Indicador de digitação"
-				>
+				<div class="typing-strip" role="status" aria-label="Indicador de digitação">
 					<span class="typing-avatars">
 						{#each typingIds as uid (uid)}
 							{@const u = usersStore.state.byId.get(uid)}
@@ -291,30 +263,16 @@
 						{/each}
 					</span>
 
-					<span
-						class="typing-text"
-						aria-label={typingText + '...'}
-					>
-						<span
-							class="typing-wave"
-							aria-hidden="true"
-						>
-							{#each typingChars as char, i}
-								<span
-									class="typing-char"
-									style={`--i: ${i}`}
-								>
-									{char === ' '
-										? '\u00A0'
-										: char}
+					<span class="typing-text" aria-label={typingText + '...'}>
+						<span class="typing-wave" aria-hidden="true">
+							{#each typingChars as char, i (i)}
+								<span class="typing-char" style={`--i: ${i}`}>
+									{char === ' ' ? '\u00A0' : char}
 								</span>
 							{/each}
 						</span>
 
-						<span
-							class="typing-dots"
-							aria-hidden="true"
-						>
+						<span class="typing-dots" aria-hidden="true">
 							<span>.</span>
 							<span>.</span>
 							<span>.</span>
@@ -477,14 +435,6 @@
 	.typing-avatars {
 		display: flex;
 		gap: 2px;
-	}
-
-	.typing-avatar-fallback {
-		display: inline-block;
-		width: 18px;
-		height: 18px;
-		border-radius: 50%;
-		background: var(--border);
 	}
 
 	.typing-text {

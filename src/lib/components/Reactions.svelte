@@ -277,10 +277,17 @@
 	}
 </script>
 
-<div class="reactions" class:add-only={showAdd && reactions.length === 0} role={reactions.length ? 'list' : undefined}>
+<div
+	class="reactions"
+	class:add-only={showAdd && reactions.length === 0}
+	role={reactions.length ? 'list' : undefined}
+>
 	{#each reactions as r (r.unicode ?? r.emoji_id)}
+		<!-- Hover reveals the reactor list; keyboard users open the same popover by clicking the reaction button -->
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<span
 			class="reaction-group"
+			role="listitem"
 			onpointerenter={(e) => {
 				if (e.pointerType === 'mouse') {
 					const emoji = r.unicode ?? r.emoji_id ?? '';
@@ -369,7 +376,7 @@
 		display: inline-flex;
 		align-items: center;
 		margin-left: 3px;
-		margin-top: 4px
+		margin-top: 4px;
 	}
 
 	.add-react {

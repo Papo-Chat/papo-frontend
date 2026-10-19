@@ -6,7 +6,8 @@
 	// openChannelId)?.pinned (GET /channels/:id/pinned). Clicking a pin
 	// navigates/highlights the message (scrollTarget mechanism, same as search).
 	import { goto } from '$app/navigation';
-	import { state, setScrollTarget } from '$lib/store/ui.svelte';
+	import { resolve } from '$app/paths';
+	import { state as uiState, setScrollTarget } from '$lib/store/ui.svelte';
 	import * as channelsStore from '$lib/store/channels.svelte';
 	import * as messagesStore from '$lib/store/messages.svelte';
 	import * as usersStore from '$lib/store/users.svelte';
@@ -18,16 +19,13 @@
 	import WebhookAvatar from './WebhookAvatar.svelte';
 	import CompactMessageContent from './CompactMessageContent.svelte';
 
-	let {
-		channelId = null,
-		routePrefix = 'channels'
-	} = $props<{
+	let { channelId = null, routePrefix = 'channels' } = $props<{
 		channelId?: string | null;
 		routePrefix?: 'channels' | 'dm';
 	}>();
 
-	let el: HTMLElement | null = null;
-	let open = $derived(state.pinsPopoverOpen);
+	let el = $state<HTMLElement | null>(null);
+	let open = $derived(uiState.pinsPopoverOpen);
 
 	const openChannelId = $derived(channelId ?? channelsStore.state.openChannelId);
 	const pinned = $derived(
@@ -35,7 +33,7 @@
 	);
 
 	function close(): void {
-		state.pinsPopoverOpen = false;
+		uiState.pinsPopoverOpen = false;
 	}
 
 	$effect(() => {
@@ -51,7 +49,11 @@
 
 	function openPin(m: MessageWithAttachment): void {
 		setScrollTarget(m.id, m.created_at);
-		goto(`/${routePrefix}/${m.channel_id}`);
+		goto(
+			routePrefix === 'dm'
+				? resolve('/dm/[dm_id]', { dm_id: m.channel_id })
+				: resolve('/channels/[channel_id]', { channel_id: m.channel_id })
+		);
 		close();
 	}
 
@@ -86,43 +88,39 @@
 		<div class="popover-body">
 			{#if pinned.length}
 				{#each pinned as m (m.id)}
-					{@const identity = messageAuthorIdentity(
-						m,
-						usersStore.state.byId.get(m.author_id ?? '')
-					)}
+					{@const identity = messageAuthorIdentity(m, usersStore.state.byId.get(m.author_id ?? ''))}
 					<div
-							class="popover-item pin-item"
-							role="button"
-							tabindex={0}
-							onclick={(e) => {
-								if (!interactiveTarget(e.target)) openPin(m);
-							}}
-							onkeydown={(e: KeyboardEvent) => {
-								if (
-									(e.key === 'Enter' || e.key === ' ') &&
-									e.target === e.currentTarget
-								) {
-									e.preventDefault();
-									openPin(m);
-								}
-							}}
-						>
-							{#if identity.isWebhook}
-								<WebhookAvatar avatarUrl={identity.avatarUrl} size={34} />
-							{:else}
-								<Avatar user={identity.user} userId={identity.userId} size={34} />
-							{/if}
-							<div class="pin-main">
-								<div class="meta">
-									<span class="name">
-										{identity.name}
-									</span>
-									<span class="time">{formatTime(m.created_at)}</span>
-								</div>
-								<CompactMessageContent message={m} pinned />
+						class="popover-item pin-item"
+						role="button"
+						tabindex={0}
+						onclick={(e) => {
+							if (!interactiveTarget(e.target)) openPin(m);
+						}}
+						onkeydown={(e: KeyboardEvent) => {
+							if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+								e.preventDefault();
+								openPin(m);
+							}
+						}}
+					>
+						{#if identity.isWebhook}
+							<WebhookAvatar avatarUrl={identity.avatarUrl} size={34} />
+						{:else}
+							<Avatar user={identity.user} userId={identity.userId} size={34} />
+						{/if}
+						<div class="pin-main">
+							<div class="meta">
+								<span class="name">
+									{identity.name}
+								</span>
+								<span class="time">{formatTime(m.created_at)}</span>
 							</div>
-							<span class="pin-badge" aria-hidden="true"><Icon name="push-pin" variant="duotone" size={13} /></span>
+							<CompactMessageContent message={m} pinned />
 						</div>
+						<span class="pin-badge" aria-hidden="true"
+							><Icon name="push-pin" variant="duotone" size={13} /></span
+						>
+					</div>
 				{/each}
 			{:else}
 				<div class="popover-empty-icon">
@@ -137,7 +135,6 @@
 		</div>
 	</div>
 {/if}
-
 
 <style>
 	.pins-popover .popover-body {

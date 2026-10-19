@@ -7,6 +7,8 @@
 		offset: number;
 		stickToBottom: boolean;
 	};
+	// Cache de módulo, não reativo por design (nunca é lido pela UI).
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- ver comentário
 	const savedChatScrolls = new Map<string, SavedChatScroll>();
 </script>
 
@@ -65,10 +67,14 @@
 	// autor, dentro da janela de 10min e sem reply_to próprio.
 	function sameAuthorWindow(a: MessageWithAttachment, b: MessageWithAttachment): boolean {
 		if (b.reply_to) return false;
-		const noAuthor = (a.author_id == null || b.author_id == null) && (a.webhook_id == null || b.webhook_id == null);
+		const noAuthor =
+			(a.author_id == null || b.author_id == null) &&
+			(a.webhook_id == null || b.webhook_id == null);
 		if (noAuthor) return false;
 
-		const sameAuthor = a.external_author ? (a.webhook_id == b.webhook_id) : (a.author_id == b.author_id);
+		const sameAuthor = a.external_author
+			? a.webhook_id == b.webhook_id
+			: a.author_id == b.author_id;
 		if (!sameAuthor) return false;
 
 		const ta = Date.parse(a.created_at);
@@ -78,7 +84,9 @@
 	}
 
 	const groupedFlags = $derived(
-		messages.map((m: MessageWithAttachment, i: number) => i > 0 && sameAuthorWindow(messages[i - 1], m))
+		messages.map(
+			(m: MessageWithAttachment, i: number) => i > 0 && sameAuthorWindow(messages[i - 1], m)
+		)
 	);
 
 	let listEl: HTMLElement | null = null;
@@ -113,10 +121,7 @@
 
 	function distanceFromBottom(): number {
 		if (!listEl) return Number.POSITIVE_INFINITY;
-		return Math.max(
-			0,
-			listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight
-		);
+		return Math.max(0, listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight);
 	}
 
 	function isAtBottom(): boolean {
@@ -154,11 +159,7 @@
 	}
 
 	function findLastReadDivider(id: string): HTMLElement | null {
-		return (
-			listEl?.querySelector<HTMLElement>(
-				`[data-last-read-divider="${id}"]`
-			) ?? null
-		);
+		return listEl?.querySelector<HTMLElement>(`[data-last-read-divider="${id}"]`) ?? null;
 	}
 
 	async function showLastReadBoundary(id: string): Promise<boolean> {
@@ -186,12 +187,7 @@
 	}
 
 	async function initializePosition(): Promise<void> {
-		if (
-			initializingPosition ||
-			initialScrollDone ||
-			loading ||
-			messages.length === 0
-		) {
+		if (initializingPosition || initialScrollDone || loading || messages.length === 0) {
 			return;
 		}
 
@@ -210,8 +206,7 @@
 				// layout final seja o mesmo no momento do ajuste.
 				if (readId) {
 					const readIndex = messages.findIndex((m: MessageWithAttachment) => m.id === readId);
-					const unreadInWindow =
-						readIndex >= 0 ? Math.max(0, messages.length - readIndex - 1) : 0;
+					const unreadInWindow = readIndex >= 0 ? Math.max(0, messages.length - readIndex - 1) : 0;
 					const hasUnreadAfter =
 						(readIndex >= 0 && readIndex < messages.length - 1) || hasMoreNewer;
 					if (hasUnreadAfter) {
@@ -234,17 +229,13 @@
 
 			if (readId && !positionedAtUnread) {
 				const readIndex = messages.findIndex((m: MessageWithAttachment) => m.id === readId);
-				const unreadInWindow =
-					readIndex >= 0 ? Math.max(0, messages.length - readIndex - 1) : 0;
-				const hasUnreadAfter =
-					(readIndex >= 0 && readIndex < messages.length - 1) || hasMoreNewer;
+				const unreadInWindow = readIndex >= 0 ? Math.max(0, messages.length - readIndex - 1) : 0;
+				const hasUnreadAfter = (readIndex >= 0 && readIndex < messages.length - 1) || hasMoreNewer;
 
 				if (hasUnreadAfter || readIndex < 0) {
 					positionedAtUnread = await showLastReadBoundary(readId);
 					if (positionedAtUnread) {
-						setUnreadCount(
-							Math.max(hasMoreNewer ? 1 : 0, unreadInWindow)
-						);
+						setUnreadCount(Math.max(hasMoreNewer ? 1 : 0, unreadInWindow));
 					}
 				}
 			}
@@ -262,9 +253,7 @@
 			// Allow intrinsic media sizes to settle for two frames before user
 			// scroll starts affecting the read state.
 			await new Promise<void>((resolve) =>
-				requestAnimationFrame(() =>
-					requestAnimationFrame(() => resolve())
-				)
+				requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
 			);
 
 			if (stickToBottom) scrollToBottom();
@@ -419,7 +408,9 @@
 			showReturnRecent = false;
 			return;
 		}
-		const index = messages.findIndex((message: MessageWithAttachment) => message.id === firstVisibleId);
+		const index = messages.findIndex(
+			(message: MessageWithAttachment) => message.id === firstVisibleId
+		);
 		showReturnRecent = index >= 0 && messages.length - index - 1 > RETURN_RECENT_THRESHOLD;
 	}
 
@@ -650,10 +641,7 @@
 
 		const observer = new IntersectionObserver(
 			(entries) => {
-				if (
-					scrollDirection !== 'down' &&
-					entries.some((entry) => entry.isIntersecting)
-				) {
+				if (scrollDirection !== 'down' && entries.some((entry) => entry.isIntersecting)) {
 					void loadOlder();
 				}
 			},
@@ -678,10 +666,7 @@
 
 		const observer = new IntersectionObserver(
 			(entries) => {
-				if (
-					scrollDirection === 'down' &&
-					entries.some((entry) => entry.isIntersecting)
-				) {
+				if (scrollDirection === 'down' && entries.some((entry) => entry.isIntersecting)) {
 					void loadNewer();
 				}
 			},
@@ -714,9 +699,7 @@
 		};
 
 		const observer =
-			typeof ResizeObserver !== 'undefined'
-				? new ResizeObserver(settleBottom)
-				: null;
+			typeof ResizeObserver !== 'undefined' ? new ResizeObserver(settleBottom) : null;
 		observer?.observe(content);
 
 		// Capture resource load events as a fallback and as an extra signal for
@@ -772,9 +755,7 @@
 		if (!highlightMessageId) return;
 
 		queueMicrotask(() => {
-			const el = listEl?.querySelector<HTMLElement>(
-				`[data-message-id="${highlightMessageId}"]`
-			);
+			const el = listEl?.querySelector<HTMLElement>(`[data-message-id="${highlightMessageId}"]`);
 			if (!el) return;
 
 			// Highlight navigation is an intentional move away from the latest
@@ -797,9 +778,12 @@
 		<div class="newer-loading" aria-hidden="true">Carregando recentes…</div>
 	{/if}
 
+	<!-- role exigido pelo a11y linter: os handlers de scroll/touch/pointer só
+	     controlam rolagem; o conteúdo interativo vive nos filhos. -->
 	<div
 		class="chat"
 		class:ready={messages.length === 0 || initialScrollDone}
+		role="presentation"
 		bind:this={listEl}
 		onscroll={handleScroll}
 		onwheel={handleWheel}
@@ -812,57 +796,52 @@
 	>
 		<div class="chat-content" bind:this={contentEl}>
 			<div class="chat-top-anchor" bind:this={topEl} aria-hidden="true"></div>
-		{#if hasMoreNewer}
-			<button
-				class="jump-to-latest"
-				onclick={jumpToLatest}
-				aria-label="Ir para as últimas mensagens"
-			>
-				↓ Ver últimas mensagens
-			</button>
-		{/if}
-
-		{#if loading && messages.length === 0}
-			<div class="chat-empty">
-				<p>Carregando…</p>
-			</div>
-		{:else if messages.length === 0}
-			<div class="chat-empty">
-				<p>
-					{searchActive
-						? 'Nada encontrado.'
-						: 'Nenhuma mensagem por enquanto.'}
-				</p>
-			</div>
-		{:else}
-			{#each messages as m, index (m.id)}
-				<div
-					class:message-enter={m.id === animatedMessageId}
-					class:message-target-highlight={m.id === highlightMessageId}
-					class:message-group-end-no-reactions={
-						(index === messages.length - 1 || !groupedFlags[index + 1]) &&
-						m.reactions.length === 0
-					}
+			{#if hasMoreNewer}
+				<button
+					class="jump-to-latest"
+					onclick={jumpToLatest}
+					aria-label="Ir para as últimas mensagens"
 				>
-					<Message
-						message={m}
-						groupFirst={index === 0 || !groupedFlags[index]}
-						grouped={groupedFlags[index]}
-						groupLast={index === messages.length - 1 || !groupedFlags[index + 1]}
-						onReply={(msg) => onReply?.(msg)}
-					/>
+					↓ Ver últimas mensagens
+				</button>
+			{/if}
+
+			{#if loading && messages.length === 0}
+				<div class="chat-empty">
+					<p>Carregando…</p>
 				</div>
-				{#if m.id === visibleLastReadMessageId && (index < messages.length - 1 || hasMoreNewer)}
-					<div class="last-read-divider" data-last-read-divider={m.id}>
-						<span>Novas mensagens</span>
+			{:else if messages.length === 0}
+				<div class="chat-empty">
+					<p>
+						{searchActive ? 'Nada encontrado.' : 'Nenhuma mensagem por enquanto.'}
+					</p>
+				</div>
+			{:else}
+				{#each messages as m, index (m.id)}
+					<div
+						class:message-enter={m.id === animatedMessageId}
+						class:message-target-highlight={m.id === highlightMessageId}
+						class:message-group-end-no-reactions={(index === messages.length - 1 ||
+							!groupedFlags[index + 1]) &&
+							m.reactions.length === 0}
+					>
+						<Message
+							message={m}
+							grouped={groupedFlags[index]}
+							groupLast={index === messages.length - 1 || !groupedFlags[index + 1]}
+							onReply={(msg) => onReply?.(msg)}
+						/>
 					</div>
-				{/if}
-			{/each}
-		{/if}
+					{#if m.id === visibleLastReadMessageId && (index < messages.length - 1 || hasMoreNewer)}
+						<div class="last-read-divider" data-last-read-divider={m.id}>
+							<span>Novas mensagens</span>
+						</div>
+					{/if}
+				{/each}
+			{/if}
 			<div class="chat-bottom-anchor" bind:this={bottomEl} aria-hidden="true"></div>
 		</div>
 	</div>
-
 
 	{#if showReturnRecent}
 		<button
@@ -875,14 +854,9 @@
 	{/if}
 
 	{#if unreadCount > 0}
-		<button
-			class="new-messages-bubble"
-			onclick={jumpToUnread}
-		>
+		<button class="new-messages-bubble" onclick={jumpToUnread}>
 			↑ {unreadCount}
-			{unreadCount === 1
-				? 'nova mensagem'
-				: 'novas mensagens'}
+			{unreadCount === 1 ? 'nova mensagem' : 'novas mensagens'}
 		</button>
 	{/if}
 </div>
@@ -986,7 +960,9 @@
 		white-space: nowrap;
 	}
 
-	.new-messages-bubble:hover { background: var(--hover); }
+	.new-messages-bubble:hover {
+		background: var(--hover);
+	}
 	.return-recent {
 		bottom: 12px;
 		background: color-mix(in srgb, var(--surface) 94%, var(--accent) 6%);

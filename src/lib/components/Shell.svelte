@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Shared shell for admin + settings back-office pages: top bar
 	// (back + brand) + left nav + content slot.
+	import type { Snippet } from 'svelte';
 	import { page } from '$app/state';
 	import type { Server } from '$lib/types';
 	import Icon from '$lib/components/Icon.svelte';
@@ -14,7 +15,8 @@
 		brandIcon = 'server',
 		brandSub = 'Administração',
 		nav = [] as NavItem[],
-		server
+		server,
+		children
 	} = $props<{
 		backUrl?: string | null;
 		backLabel?: string;
@@ -22,6 +24,7 @@
 		brandSub?: string;
 		nav: NavItem[];
 		server?: Server;
+		children: Snippet;
 	}>();
 
 	// Exact match first, then prefix (with trailing slash) so the first
@@ -36,6 +39,8 @@
 <div class="admin-shell">
 	<header class="admin-topbar">
 		{#if backUrl}
+			<!-- href dinâmico: as rotas já chegam resolvidas pelos callers da Shell. -->
+			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- ver comentário -->
 			<a class="admin-back" href={backUrl} aria-label={backLabel}>
 				<Icon name="arrow-left" variant="light" />
 				<span>{backLabel}</span>
@@ -62,12 +67,15 @@
 			</div>
 		</div>
 
-		<div class="admin-topbar-spacer" />
+		<div class="admin-topbar-spacer"></div>
 	</header>
 
 	<div class="admin-layout">
 		<nav class="admin-nav" aria-label="Navegação">
 			{#each nav as item (item.to)}
+				<!-- href dinâmico: as rotas já chegam resolvidas pelos callers da
+				     Shell. -->
+				<!-- eslint-disable svelte/no-navigation-without-resolve -->
 				<a
 					class="dash-tab {item.to === current ? 'active' : ''}"
 					href={item.to}
@@ -88,11 +96,12 @@
 					{/if}
 					<span>{item.label}</span>
 				</a>
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
 			{/each}
 		</nav>
 
 		<main class="admin-main">
-			<slot />
+			{@render children()}
 		</main>
 	</div>
 </div>

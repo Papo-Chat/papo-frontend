@@ -27,7 +27,6 @@
 		message,
 		grouped = false,
 		groupLast = false,
-		groupFirst = false,
 		onReply
 	} = $props<{
 		message: MessageWithAttachment;
@@ -36,7 +35,6 @@
 		grouped?: boolean;
 		// Última mensagem do grupo: mantém o botão de reação visível.
 		groupLast?: boolean;
-		groupFirst?: boolean;
 		onReply?: (message: MessageWithAttachment) => void;
 	}>();
 
@@ -94,9 +92,7 @@
 			: 'Webhook'
 	);
 	const name = $derived(
-		isWebhookMessage
-			? webhookName
-			: author?.nickname || author?.username || 'Usuário'
+		isWebhookMessage ? webhookName : author?.nickname || author?.username || 'Usuário'
 	);
 
 	function openCurrentWebhookProfile(): void {
@@ -115,11 +111,7 @@
 	const replyExternal = $derived(msgReply?.webhook_id ? (msgReply.external_author ?? null) : null);
 	const mentionsMe = $derived(!!me && (message.content ?? '').includes(`@mention(<@${me}>)`));
 	const replyPreviewText = $derived(
-		msgReply?.content
-			? msgReply.content
-			: msgReply?.attachments.length
-				? 'Anexo'
-				: ''
+		msgReply?.content ? msgReply.content : msgReply?.attachments.length ? 'Anexo' : ''
 	);
 	const repliesToMe = $derived(!!me && !!message.reply_to && msgReply?.author_id === me);
 	const goldHighlight = $derived(isPinned || isEveryoneMessage || mentionsMe || repliesToMe);
@@ -155,7 +147,7 @@
 	let editText = $state('');
 	let showDeleteConfirm = $state(false);
 	let deleting = $state(false);
-	let deleteButton: HTMLButtonElement | null = null;
+	let deleteButton = $state<HTMLButtonElement | null>(null);
 
 	async function startDelete(): Promise<void> {
 		showDeleteConfirm = true;
@@ -406,14 +398,14 @@
 						doEdit();
 					}}
 				>
+					<!-- svelte-ignore a11y_autofocus -->
 					<textarea
 						class="edit-input"
 						bind:value={editText}
 						aria-label="Editar mensagem"
 						placeholder="..."
 						autofocus
-						onkeydown={handleEditKeydown}
-					/>
+						onkeydown={handleEditKeydown}></textarea>
 				</form>
 				<button class="confirm-btn" type="button" onclick={doEdit}> Enviar </button>
 			</div>
@@ -423,12 +415,12 @@
 			</div>
 			{#if message.embeds.length}
 				{#each message.embeds as embed (embed.id)}
-					<EmbedCard embed={embed} />
+					<EmbedCard {embed} />
 				{/each}
 			{/if}
 		{:else if message.embeds.length}
 			{#each message.embeds as embed (embed.id)}
-				<EmbedCard embed={embed} />
+				<EmbedCard {embed} />
 			{/each}
 		{/if}
 
@@ -518,19 +510,6 @@
 		margin-bottom: 7px;
 	}
 
-	.message.gold-highlight {
-		box-shadow: inset 0 0 0 1px rgba(224, 168, 20, 0.78);
-		background: linear-gradient(90deg, rgba(231, 168, 11, 0.055), transparent 72%);
-	}
-
-	:global([data-theme='dark']) .message.gold-highlight {
-		box-shadow: inset 0 0 0 1px rgba(255, 214, 109, 0.48);
-		background: linear-gradient(90deg, rgba(255, 205, 72, 0.065), transparent 72%);
-	}
-
-	:global(html[data-ui-flat]) .message.gold-highlight {
-		background: rgba(231, 168, 11, 0.06);
-	}
 	.edit-input {
 		font: inherit;
 		color: var(--text-primary);
@@ -552,16 +531,6 @@
 		white-space: pre-wrap;
 		outline: none;
 	}
-	/* importante: seu .message só possui .message-enter como filho */
-	.message-enter {
-		display: flex;
-		align-items: flex-start;
-		gap: 8px;
-		width: 100%;
-		min-width: 0;
-		animation: message-enter 180ms ease;
-	}
-
 	.attachment-grid {
 		display: grid;
 		width: min(560px, 100%);
@@ -710,13 +679,6 @@
 	:global(html[data-ui-flat]) .webhook-app-badge {
 		box-shadow: none;
 	}
-	@keyframes message-enter {
-		to {
-			opacity: 1;
-			transform: translateY(-2px);
-		}
-	}
-
 	.time {
 		color: var(--muted);
 		font-size: 12px;

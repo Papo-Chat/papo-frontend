@@ -1,8 +1,12 @@
 <script module lang="ts">
+	// Rascunhos por canal, preservados entre trocas de canal. Cache de módulo,
+	// não reativo por design (nunca é lido pela UI).
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- ver comentário
 	const channelDrafts = new Map<string, string>();
 </script>
 
 <script lang="ts">
+	import { SvelteMap } from 'svelte/reactivity';
 	import type { MessageWithAttachment } from '$lib/types';
 	import { allEmojis, emojiText, type EmojiOption } from '$lib/utils/emojis';
 	import { formatToMime } from '$lib/utils/media';
@@ -52,8 +56,8 @@
 	let mobileEmojiOpen = $state(false);
 	let mobileActionsOpen = $state(false);
 
-	let inputEl: HTMLTextAreaElement | null = null;
-	let fileInput: HTMLInputElement | null = null;
+	let inputEl = $state<HTMLTextAreaElement | null>(null);
+	let fileInput = $state<HTMLInputElement | null>(null);
 	let focusRequestedChannelId: string | null = null;
 
 	let files = $state<File[]>([]);
@@ -64,7 +68,7 @@
 		label: string;
 		username: string;
 	};
-	const selectedMentions = new Map<string, string>();
+	const selectedMentions = new SvelteMap<string, string>();
 	let mentionOpen = $state(false);
 	let mentionStart = $state(-1);
 	let mentionQuery = $state('');
@@ -166,7 +170,6 @@
 		});
 	}
 
-
 	function emojiAutocompleteOptions(): EmojiOption[] {
 		if (!emojiAutocompleteOpen) return [];
 		const query = emojiAutocompleteQuery.toLowerCase();
@@ -254,9 +257,7 @@
 
 		files = [...files, ...selected.slice(0, available)];
 		error =
-			selected.length > available
-				? `Máximo de ${MAX_ATTACHMENTS} anexos por mensagem.`
-				: null;
+			selected.length > available ? `Máximo de ${MAX_ATTACHMENTS} anexos por mensagem.` : null;
 	}
 
 	function onFilesSelected(e: Event): void {
@@ -352,41 +353,26 @@
 
 		const style = getComputedStyle(inputEl);
 
-		const lineHeight =
-			Number.parseFloat(style.lineHeight) || 20;
+		const lineHeight = Number.parseFloat(style.lineHeight) || 20;
 
-		const paddingTop =
-			Number.parseFloat(style.paddingTop) || 0;
+		const paddingTop = Number.parseFloat(style.paddingTop) || 0;
 
-		const paddingBottom =
-			Number.parseFloat(style.paddingBottom) || 0;
+		const paddingBottom = Number.parseFloat(style.paddingBottom) || 0;
 
-		const borderTop =
-			Number.parseFloat(style.borderTopWidth) || 0;
+		const borderTop = Number.parseFloat(style.borderTopWidth) || 0;
 
-		const borderBottom =
-			Number.parseFloat(style.borderBottomWidth) || 0;
+		const borderBottom = Number.parseFloat(style.borderBottomWidth) || 0;
 
 		const mobile = isMobileUi();
 
 		const maxHeight =
-			lineHeight * (mobile ? 1 : MAX_LINES) +
-			paddingTop +
-			paddingBottom +
-			borderTop +
-			borderBottom;
+			lineHeight * (mobile ? 1 : MAX_LINES) + paddingTop + paddingBottom + borderTop + borderBottom;
 
-		const newHeight = Math.min(
-			inputEl.scrollHeight,
-			maxHeight
-		);
+		const newHeight = Math.min(inputEl.scrollHeight, maxHeight);
 
 		inputEl.style.height = `${newHeight}px`;
 
-		inputEl.style.overflowY =
-			inputEl.scrollHeight > maxHeight
-				? 'auto'
-				: 'hidden';
+		inputEl.style.overflowY = inputEl.scrollHeight > maxHeight ? 'auto' : 'hidden';
 	}
 
 	$effect(() => {
@@ -419,11 +405,7 @@
 		void tick().then(() => {
 			requestAnimationFrame(() => {
 				requestAnimationFrame(() => {
-					if (
-						channelId === activeChannelId &&
-						!disabled &&
-						!isMobileUi()
-					) {
+					if (channelId === activeChannelId && !disabled && !isMobileUi()) {
 						inputEl?.focus({ preventScroll: true });
 					}
 				});
@@ -481,13 +463,9 @@
 		sending = true;
 		progress = 0;
 
-		onSend?.(
-			wireText || null,
-			files,
-			(percent: number) => {
-				progress = percent;
-			}
-		)
+		onSend?.(wireText || null, files, (percent: number) => {
+			progress = percent;
+		})
 			.then(() => {
 				text = '';
 				if (channelId) channelDrafts.delete(channelId);
@@ -502,10 +480,7 @@
 				resetInputHeight();
 			})
 			.catch((err: unknown) => {
-				error =
-					err instanceof Error
-						? err.message
-						: 'Erro ao enviar a mensagem.';
+				error = err instanceof Error ? err.message : 'Erro ao enviar a mensagem.';
 			})
 			.finally(() => {
 				sending = false;
@@ -551,8 +526,7 @@
 		if (emojiAutocompleteOpen && emojiAutocompleteItems.length) {
 			if (e.key === 'ArrowDown') {
 				e.preventDefault();
-				emojiAutocompleteIndex =
-					(emojiAutocompleteIndex + 1) % emojiAutocompleteItems.length;
+				emojiAutocompleteIndex = (emojiAutocompleteIndex + 1) % emojiAutocompleteItems.length;
 				return;
 			}
 			if (e.key === 'ArrowUp') {
@@ -577,11 +551,7 @@
 		}
 		// Enter envia.
 		// Shift + Enter é deixado para o textarea criar uma nova linha.
-		if (
-			e.key === 'Enter' &&
-			!e.shiftKey &&
-			!e.isComposing
-		) {
+		if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
 			e.preventDefault();
 			send();
 		}
@@ -613,20 +583,14 @@
 	}
 
 	function onPickEmoji(emoji: EmojiOption): void {
-		const char =
-			emoji.kind === 'unicode'
-				? emoji.char
-				: `:${emoji.name}:`;
+		const char = emoji.kind === 'unicode' ? emoji.char : `:${emoji.name}:`;
 
 		const el = inputEl;
 
 		const start = el?.selectionStart ?? text.length;
 		const end = el?.selectionEnd ?? text.length;
 
-		text =
-			text.slice(0, start) +
-			char +
-			text.slice(end);
+		text = text.slice(0, start) + char + text.slice(end);
 		if (channelId) channelDrafts.set(channelId, text);
 
 		queueMicrotask(() => {
@@ -686,9 +650,7 @@
 		const p = (n: number) => String(n).padStart(2, '0');
 		const stamp = `${now.getFullYear()}${p(now.getMonth() + 1)}${p(
 			now.getDate()
-		)}_${p(now.getHours())}${p(now.getMinutes())}${p(
-			now.getSeconds()
-		)}`;
+		)}_${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`;
 
 		return `audio_${stamp}.${mime.includes('ogg') ? 'ogg' : 'webm'}`;
 	}
@@ -789,8 +751,7 @@
 			})
 			.catch(() => {
 				// getUserMedia rejeitou (permissão negada ou sem suporte).
-				error =
-					'Permissão de microfone negada. Ative a permissão do navegador e tente de novo.';
+				error = 'Permissão de microfone negada. Ative a permissão do navegador e tente de novo.';
 			});
 	}
 
@@ -826,7 +787,7 @@
 			)
 				.then(() => {
 					desktopEmojiOpen = false;
-				mobileEmojiOpen = false;
+					mobileEmojiOpen = false;
 					mobileActionsOpen = false;
 				})
 				.catch((err: unknown) => {
@@ -857,9 +818,12 @@
 	});
 </script>
 
+<!-- role exigido pelo a11y linter: handlers de drag-and-drop de arquivos; o
+     conteúdo interativo (textarea/botões) vive nos filhos. -->
 <div
 	class="composer-area"
 	class:dragging-files={draggingFiles}
+	role="presentation"
 	ondragenter={onDragEnter}
 	ondragover={onDragOver}
 	ondragleave={onDragLeave}
@@ -874,19 +838,12 @@
 
 	{#if replyTo}
 		<div class="composer-reply">
-			<Icon
-				name="arrow-bend-up-left"
-				variant="light"
-			/>
+			<Icon name="arrow-bend-up-left" variant="light" />
 
 			{#if replyToIdentity.isWebhook}
 				<WebhookAvatar avatarUrl={replyToIdentity.avatarUrl} size={20} />
 			{:else}
-				<Avatar
-					user={replyToIdentity.user}
-					userId={replyToIdentity.userId}
-					size={20}
-				/>
+				<Avatar user={replyToIdentity.user} userId={replyToIdentity.userId} size={20} />
 			{/if}
 
 			<span class="reply-name">
@@ -901,56 +858,31 @@
 				{/if}
 			</div>
 
-			<button
-				class="reply-cancel"
-				onclick={cancelReply}
-				aria-label="Cancelar resposta"
-			>
-				<Icon
-					name="x"
-					variant="light"
-				/>
+			<button class="reply-cancel" onclick={cancelReply} aria-label="Cancelar resposta">
+				<Icon name="x" variant="light" />
 			</button>
 		</div>
 	{/if}
 
 	{#if error}
-		<div
-			class="send-error"
-			role="alert"
-		>
-			<Icon
-				name="warning-circle"
-				variant="light"
-			/>
+		<div class="send-error" role="alert">
+			<Icon name="warning-circle" variant="light" />
 
 			<span>{error}</span>
 		</div>
 	{/if}
 
 	{#if files.length}
-		<div
-			class="composer-files"
-			aria-label="Arquivos anexados"
-		>
+		<div class="composer-files" aria-label="Arquivos anexados">
 			{#each files as f, index (f.name + f.size + index)}
 				<span class="composer-file">
-					<span
-						class="composer-file-name"
-						title={f.name}
-					>
+					<span class="composer-file-name" title={f.name}>
 						{f.name}
 					</span>
 
 					{#if sending}
-						<span
-							class="composer-file-progress"
-							aria-hidden="true"
-						>
-							<span
-								class="composer-file-bar"
-								style="width: {progress}%"
-							></span>
+						<span class="composer-file-progress" aria-hidden="true">
+							<span class="composer-file-bar" style="width: {progress}%"></span>
 						</span>
 					{/if}
 
@@ -962,10 +894,7 @@
 						onclick={() => removeFile(index)}
 						disabled={sending}
 					>
-						<Icon
-							name="x"
-							variant="light"
-						/>
+						<Icon name="x" variant="light" />
 					</button>
 				</span>
 			{/each}
@@ -1000,226 +929,195 @@
 				</button>
 			</div>
 		{:else}
-		<div class="composer-tools-desktop">
-			{#if canSendAttachment}
-				<button
-					class="composer-tool"
-					title="Anexo"
-					aria-label="Anexo"
-					{disabled}
-					onclick={openFilePicker}
-				>
-					<Icon name="paperclip" variant="light" />
-				</button>
+			<div class="composer-tools-desktop">
+				{#if canSendAttachment}
+					<button
+						class="composer-tool"
+						title="Anexo"
+						aria-label="Anexo"
+						{disabled}
+						onclick={openFilePicker}
+					>
+						<Icon name="paperclip" variant="light" />
+					</button>
 
-				<button
-					class="composer-tool mic-tool"
-					class:recording={recording}
-					title="Gravar áudio"
-					aria-label="Gravar áudio"
-					{disabled}
-					onclick={startRecording}
-				>
-					<Icon name="microphone" variant="light" />
-				</button>
-			{/if}
+					<button
+						class="composer-tool mic-tool"
+						class:recording
+						title="Gravar áudio"
+						aria-label="Gravar áudio"
+						{disabled}
+						onclick={startRecording}
+					>
+						<Icon name="microphone" variant="light" />
+					</button>
+				{/if}
 
-			<div class="emoji-btn-wrap">
-				<button
-					class="composer-tool emoji-btn"
-					title="Emojis e GIFs"
-					aria-label="Emojis e GIFs"
-					onclick={toggleEmoji}
-					{disabled}
-				>
-					<Icon
-						name="smiley"
-						variant="light"
-					/>
-				</button>
-
-				<EmojiPicker
-					bind:open={desktopEmojiOpen}
-					onPick={onPickEmoji}
-					enableGifs
-					onPickGif={onPickGif}
-				/>
-			</div>
-		</div>
-
-		<div
-			class="mobile-actions"
-			class:open={mobileActionsOpen}
-		>
-			<div
-				class="mobile-action-menu"
-				aria-hidden={!mobileActionsOpen}
-			>
-				<div class="mobile-action emoji-mobile-wrap">
+				<div class="emoji-btn-wrap">
 					<button
 						class="composer-tool emoji-btn"
 						title="Emojis e GIFs"
 						aria-label="Emojis e GIFs"
-						tabindex={mobileActionsOpen ? 0 : -1}
-						onclick={toggleMobileEmoji}
+						onclick={toggleEmoji}
 						{disabled}
 					>
-						<Icon
-							name="smiley"
-							variant="light"
-						/>
+						<Icon name="smiley" variant="light" />
 					</button>
 
-					<EmojiPicker
-						bind:open={mobileEmojiOpen}
-						onPick={onPickEmoji}
-						enableGifs
-						onPickGif={onPickGif}
-					/>
+					<EmojiPicker bind:open={desktopEmojiOpen} onPick={onPickEmoji} enableGifs {onPickGif} />
 				</div>
-
-				{#if canSendAttachment}
-					<button
-						class="composer-tool mobile-action mic-tool"
-						class:recording={recording}
-						title="Gravar áudio"
-						aria-label="Gravar áudio"
-						tabindex={mobileActionsOpen ? 0 : -1}
-						onclick={startRecording}
-						{disabled}
-					>
-						<Icon name="microphone" variant="light" />
-					</button>
-
-					<button
-						class="composer-tool mobile-action"
-						title="Anexo"
-						aria-label="Anexo"
-						tabindex={mobileActionsOpen ? 0 : -1}
-						onclick={openFilePicker}
-						{disabled}
-					>
-						<Icon name="paperclip" variant="light" />
-					</button>
-				{/if}
 			</div>
 
-			<button
-				class="composer-tool mobile-actions-trigger"
-				title={mobileActionsOpen ? 'Fechar ações' : 'Mais ações'}
-				aria-label={mobileActionsOpen ? 'Fechar ações' : 'Mais ações'}
-				aria-expanded={mobileActionsOpen}
-				onclick={toggleMobileActions}
-				{disabled}
-			>
-				<span
-					class="mobile-actions-glyph"
-					aria-hidden="true"
+			<div class="mobile-actions" class:open={mobileActionsOpen}>
+				<div class="mobile-action-menu" aria-hidden={!mobileActionsOpen}>
+					<div class="mobile-action emoji-mobile-wrap">
+						<button
+							class="composer-tool emoji-btn"
+							title="Emojis e GIFs"
+							aria-label="Emojis e GIFs"
+							tabindex={mobileActionsOpen ? 0 : -1}
+							onclick={toggleMobileEmoji}
+							{disabled}
+						>
+							<Icon name="smiley" variant="light" />
+						</button>
+
+						<EmojiPicker bind:open={mobileEmojiOpen} onPick={onPickEmoji} enableGifs {onPickGif} />
+					</div>
+
+					{#if canSendAttachment}
+						<button
+							class="composer-tool mobile-action mic-tool"
+							class:recording
+							title="Gravar áudio"
+							aria-label="Gravar áudio"
+							tabindex={mobileActionsOpen ? 0 : -1}
+							onclick={startRecording}
+							{disabled}
+						>
+							<Icon name="microphone" variant="light" />
+						</button>
+
+						<button
+							class="composer-tool mobile-action"
+							title="Anexo"
+							aria-label="Anexo"
+							tabindex={mobileActionsOpen ? 0 : -1}
+							onclick={openFilePicker}
+							{disabled}
+						>
+							<Icon name="paperclip" variant="light" />
+						</button>
+					{/if}
+				</div>
+
+				<button
+					class="composer-tool mobile-actions-trigger"
+					title={mobileActionsOpen ? 'Fechar ações' : 'Mais ações'}
+					aria-label={mobileActionsOpen ? 'Fechar ações' : 'Mais ações'}
+					aria-expanded={mobileActionsOpen}
+					onclick={toggleMobileActions}
+					{disabled}
 				>
-					<Icon
-						name="plus"
-						variant="light"
-					/>
-				</span>
+					<span class="mobile-actions-glyph" aria-hidden="true">
+						<Icon name="plus" variant="light" />
+					</span>
+				</button>
+			</div>
+
+			<div class="input">
+				{#if mentionOpen && mentionItems.length}
+					<div class="mention-menu" role="listbox">
+						{#each mentionItems as option, index (option.kind + option.id)}
+							<button
+								type="button"
+								class:active={index === mentionIndex}
+								onmousedown={(e) => e.preventDefault()}
+								onclick={() => insertMention(option)}
+							>
+								{#if option.kind === 'user'}
+									<Avatar user={usersStore.state.byId.get(option.id)} size={24} />
+									<span class="mention-option-copy">
+										<strong>{option.label}</strong>
+										<small>@{option.username}</small>
+									</span>
+								{:else}
+									<span class="mention-everyone-icon">@</span>
+									<span class="mention-option-copy">
+										<strong>@everyone</strong>
+										<small>Mencionar todos</small>
+									</span>
+								{/if}
+							</button>
+						{/each}
+					</div>
+				{/if}
+				{#if emojiAutocompleteOpen && emojiAutocompleteItems.length}
+					<div class="mention-menu" role="listbox" aria-label="Sugestões de emoji">
+						{#each emojiAutocompleteItems as option, index (option.kind === 'unicode' ? option.char : option.id)}
+							<button
+								type="button"
+								role="option"
+								class:active={index === emojiAutocompleteIndex}
+								aria-selected={index === emojiAutocompleteIndex}
+								onmousedown={(e) => e.preventDefault()}
+								onclick={() => insertEmojiAutocomplete(option)}
+							>
+								{#if option.kind === 'unicode'}
+									<span class="emoji-autocomplete-icon">{option.char}</span>
+									<span class="mention-option-copy">
+										<strong>:{option.label}:</strong>
+										<small>Emoji</small>
+									</span>
+								{:else}
+									<span class="emoji-autocomplete-icon custom">
+										{#if option.image_blob}
+											<img src={emojiAutocompleteImage(option)} alt="" />
+										{:else}
+											:
+										{/if}
+									</span>
+									<span class="mention-option-copy">
+										<strong>:{option.name}:</strong>
+										<small>Emoji personalizado</small>
+									</span>
+								{/if}
+							</button>
+						{/each}
+					</div>
+				{/if}
+				<textarea
+					class="composer-input"
+					bind:this={inputEl}
+					bind:value={text}
+					rows="1"
+					placeholder="Digite sua mensagem..."
+					aria-label="Digite sua mensagem"
+					{disabled}
+					oninput={onInput}
+					onkeydown={onKeydown}
+					onpaste={onPaste}></textarea>
+			</div>
+
+			{#if canSendAttachment}
+				<input
+					type="file"
+					multiple
+					accept="image/*,video/*,audio/*,application/pdf"
+					aria-label="Selecionar arquivos para anexar"
+					class="composer-file-input"
+					bind:this={fileInput}
+					onchange={onFilesSelected}
+				/>
+			{/if}
+
+			<button
+				class="send"
+				onclick={send}
+				disabled={disabled || (text.trim() === '' && files.length === 0)}
+			>
+				Enviar
 			</button>
-		</div>
-
-        <div class="input">
-			{#if mentionOpen && mentionItems.length}
-				<div class="mention-menu" role="listbox">
-					{#each mentionItems as option, index (option.kind + option.id)}
-						<button
-							type="button"
-							class:active={index === mentionIndex}
-							onmousedown={(e) => e.preventDefault()}
-							onclick={() => insertMention(option)}
-						>
-							{#if option.kind === 'user'}
-								<Avatar user={usersStore.state.byId.get(option.id)} size={24} />
-								<span class="mention-option-copy">
-									<strong>{option.label}</strong>
-									<small>@{option.username}</small>
-								</span>
-							{:else}
-								<span class="mention-everyone-icon">@</span>
-								<span class="mention-option-copy">
-									<strong>@everyone</strong>
-									<small>Mencionar todos</small>
-								</span>
-							{/if}
-						</button>
-					{/each}
-				</div>
-			{/if}
-			{#if emojiAutocompleteOpen && emojiAutocompleteItems.length}
-				<div class="mention-menu" role="listbox" aria-label="Sugestões de emoji">
-					{#each emojiAutocompleteItems as option, index (option.kind === 'unicode' ? option.char : option.id)}
-						<button
-							type="button"
-							class:active={index === emojiAutocompleteIndex}
-							aria-selected={index === emojiAutocompleteIndex}
-							onmousedown={(e) => e.preventDefault()}
-							onclick={() => insertEmojiAutocomplete(option)}
-						>
-							{#if option.kind === 'unicode'}
-								<span class="emoji-autocomplete-icon">{option.char}</span>
-								<span class="mention-option-copy">
-									<strong>:{option.label}:</strong>
-									<small>Emoji</small>
-								</span>
-							{:else}
-								<span class="emoji-autocomplete-icon custom">
-									{#if option.image_blob}
-										<img src={emojiAutocompleteImage(option)} alt="" />
-									{:else}
-										:
-									{/if}
-								</span>
-								<span class="mention-option-copy">
-									<strong>:{option.name}:</strong>
-									<small>Emoji personalizado</small>
-								</span>
-							{/if}
-						</button>
-					{/each}
-				</div>
-			{/if}
-            <textarea
-                class="composer-input"
-                bind:this={inputEl}
-                bind:value={text}
-                rows="1"
-                placeholder="Digite sua mensagem..."
-                aria-label="Digite sua mensagem"
-                {disabled}
-                oninput={onInput}
-                onkeydown={onKeydown}
-				onpaste={onPaste}
-            ></textarea>
-        </div>
-
-		{#if canSendAttachment}
-		<input
-			type="file"
-			multiple
-			accept="image/*,video/*,audio/*,application/pdf"
-			aria-label="Selecionar arquivos para anexar"
-			class="composer-file-input"
-			bind:this={fileInput}
-			onchange={onFilesSelected}
-		/>
-		{/if}
-
-		<button
-			class="send"
-			onclick={send}
-			disabled={
-				disabled ||
-				text.trim() === '' && files.length === 0
-			}
-		>
-			Enviar
-		</button>
 		{/if}
 	</footer>
 </div>
@@ -1391,16 +1289,8 @@
 		border-radius: 18px;
 
 		background:
-			radial-gradient(
-				circle at 12% -60%,
-				rgba(255, 255, 255, 0.6),
-				transparent 58%
-			),
-			linear-gradient(
-				145deg,
-				rgba(250, 253, 255, 0.54),
-				rgba(208, 235, 248, 0.32)
-			);
+			radial-gradient(circle at 12% -60%, rgba(255, 255, 255, 0.6), transparent 58%),
+			linear-gradient(145deg, rgba(250, 253, 255, 0.54), rgba(208, 235, 248, 0.32));
 
 		backdrop-filter: blur(16px) saturate(150%);
 		-webkit-backdrop-filter: blur(16px) saturate(150%);
@@ -1431,6 +1321,7 @@
 		overflow: hidden;
 		-webkit-box-orient: vertical;
 		-webkit-line-clamp: 2;
+		line-clamp: 2;
 	}
 
 	:global([data-theme='dark']) .composer-reply {
@@ -1613,11 +1504,7 @@
 
 		button.composer-tool.mobile-actions-trigger,
 		button.composer-tool.mobile-action {
-			background: linear-gradient(
-				145deg,
-				rgb(255, 255, 255),
-				rgba(223, 241, 250)
-			);
+			background: linear-gradient(145deg, rgb(255, 255, 255), rgba(223, 241, 250));
 
 			border-color: #d3e1e9;
 
@@ -1656,8 +1543,7 @@
 
 			transition:
 				opacity 160ms ease,
-				transform 220ms
-					cubic-bezier(0.2, 0.9, 0.25, 1.15);
+				transform 220ms cubic-bezier(0.2, 0.9, 0.25, 1.15);
 		}
 
 		.mobile-actions.open .mobile-action-menu {
@@ -1695,9 +1581,7 @@
 
 			transform: rotate(0deg);
 
-			transition:
-				transform 220ms
-					cubic-bezier(0.2, 0.9, 0.25, 1.15);
+			transition: transform 220ms cubic-bezier(0.2, 0.9, 0.25, 1.15);
 		}
 
 		.mobile-actions.open .mobile-actions-glyph {
@@ -1711,38 +1595,30 @@
 			min-width: 80px;
 			max-width: none;
 		}
-        
-        .composer-input {
-            display: block;
-            width: 100%;
-            min-width: 0;
-            box-sizing: border-box;
-        }
+
+		.composer-input {
+			display: block;
+			width: 100%;
+			min-width: 0;
+			box-sizing: border-box;
+		}
 
 		.send {
 			flex: 0 0 auto;
 		}
 	}
 
-	:global([data-theme='dark'])
-		button.composer-tool.mobile-actions-trigger,
-	:global([data-theme='dark'])
-		button.composer-tool.mobile-action {
-		background: linear-gradient(
-			145deg,
-			rgb(61, 84, 99),
-			rgba(24, 48, 63)
-		);
+	:global([data-theme='dark']) button.composer-tool.mobile-actions-trigger,
+	:global([data-theme='dark']) button.composer-tool.mobile-action {
+		background: linear-gradient(145deg, rgb(61, 84, 99), rgba(24, 48, 63));
 
 		border-color: #405866;
 
 		box-shadow: none;
 	}
 
-	:global([data-theme='dark'])
-		button.composer-tool.mobile-actions-trigger:hover,
-	:global([data-theme='dark'])
-		button.composer-tool.mobile-action:hover {
+	:global([data-theme='dark']) button.composer-tool.mobile-actions-trigger:hover,
+	:global([data-theme='dark']) button.composer-tool.mobile-action:hover {
 		background: #2f4553;
 		box-shadow: none;
 	}
@@ -1754,56 +1630,56 @@
 		}
 	}
 
-    .composer-input {
-        min-width: 0;
-        width: 100%;
-        flex: 1;
+	.composer-input {
+		min-width: 0;
+		width: 100%;
+		flex: 1;
 
-        margin: 0;
-        padding: 0;
+		margin: 0;
+		padding: 0;
 
-        border: 0;
-        outline: 0;
-        resize: none;
+		border: 0;
+		outline: 0;
+		resize: none;
 
-        background: transparent;
-        color: var(--text);
+		background: transparent;
+		color: var(--text);
 
-        font: inherit;
-        font-size: 16px;
-        line-height: 1.4;
+		font: inherit;
+		font-size: 16px;
+		line-height: 1.4;
 
-        box-sizing: border-box;
+		box-sizing: border-box;
 
-        overflow-x: hidden;
-        overflow-y: hidden;
+		overflow-x: hidden;
+		overflow-y: hidden;
 
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
 
-        scrollbar-width: thin;
-        scrollbar-color: rgba(72, 130, 170, 0.28) transparent;
-    }
+		scrollbar-width: thin;
+		scrollbar-color: rgba(72, 130, 170, 0.28) transparent;
+	}
 
-    .composer-input::placeholder {
-        color: var(--muted-soft);
-    }
+	.composer-input::placeholder {
+		color: var(--muted-soft);
+	}
 
-    .composer-input::-webkit-scrollbar {
-        width: 8px;
-    }
+	.composer-input::-webkit-scrollbar {
+		width: 8px;
+	}
 
-    .composer-input::-webkit-scrollbar-thumb {
-        background: rgba(72, 130, 170, 0.22);
-        border-radius: 999px;
-        border: 2px solid transparent;
-        background-clip: padding-box;
-    }
+	.composer-input::-webkit-scrollbar-thumb {
+		background: rgba(72, 130, 170, 0.22);
+		border-radius: 999px;
+		border: 2px solid transparent;
+		background-clip: padding-box;
+	}
 
-    .composer-input:disabled {
-        opacity: 0.55;
-        cursor: not-allowed;
-    }
+	.composer-input:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+	}
 
 	/* ── gravação de microfone ──────────────────────────────
 	     Estado de gravação do botão de microfone. Especificidade

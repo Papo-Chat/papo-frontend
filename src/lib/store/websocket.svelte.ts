@@ -132,7 +132,7 @@ function resync(): void {
 export function reportPresenceActivity(force = false): void {
 	if (!state.connected) return;
 	const now = Date.now();
-	if (!force && now-lastPresenceActivitySentAt < PRESENCE_ACTIVITY_THROTTLE_MS) return;
+	if (!force && now - lastPresenceActivitySentAt < PRESENCE_ACTIVITY_THROTTLE_MS) return;
 	if (wsSend({ type: 'presence_activity' } as WsInbound)) {
 		lastPresenceActivitySentAt = now;
 	}

@@ -9,7 +9,11 @@
 	} from '$lib/utils/media';
 	import { formatBytes, isImageMime } from '$lib/utils/text';
 
-	let { attachment, pinned = false, tiled = false} = $props<{
+	let {
+		attachment,
+		pinned = false,
+		tiled = false
+	} = $props<{
 		attachment: MessageAttachment;
 		pinned?: boolean;
 		tiled?: boolean;
@@ -25,10 +29,12 @@
 	);
 
 	const fullUrl = $derived(attachmentUrl(attachment.id));
-	const name = attachment.original_file_name || 'anexo';
-	const isImage = isImageMime(attachment.mime_type);
-	const isRecordedAudioName = /^audio_.*\.(webm|ogg|wav|mp3|m4a|aac|opus)$/i.test(name);
-	const isAudio = attachment.mime_type.startsWith('audio/') || isRecordedAudioName;
+	// `attachment` é substituído (não mutado) em updates de moderação via WS,
+	// então estes valores precisam ser derivados, não constantes.
+	const name = $derived(attachment.original_file_name || 'anexo');
+	const isImage = $derived(isImageMime(attachment.mime_type));
+	const isRecordedAudioName = $derived(/^audio_.*\.(webm|ogg|wav|mp3|m4a|aac|opus)$/i.test(name));
+	const isAudio = $derived(attachment.mime_type.startsWith('audio/') || isRecordedAudioName);
 
 	// Imagem: o download só começa quando o box entra na margem do viewport
 	// (MEDIA_PRELOAD_MARGIN), bem antes de aparecer na tela. Download e
@@ -199,7 +205,7 @@
 	}
 </script>
 
-{#if (attachment.thumbnail_id !== null && isImage.isImage)}
+{#if attachment.thumbnail_id !== null && isImage.isImage}
 	<!-- Imagem: thumbnail inline; o clique abre o original em lightbox (in-app). -->
 	<button
 		type="button"
@@ -243,28 +249,23 @@
 	</button>
 
 	{#if lightboxOpen}
-	<dialog
-		bind:this={lightbox}
-		class="lightbox"
-		aria-label={name}
-		onclick={closeOnBackground}
-		oncancel={(e) => {
-			e.preventDefault();
-			closeLightbox();
-		}}
-	>
-		<img class="lightbox-image" src={fullUrl} alt={name} />
-
-		<button
-			type="button"
-			class="lightbox-close"
-			onclick={closeLightbox}
-			aria-label="Fechar"
+		<dialog
+			bind:this={lightbox}
+			class="lightbox"
+			aria-label={name}
+			onclick={closeOnBackground}
+			oncancel={(e) => {
+				e.preventDefault();
+				closeLightbox();
+			}}
 		>
-			✕
-		</button>
-	</dialog>
-{/if}
+			<img class="lightbox-image" src={fullUrl} alt={name} />
+
+			<button type="button" class="lightbox-close" onclick={closeLightbox} aria-label="Fechar">
+				✕
+			</button>
+		</dialog>
+	{/if}
 {:else if isAudio}
 	<!-- Áudio: player compacto. O arquivo só é pedido no primeiro toque. -->
 	<div class="attachment-media attachment-audio" class:pinned-attachment={pinned} title={name}>
@@ -285,7 +286,12 @@
 			ontimeupdate={syncAudioTime}
 			onerror={handleAudioError}
 		></audio>
-		<button class="audio-play" type="button" onclick={toggleAudio} aria-label={audioPlaying ? 'Pausar áudio' : 'Reproduzir áudio'}>
+		<button
+			class="audio-play"
+			type="button"
+			onclick={toggleAudio}
+			aria-label={audioPlaying ? 'Pausar áudio' : 'Reproduzir áudio'}
+		>
 			<span aria-hidden="true">{audioPlaying ? '❚❚' : '▶'}</span>
 		</button>
 		<input
@@ -301,7 +307,9 @@
 		/>
 		<span class="audio-time">
 			{formatAudioTime(audioCurrent)}
-			<span class="audio-duration">/ {audioDuration > 0 ? formatAudioTime(audioDuration) : (audioLoading ? '…' : '--:--')}</span>
+			<span class="audio-duration"
+				>/ {audioDuration > 0 ? formatAudioTime(audioDuration) : audioLoading ? '…' : '--:--'}</span
+			>
 		</span>
 	</div>
 {:else if attachment.mime_type.startsWith('video/') || attachment.mime_type.startsWith('application/octet-stream')}
@@ -329,7 +337,8 @@
 					{/if}
 					<span class="video-play" aria-hidden="true">▶</span>
 					<span class="video-meta">
-						{name}{#if attachment.size_bytes > 0} · {formatBytes(attachment.size_bytes)}{/if}
+						{name}{#if attachment.size_bytes > 0}
+							· {formatBytes(attachment.size_bytes)}{/if}
 					</span>
 				</button>
 			{/if}
@@ -566,11 +575,6 @@
 		font-size: 12px;
 		color: var(--text-secondary);
 	}
-	.attachment-image .attachment-name,
-	.attachment-media .attachment-name {
-		display: block;
-		margin-top: 4px;
-	}
 	.attachment-file {
 		display: inline-flex;
 		align-items: center;
@@ -687,4 +691,4 @@
 	.lightbox-close:hover {
 		background: rgba(0, 0, 0, 0.6);
 	}
-	</style>
+</style>

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import type { Channel, SearchResult } from '$lib/types';
 	import { state as uiState } from '$lib/store/ui.svelte';
 	import * as notificationsStore from '$lib/store/notifications.svelte';
@@ -18,14 +19,12 @@
 		channel,
 		searchQuery = $bindable(''),
 		searchOpen = $bindable(false),
-		onSearchQueryChange,
 		onSearchOpenChange,
 		onSearchResult
 	} = $props<{
 		channel: Channel;
 		searchQuery?: string;
 		searchOpen?: boolean;
-		onSearchQueryChange?: (q: string) => void;
 		onSearchOpenChange?: (open: boolean) => void;
 		onSearchResult?: (result: SearchResult) => void;
 	}>();
@@ -101,7 +100,7 @@
 			{#if canManageChannel}
 				<button
 					class="pill channel-admin-btn"
-					onclick={() => goto(`/channels/${channel.id}/admin`)}
+					onclick={() => goto(resolve('/channels/[channel_id]/admin', { channel_id: channel.id }))}
 					aria-label="Administração do canal"
 					title="Administração do canal"
 				>
@@ -110,14 +109,13 @@
 			{/if}
 		</div>
 		{#if channel.topic}
-
 			<button
 				class="topic-preview"
 				onclick={openTopic}
 				aria-label="Ver tópico completo"
 				title="Clique para ver o tópico completo"
 			>
-				<LightFormattedMessage content={channel.topic}/>
+				<LightFormattedMessage content={channel.topic} />
 			</button>
 		{/if}
 	</div>
@@ -196,28 +194,18 @@
 			if (event.target === event.currentTarget) closeTopic();
 		}}
 	>
-		<section
-			class="topic-dialog"
-			role="dialog"
-			aria-modal="true"
-			aria-labelledby="topic-dialog-title"
-		>
+		<div class="topic-dialog" role="dialog" aria-modal="true" aria-labelledby="topic-dialog-title">
 			<div class="topic-dialog-head">
 				<div>
 					<span class="topic-dialog-eyebrow">Tópico do canal</span>
 					<h3 id="topic-dialog-title">{channel.name}</h3>
 				</div>
-				<button
-					class="topic-close"
-					onclick={closeTopic}
-					aria-label="Fechar tópico"
-					title="Fechar"
-				>
+				<button class="topic-close" onclick={closeTopic} aria-label="Fechar tópico" title="Fechar">
 					<Icon name="x" variant="light" size={18} />
 				</button>
 			</div>
-			<p class="topic-full"><FormattedMessage content={channel.topic}/></p>
-		</section>
+			<p class="topic-full"><FormattedMessage content={channel.topic} /></p>
+		</div>
 	</div>
 {/if}
 

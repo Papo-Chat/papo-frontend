@@ -21,24 +21,48 @@
 	// name -> emoji Map for every mounted message.
 	const nameMap = $derived(emojisStore.state.byName);
 
-	const mentionIds = $derived([...content.matchAll(/@mention\(<@([0-9a-fA-F-]{16,})>\)/g)].map((m) => m[1]));
-	const mentionMap = $derived(new Map(mentionIds.map((id) => { const u = usersStore.state.byId.get(id); return [id, u?.nickname || u?.username || 'usuário'] as const; })));
-	$effect(() => { if (mentionIds.length) void usersStore.ensureSummaries(mentionIds).catch(() => {}); });
-	const html = $derived(renderMessageMarkdown(content, nameMap, emojiUrl, { mentions: mentionMap, highlightEveryone: allowEveryoneHighlight }));
+	const mentionIds = $derived(
+		[...content.matchAll(/@mention\(<@([0-9a-fA-F-]{16,})>\)/g)].map((m) => m[1])
+	);
+	const mentionMap = $derived(
+		new Map(
+			mentionIds.map((id) => {
+				const u = usersStore.state.byId.get(id);
+				return [id, u?.nickname || u?.username || 'usuário'] as const;
+			})
+		)
+	);
+	$effect(() => {
+		if (mentionIds.length) void usersStore.ensureSummaries(mentionIds).catch(() => {});
+	});
+	const html = $derived(
+		renderMessageMarkdown(content, nameMap, emojiUrl, {
+			mentions: mentionMap,
+			highlightEveryone: allowEveryoneHighlight
+		})
+	);
 
 	function handleMentionClick(event: MouseEvent): void {
-		const target = (event.target as HTMLElement | null)?.closest<HTMLElement>('[data-mention-user-id]');
+		const target = (event.target as HTMLElement | null)?.closest<HTMLElement>(
+			'[data-mention-user-id]'
+		);
 		const id = target?.dataset.mentionUserId;
 		if (!id) return;
 		const known = usersStore.state.byId.get(id);
-		if (known) { openProfile(known); return; }
-		void usersStore.ensureSummary(id).then((summary) => {
-		if (summary) openProfile(summary);
-	}).catch(() => {});
+		if (known) {
+			openProfile(known);
+			return;
+		}
+		void usersStore
+			.ensureSummary(id)
+			.then((summary) => {
+				if (summary) openProfile(summary);
+			})
+			.catch(() => {});
 	}
 
-	// O compilador trata `innerHTML` como atributo (não propriedade) quando o
-	// valor é string; atribui o HTML gerado pelo parser via efeito.
+	// Realça o termo buscado dentro do texto já renderizado ({@html}). Idempotente:
+	// nós dentro de <mark class="search-text-highlight"> são ignorados.
 	function applyTextHighlight(root: HTMLElement, query: string): void {
 		const needle = query.trim();
 		if (!needle) return;
@@ -76,14 +100,21 @@
 		}
 	}
 
+	// O {@html} substitui o subtree quando `html` muda; o efeito roda depois do
+	// update e reaplica o destaque da busca sobre o novo conteúdo.
 	$effect(() => {
-		if (!el) return;
-		el.innerHTML = html;
+		if (!el || !highlightText.trim()) return;
+		void html;
 		applyTextHighlight(el, highlightText);
 	});
 </script>
 
-<div class="msg-text" bind:this={el} onclick={handleMentionClick}></div>
+<!-- renderMessageMarkdown escapa todo o texto e descarta HTML cru
+     (utils/markdown.ts). -->
+<div class="msg-text" bind:this={el} role="presentation" onclick={handleMentionClick}>
+	<!-- eslint-disable-next-line svelte/no-at-html-tags -- saída do renderizador é segura -->
+	{@html html}
+</div>
 
 <style>
 	.msg-text {
@@ -262,9 +293,25 @@
 		object-fit: contain;
 		flex: none;
 	}
-	:global(.message-mention) { display: inline; padding: 0.06em 0.3em; border: 0; border-radius: 5px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--link); font: inherit; font-weight: 650; cursor: pointer; }
-	:global(.message-mention:hover) { background: color-mix(in srgb, var(--accent) 24%, transparent); text-decoration: underline; }
-	:global(.message-mention-everyone) { cursor: default; text-decoration: none; }
+	:global(.message-mention) {
+		display: inline;
+		padding: 0.06em 0.3em;
+		border: 0;
+		border-radius: 5px;
+		background: color-mix(in srgb, var(--accent) 16%, transparent);
+		color: var(--link);
+		font: inherit;
+		font-weight: 650;
+		cursor: pointer;
+	}
+	:global(.message-mention:hover) {
+		background: color-mix(in srgb, var(--accent) 24%, transparent);
+		text-decoration: underline;
+	}
+	:global(.message-mention-everyone) {
+		cursor: default;
+		text-decoration: none;
+	}
 	:global(.search-text-highlight) {
 		padding: 0 0.08em;
 		border-radius: 3px;

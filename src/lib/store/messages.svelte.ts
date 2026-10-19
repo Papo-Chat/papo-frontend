@@ -11,7 +11,7 @@
 // `requestGeneration` discards a page that resolves after the channel was
 // evicted/refreshed.
 
-import { SvelteMap, SvelteSet } from 'svelte/reactivity';
+import { SvelteDate, SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
 import * as webhooksStore from './webhooks.svelte';
 import type { ChannelMessagesState, MessagesState } from './messages.types';
@@ -73,7 +73,7 @@ function releaseMessageResources(
 	}
 
 	// Embed ids still referenced by messages kept in the window.
-	const keptEmbedIds = new Set<string>();
+	const keptEmbedIds = new SvelteSet<string>();
 	for (const m of byId.values()) {
 		for (const e of m.embeds) {
 			keptEmbedIds.add(e.id);
@@ -91,13 +91,24 @@ function releaseMessageResources(
 	}
 }
 
+// Valores dentro de um mapa reativo não são reativos em profundidade: cada
+// mudança parte de um clone de `byId` com as entradas afetadas substituídas.
+function cloneById(
+	byId: Map<string, MessageWithAttachment>
+): SvelteMap<string, MessageWithAttachment> {
+	const next = new SvelteMap<string, MessageWithAttachment>();
+	for (const [id, m] of byId) {
+		next.set(id, m);
+	}
+	return next;
+}
+
 // ── state ─────────────────────────────────────────────────
 
 function checkpointWindow(
 	ch: ChannelMessagesState,
 	byId: SvelteMap<string, MessageWithAttachment>,
-	trimSide: 'oldest' | 'newest' =
-		ch.windowMode === 'latest' ? 'oldest' : 'newest'
+	trimSide: 'oldest' | 'newest' = ch.windowMode === 'latest' ? 'oldest' : 'newest'
 ): {
 	byId: SvelteMap<string, MessageWithAttachment>;
 	hasMoreOlder: boolean;
@@ -111,10 +122,7 @@ function checkpointWindow(
 	if (byId.size > MAX_WINDOW) {
 		const ids = sortedIds(byId);
 		const excess = ids.length - MAX_WINDOW;
-		const dropIds =
-			trimSide === 'oldest'
-				? ids.slice(0, excess)
-				: ids.slice(ids.length - excess);
+		const dropIds = trimSide === 'oldest' ? ids.slice(0, excess) : ids.slice(ids.length - excess);
 
 		const dropped: MessageWithAttachment[] = [];
 		for (const id of dropIds) {
@@ -136,12 +144,8 @@ function checkpointWindow(
 		byId,
 		hasMoreOlder,
 		hasMoreNewer,
-		cursorOlder: oldest
-			? { since: oldest.created_at, last_id: oldest.id }
-			: null,
-		cursorNewer: newest
-			? { since: newest.created_at, last_id: newest.id }
-			: null
+		cursorOlder: oldest ? { since: oldest.created_at, last_id: oldest.id } : null,
+		cursorNewer: newest ? { since: newest.created_at, last_id: newest.id } : null
 	};
 }
 
@@ -263,8 +267,8 @@ export function mergeFetchedMessage(
 	}
 	const incomingSafe: MessageWithAttachment = {
 		...normalizedIncoming,
-		embeds: normalizedIncoming.embeds.filter((e) =>
-			!isEmbedRemoved(ch, normalizedIncoming.id, e.id)
+		embeds: normalizedIncoming.embeds.filter(
+			(e) => !isEmbedRemoved(ch, normalizedIncoming.id, e.id)
 		)
 	};
 	if (!normalizedExisting) {
@@ -321,10 +325,7 @@ export function upsertMessage(
 	if (ch) {
 		const merged = mergeFetchedMessage(ch.byId.get(safeMessage.id), safeMessage, ch);
 		if (merged) {
-			const newByd = new SvelteMap<string, MessageWithAttachment>();
-			for (const [id, m] of ch.byId) {
-				newByd.set(id, m);
-			}
+			const newByd = cloneById(ch.byId);
 			newByd.set(safeMessage.id, merged);
 
 			const checkpointed = checkpointWindow(ch, newByd);
@@ -367,10 +368,7 @@ function patchMessage(
 		if (!msg) {
 			return old;
 		}
-		const newByd = new SvelteMap<string, MessageWithAttachment>();
-		for (const [id, m] of old.byId) {
-			newByd.set(id, m);
-		}
+		const newByd = cloneById(old.byId);
 		newByd.set(messageId, { ...msg, ...patch });
 		return {
 			...old,
@@ -442,7 +440,7 @@ export function patchPinned(state: MessagesState, messageId: string, isPinned: b
 }
 
 const embedRequests = new SvelteMap<string, Promise<EmbedWithImage>>();
-const removeRequests = new Map<string, Promise<void>>();
+const removeRequests = new SvelteMap<string, Promise<void>>();
 
 // Embed metadata (WS/REST) has no image_data: the card asks for it when it
 // approaches the viewport. GET /embeds/:embed_id returns the embed + the
@@ -538,10 +536,7 @@ export function reactUpdate(state: MessagesState, event: WsReactUpdate): void {
 			if (!m) {
 				return old;
 			}
-			const newByd = new SvelteMap<string, MessageWithAttachment>();
-			for (const [id, mm] of old.byId) {
-				newByd.set(id, mm);
-			}
+			const newByd = cloneById(old.byId);
 			newByd.set(event.message_id, { ...m, reactions });
 			return {
 				...old,
@@ -574,7 +569,7 @@ export function applyEmbedsUpdate(state: MessagesState, event: WsMessageEmbedsUp
 
 	touchDuringFresh(channel_id, message_id);
 
-	const nextIds = new Set(embeds.map((e) => e.id));
+	const nextIds = new SvelteSet(embeds.map((e) => e.id));
 	const dropped = msg.embeds.filter((e) => !nextIds.has(e.id));
 	const tombstones = new SvelteSet(ch.embedTombstones);
 	for (const e of dropped) {
@@ -589,10 +584,7 @@ export function applyEmbedsUpdate(state: MessagesState, event: WsMessageEmbedsUp
 		if (!m) {
 			return old;
 		}
-		const newById = new SvelteMap<string, MessageWithAttachment>();
-		for (const [id, mm] of old.byId) {
-			newById.set(id, mm);
-		}
+		const newById = cloneById(old.byId);
 		newById.set(message_id, { ...m, embeds });
 		return {
 			...old,
@@ -642,12 +634,7 @@ function applyPendingEmbeds(state: MessagesState, messageId: string): void {
 			const m = old.byId.get(messageId);
 			if (!m) return old;
 
-			const newById = new SvelteMap<string, MessageWithAttachment>();
-
-			for (const [id, mm] of old.byId) {
-				newById.set(id, mm);
-			}
-
+			const newById = cloneById(old.byId);
 			newById.set(messageId, { ...m, embeds });
 
 			return {
@@ -691,10 +678,7 @@ export function attachmentModerationUpdate(
 		if (!m) {
 			return old;
 		}
-		const newByd = new SvelteMap<string, MessageWithAttachment>();
-		for (const [id, mm] of old.byId) {
-			newByd.set(id, mm);
-		}
+		const newByd = cloneById(old.byId);
 		newByd.set(message_id, { ...m, attachments: nextAttachments });
 		return {
 			...old,
@@ -757,7 +741,7 @@ export function evict(channelId: string): void {
 	const ch = state.channels.get(channelId);
 	if (!ch) return;
 
-	const droppedById = new Map<string, MessageWithAttachment>();
+	const droppedById = new SvelteMap<string, MessageWithAttachment>();
 	for (const message of ch.byId.values()) {
 		droppedById.set(message.id, message);
 	}
@@ -767,10 +751,9 @@ export function evict(channelId: string): void {
 		}
 	}
 
-	releaseMessageResources(
-		new SvelteMap<string, MessageWithAttachment>(),
-		[...droppedById.values()]
-	);
+	releaseMessageResources(new SvelteMap<string, MessageWithAttachment>(), [
+		...droppedById.values()
+	]);
 
 	for (const message of droppedById.values()) {
 		deletePendingEmbeds(message.id);
@@ -822,12 +805,8 @@ async function _fetchPage(
 		const res = await api.messages.list(channelId, q);
 		// Normaliza arrays nulos vindos da API (embeds/reactions).
 		const messages = res.messages.map(coerceMessage);
-		const current = state.channels.get(channelId);
-		if (!current || current.requestGeneration !== gen) {
-			return;
-		}
-		const ch2 = state.channels.get(channelId);
 		// Discard if the channel was evicted/refreshed while in flight (P0.4).
+		const ch2 = state.channels.get(channelId);
 		if (!ch2 || ch2.requestGeneration !== gen) {
 			return;
 		}
@@ -911,16 +890,8 @@ async function _fetchPage(
 		const direction = q?.order ?? 'desc';
 		const pageState: ChannelMessagesState = {
 			...ch2,
-			hasMoreOlder:
-				q == null || direction === 'desc'
-					? res.has_more
-					: ch2.hasMoreOlder,
-			hasMoreNewer:
-				q == null
-					? false
-					: direction === 'asc'
-						? res.has_more
-						: ch2.hasMoreNewer
+			hasMoreOlder: q == null || direction === 'desc' ? res.has_more : ch2.hasMoreOlder,
+			hasMoreNewer: q == null ? false : direction === 'asc' ? res.has_more : ch2.hasMoreNewer
 		};
 		const checkpointed = checkpointWindow(
 			pageState,
@@ -1100,7 +1071,7 @@ export async function gotoMessage(
 
 		const targetTime = Date.parse(createdAt);
 		if (!Number.isNaN(targetTime)) {
-			const justBeforeTarget = new Date(targetTime - 1).toISOString();
+			const justBeforeTarget = new SvelteDate(targetTime - 1).toISOString();
 			const nearbyLimit = Math.floor(MAX_WINDOW / 2);
 			const generation = ++requestSerial;
 			state.channels.set(channelId, {
@@ -1140,9 +1111,7 @@ export async function gotoMessage(
 				const ids = sortedIds(newById);
 				const oldest = ids.length ? newById.get(ids[0]) : undefined;
 				const newest = ids.length ? newById.get(ids[ids.length - 1]) : undefined;
-				const dropped = [...current.byId.values()].filter(
-					(message) => !newById.has(message.id)
-				);
+				const dropped = [...current.byId.values()].filter((message) => !newById.has(message.id));
 				releaseMessageResources(newById, dropped);
 				state.channels.set(channelId, {
 					...current,
@@ -1179,13 +1148,12 @@ export async function gotoMessage(
 		if (current.byId.has(messageId)) return true;
 
 		const newest = current.ids.length
-			? current.byId.get(current.ids[current.ids.length - 1]) ?? null
+			? (current.byId.get(current.ids[current.ids.length - 1]) ?? null)
 			: null;
 		const targetIsNewer =
 			!!createdAt &&
 			!!newest &&
-			(createdAt > newest.created_at ||
-				(createdAt === newest.created_at && messageId > newest.id));
+			(createdAt > newest.created_at || (createdAt === newest.created_at && messageId > newest.id));
 
 		if (targetIsNewer) {
 			if (!current.hasMoreNewer || !current.cursorNewer) return false;
@@ -1316,7 +1284,7 @@ export function unpin(channelId: string, messageId: string): Promise<void> {
 		patchPinned(state, messageId, false);
 	});
 }
-// DROP-IN: substitua updateUserReactions(), react() e unreact() por este bloco.
+// Reações: `reactions` e `user_reactions` atualizados juntos.
 //
 // Objetivo:
 // - atualizar `reactions` e `user_reactions` juntos;
@@ -1353,10 +1321,7 @@ function updateMessageAtomic(
 	const nextMessage = updater(current);
 
 	// Só cria novas referências depois de aplicar o updater sobre o estado MAIS RECENTE.
-	const nextById = new SvelteMap<string, MessageWithAttachment>();
-	for (const [id, message] of ch.byId) {
-		nextById.set(id, message);
-	}
+	const nextById = cloneById(ch.byId);
 	nextById.set(messageId, nextMessage);
 
 	state.channels.set(channelId, {
@@ -1375,9 +1340,7 @@ function applyLocalReaction(
 	const wantedKey = reactionKey(reaction);
 
 	updateMessageAtomic(channelId, messageId, (msg) => {
-		const mineBefore = msg.user_reactions.some(
-			(r) => reactionKey(r) === wantedKey
-		);
+		const mineBefore = msg.user_reactions.some((r) => reactionKey(r) === wantedKey);
 
 		// Idempotência: não incrementa/decrementa duas vezes a mesma reação local.
 		if (!remove && mineBefore) return msg;
@@ -1394,9 +1357,7 @@ function applyLocalReaction(
 					}
 				];
 
-		const existingIndex = msg.reactions.findIndex(
-			(r) => reactionKey(r) === wantedKey
-		);
+		const existingIndex = msg.reactions.findIndex((r) => reactionKey(r) === wantedKey);
 
 		let nextReactions: typeof msg.reactions;
 
@@ -1472,11 +1433,7 @@ export function react(
 	);
 }
 
-export function unreact(
-	channelId: string,
-	messageId: string,
-	req: ReactionInput
-): Promise<void> {
+export function unreact(channelId: string, messageId: string, req: ReactionInput): Promise<void> {
 	const epoch = storeEpoch;
 
 	// Otimista e síncrono.
@@ -1510,7 +1467,6 @@ export function reactionUsers(
 }> {
 	return api.messages.reactionUsers(channelId, messageId, q);
 }
-
 
 export function loadPinned(channelId: string, force = false): void {
 	const ch = state.channels.get(channelId);
