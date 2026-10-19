@@ -136,21 +136,42 @@ function invalidateProfile(id: string): void {
     revokeBlobKey(`avatar:${id}`);
 }
 
+// Avatar cleanup can run while Svelte is reconciling a keyed message list.
+// Defer reactive profile-map deletions until the current update has completed.
+let profileEvictionScheduled = false;
+let profileEvictionGeneration = 0;
+
 function evictProfiles(): void {
-    if (state.profiles.size <= PROFILE_CACHE_MAX) {
+    if (state.profiles.size <= PROFILE_CACHE_MAX || profileEvictionScheduled) {
         return;
     }
 
-    const candidates = [...state.profiles.keys()]
-        .filter((id) => !profileIsRetained(id))
-        .sort((a, b) => (profileLastUsed.get(a) ?? 0) - (profileLastUsed.get(b) ?? 0));
+    profileEvictionScheduled = true;
+    const generation = profileEvictionGeneration;
 
-    for (const id of candidates) {
-        if (state.profiles.size <= PROFILE_CACHE_TARGET) {
-            break;
+    queueMicrotask(() => {
+        // Ignore cleanup work queued by a previous session/reset.
+        if (generation !== profileEvictionGeneration) return;
+        profileEvictionScheduled = false;
+
+        if (state.profiles.size <= PROFILE_CACHE_MAX) {
+            return;
         }
-        invalidateProfile(id);
-    }
+
+        const candidates = [...state.profiles.keys()]
+            .filter((id) => !profileIsRetained(id))
+            .sort((a, b) => (profileLastUsed.get(a) ?? 0) - (profileLastUsed.get(b) ?? 0));
+
+        for (const id of candidates) {
+            if (state.profiles.size <= PROFILE_CACHE_TARGET) {
+                break;
+            }
+            // An avatar may have retained this profile after eviction was queued.
+            if (!profileIsRetained(id)) {
+                invalidateProfile(id);
+            }
+        }
+    });
 }
 
 function scheduleProfileBatchFlush(): void {
@@ -824,6 +845,8 @@ export function avatarUrl(user: UserProfile): string {
 // cache so the previous account leaves zero residue.
 
 export function reset(): void {
+    profileEvictionGeneration += 1;
+    profileEvictionScheduled = false;
     userListRetryNotBefore = 0;
     for (const timer of typingTimers.values()) {
         clearTimeout(timer);

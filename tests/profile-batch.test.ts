@@ -84,3 +84,29 @@ describe('profile batch coalescing', () => {
 		expect(batchSpy.mock.calls[1][0]).toEqual(['u50']);
 	});
 });
+
+
+describe('profile cache eviction', () => {
+	it('defers reactive profile deletion and preserves profiles retained before eviction', async () => {
+		vi.useRealTimers();
+
+		for (let i = 0; i < 121; i += 1) {
+			const cached = profile(`cached-${i}`);
+			usersStore.state.profiles.set(cached.id, cached);
+		}
+
+		usersStore.releaseProfile('not-retained');
+
+		// releaseProfile can run from Avatar's effect cleanup while Svelte is
+		// reconciling the message list; deletion must not happen synchronously.
+		expect(usersStore.state.profiles.size).toBe(121);
+
+		// Simulate an avatar retaining the profile again before the eviction
+		// microtask runs.
+		usersStore.retainProfile('cached-0');
+		await new Promise<void>((resolve) => queueMicrotask(resolve));
+
+		expect(usersStore.state.profiles.size).toBe(75);
+		expect(usersStore.state.profiles.has('cached-0')).toBe(true);
+	});
+});
