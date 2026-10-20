@@ -82,6 +82,10 @@ describe('embedNeedsResolution', () => {
 			)
 		).toBe(false);
 	});
+
+	it('forces resolution for webhook messages when media metadata is omitted', () => {
+		expect(embedNeedsResolution(linkEmbed(), true)).toBe(true);
+	});
 });
 
 describe('embedIframeUrl / embedDirectVideoUrl', () => {
