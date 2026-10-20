@@ -13,6 +13,7 @@
 		embedDirectVideoUrl,
 		embedHost,
 		embedIframeUrl,
+		embedNeedsResolution,
 		safeEmbedColor
 	} from '$lib/utils/embeds';
 	import { truncate } from '$lib/utils/text';
@@ -32,10 +33,10 @@
 	onMount(() => {
 		if (!cardEl) return;
 		// O base64 do card (image_data / author_image_data) só existe no embed
-		// resolvido: sem thumbnail nem ícone de autor não há nada a buscar, e o
-		// card é buscado ainda fora da tela, para o bitmap chegar antes de
-		// entrar no viewport (sem tranco no scroll).
-		if (!embed.thumbnail && !embed.author?.media) return;
+		// resolvido. Thumbnail, imagem principal e ícone de autor precisam da
+		// resolução, inclusive em embeds customizados recebidos via webhook.
+		// O card é buscado ainda fora da tela, para evitar tranco no scroll.
+		if (!embedNeedsResolution(embed)) return;
 
 		const load = () =>
 			void ensureEmbed(embed.id).catch(() => {
@@ -62,7 +63,7 @@
 
 	const imageUrl = $derived(
 		resolved?.image_data
-			? blobToUrl(resolved.image_data, mimeToFormat(resolved.thumbnail?.mime_type ?? ''))
+			? blobToUrl(resolved.image_data, mimeToFormat(resolved.thumbnail?.mime_type ?? resolved.image?.mime_type ?? ''))
 			: ''
 	);
 
