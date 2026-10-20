@@ -63,14 +63,24 @@ function linkEmbed(overrides: Partial<Embed> = {}): Embed {
 
 describe('embedNeedsResolution', () => {
 	it('resolves thumbnail, image-only, and author-media embeds', () => {
-		expect(embedNeedsResolution(linkEmbed({ thumbnail: { width: 640, height: 360 } }))).toBe(true);
-		expect(embedNeedsResolution(linkEmbed({ image: { mime_type: 'image/png', width: 640, height: 360 } }))).toBe(true);
-		expect(embedNeedsResolution(linkEmbed({ author: { name: 'Bot', media: { mime_type: 'image/png' } }))).toBe(true);
+		expect(
+			embedNeedsResolution(linkEmbed({ thumbnail: { width: 640, height: 360 } }))
+		).toBe(true);
+		expect(
+			embedNeedsResolution(linkEmbed({ image: { mime_type: 'image/png', width: 640, height: 360 } }))
+		).toBe(true);
+		expect(
+			embedNeedsResolution(linkEmbed({ author: { name: 'Bot', media: { mime_type: 'image/png' } } }))
+		).toBe(true);
 	});
 
 	it('skips the details request when there is no bitmap to hydrate', () => {
 		expect(embedNeedsResolution(linkEmbed())).toBe(false);
-		expect(embedNeedsResolution(linkEmbed({ video: { url: 'https://cdn.example.com/video.mp4', mime_type: 'video/mp4' } }))).toBe(false);
+		expect(
+			embedNeedsResolution(
+				linkEmbed({ video: { url: 'https://cdn.example.com/video.mp4', mime_type: 'video/mp4' } })
+			)
+		).toBe(false);
 	});
 });
 
