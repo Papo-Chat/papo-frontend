@@ -9,7 +9,7 @@
 		fetchMediaBlob,
 		MEDIA_PRELOAD_MARGIN
 	} from '$lib/utils/media';
-	import { formatBytes, isImageMime, isVideoMime } from '$lib/utils/text';
+	import { formatBytes, isAudioMime, isImageMime, isVideoMime } from '$lib/utils/text';
 
 	let {
 		attachment,
@@ -37,7 +37,12 @@
 	const mimeType = $derived(attachment.mime_type.trim().toLowerCase());
 	const isImage = $derived(isImageMime(mimeType));
 	const isRecordedAudioName = $derived(/^audio_.*\.(webm|ogg|wav|mp3|m4a|aac|opus)$/i.test(name));
-	const isAudio = $derived(mimeType.startsWith('audio/') || isRecordedAudioName);
+	const isLegacyAudioFile = $derived(/\.(m4a|m4b|m4p|mp3|wav|ogg|opus|aac|flac|wma|aif|aiff)$/i.test(name));
+	const isAudio = $derived(
+		isAudioMime(mimeType) ||
+		isRecordedAudioName ||
+		(mimeType === 'application/octet-stream' && isLegacyAudioFile)
+	);
 	// All video/* MIME values detected by the backend are playable here. For
 	// historical uploads still labeled generic, keep the video UI only for
 	// known video extensions instead of treating every octet-stream as video.
