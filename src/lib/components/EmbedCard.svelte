@@ -63,6 +63,9 @@
 
 	// Embed completo (com image_data) vem do cache do store de mensagens.
 	const resolved = $derived(getEmbed(embed.id));
+	// GET /embeds/:id pode trazer mídia/metadados ausentes no resumo da mensagem.
+	// O payload recente da mensagem tem precedência quando ambos contêm o campo.
+	const hydratedEmbed = $derived(resolved ? { ...resolved, ...embed } : embed);
 
 	const imageUrl = $derived(
 		resolved?.image_data
@@ -77,7 +80,7 @@
 	// image_data a partir de ThumbnailFilePath). As dimensões dela vêm no
 	// resumo do embed, que já chega no payload da mensagem: reservar o box com
 	// elas evita o salto de layout quando o base64 chega do GET /embeds/:id.
-	const imageBox = $derived(embedMediaBox(embed.thumbnail) ?? embedMediaBox(embed.image));
+	const imageBox = $derived(embedMediaBox(hydratedEmbed.thumbnail) ?? embedMediaBox(hydratedEmbed.image));
 	const imageBoxStyle = $derived(
 		imageBox ? `aspect-ratio: ${imageBox.width} / ${imageBox.height}` : undefined
 	);
@@ -92,23 +95,23 @@
 			: ''
 	);
 
-	const title = $derived(embed.title ?? truncate(embed.url ?? '', 60));
-	const hasTitle = $derived(Boolean(embed.title || embed.url));
-	const host = $derived(embedHost(embed.url));
-	const sourceName = $derived(embed.site_name ?? embed.provider ?? host);
+	const title = $derived(hydratedEmbed.title ?? truncate(hydratedEmbed.url ?? '', 60));
+	const hasTitle = $derived(Boolean(hydratedEmbed.title || hydratedEmbed.url));
+	const host = $derived(embedHost(hydratedEmbed.url));
+	const sourceName = $derived(hydratedEmbed.site_name ?? hydratedEmbed.provider ?? host);
 	const hasTopline = $derived(Boolean(sourceName));
-	const authorName = $derived(embed.author?.name ?? '');
-	const authorUrl = $derived(embed.author?.url ?? '');
+	const authorName = $derived(hydratedEmbed.author?.name ?? '');
+	const authorUrl = $derived(hydratedEmbed.author?.url ?? '');
 	// Autor repetido na linha de baixo não serve para nada: o nome já é o selo.
 	const showAuthorLine = $derived(Boolean(authorName) && authorName !== (sourceName ?? ''));
-	const footerText = $derived(embed.footer?.text ?? '');
-	const fields = $derived(embed.fields ?? []);
-	const color = $derived(safeEmbedColor(embed.color));
+	const footerText = $derived(hydratedEmbed.footer?.text ?? '');
+	const fields = $derived(hydratedEmbed.fields ?? []);
+	const color = $derived(safeEmbedColor(hydratedEmbed.color));
 	const sourceInitial = $derived((sourceName || 'link').slice(0, 1).toUpperCase());
 
 	// A descrição do card passa pelo mesmo renderizador do corpo da mensagem:
 	// sem isso `:emoji:`, markdown e `@mention(<@id>)` de uma ponte aparecem crus.
-	const description = $derived(embed.description ?? '');
+	const description = $derived(hydratedEmbed.description ?? '');
 	const mentionIds = $derived(
 		[...description.matchAll(/@mention\(<@([0-9a-fA-F-]{16,})>\)/g)].map((m) => m[1])
 	);
@@ -169,7 +172,7 @@
 
 	// Vídeo direto (og:video / custom): o player usa o relay autenticado do
 	// backend (GET /embeds/:id/video), nunca a URL de origem.
-	const directVideo = $derived(embedDirectVideoUrl(embed));
+	const directVideo = $derived(embedDirectVideoUrl(hydratedEmbed));
 	const videoUrl = $derived(directVideo ? embedVideoUrl(embed.id) : '');
 	let failedVideoUrl = $state('');
 
@@ -181,7 +184,7 @@
 
 	// Iframe somente para o provedor allowlistado (padrão hardcoded do backend,
 	// entregue em video.url sem mime_type: não é arquivo reproduzível pelo relay).
-	const iframeUrl = $derived(embedIframeUrl(embed));
+	const iframeUrl = $derived(embedIframeUrl(hydratedEmbed));
 	const showsVideo = $derived(!iframeUrl && videoUrl !== '' && failedVideoUrl !== videoUrl);
 	// Só no WebKit: o card com vídeo direto usa CSS sem máscara/filtro (ver .has-video).
 	// Os outros motores mantêm o visual completo.
@@ -240,16 +243,16 @@
 
 	{#if hasTitle}
 		<h3 class="embed-heading">
-			{#if embed.url}
+			{#if hydratedEmbed.url}
 				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- URL externa do metadado do embed -->
-				<a href={embed.url} target="_blank" rel="noopener noreferrer">{title}</a>
+				<a href={hydratedEmbed.url} target="_blank" rel="noopener noreferrer">{title}</a>
 			{:else}
 				{title}
 			{/if}
 		</h3>
 	{/if}
 
-	{#if embed.description}
+	{#if hydratedEmbed.description}
 		<!-- O clique apenas delega para os links/menções gerados pelo
 		     renderizador (elementos interativos próprios, já navegáveis pelo
 		     teclado); o contêiner em si não é interativo. -->
@@ -339,7 +342,7 @@
 		<dialog
 			bind:this={lightbox}
 			class="embed-lightbox"
-			aria-label={embed.title ?? sourceName ?? 'Imagem do embed'}
+			aria-label={hydratedEmbed.title ?? sourceName ?? 'Imagem do embed'}
 			onclick={closeLightboxOnBackground}
 			oncancel={(event) => {
 				event.preventDefault();
