@@ -66,7 +66,10 @@
 
 	const imageUrl = $derived(
 		resolved?.image_data
-			? blobToUrl(resolved.image_data, mimeToFormat(resolved.thumbnail?.mime_type ?? resolved.image?.mime_type ?? ''))
+			? blobToUrl(
+				resolved.image_data,
+				mimeToFormat(resolved.thumbnail?.mime_type ?? resolved.image?.mime_type ?? '')
+			)
 			: ''
 	);
 
