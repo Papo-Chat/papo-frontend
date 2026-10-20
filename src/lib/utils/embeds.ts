@@ -16,9 +16,10 @@ const EMBED_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 // do autor. Custom/webhook embeds podem usar `image` sem `thumbnail`, então
 // ambos os campos precisam disparar a resolução.
 export function embedNeedsResolution(
-	embed: Pick<Embed, 'thumbnail' | 'image' | 'author'>
+	embed: Pick<Embed, 'thumbnail' | 'image' | 'author'>,
+	force = false
 ): boolean {
-	return Boolean(embed.thumbnail || embed.image || embed.author?.media);
+	return force || Boolean(embed.thumbnail || embed.image || embed.author?.media);
 }
 
 export function isAllowedEmbedUrl(embedUrl: string | null | undefined): embedUrl is string {
