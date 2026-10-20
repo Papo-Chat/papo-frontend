@@ -79,6 +79,41 @@ export interface MediaBox {
 	height: number;
 }
 
+// Limits mirror the backend's bounded video metadata parser. A questionable
+// dimension simply disables sizing; it must never distort or explode the UI.
+const MAX_VIDEO_DIMENSION = 16_384;
+const MAX_VIDEO_PIXEL_AREA = 100_000_000;
+const MAX_VIDEO_ASPECT_RATIO = 10;
+
+export function safeVideoMediaBox(width: unknown, height: unknown): MediaBox | null {
+	if (
+		typeof width !== 'number' ||
+		typeof height !== 'number' ||
+		!Number.isInteger(width) ||
+		!Number.isInteger(height) ||
+		width <= 0 ||
+		height <= 0 ||
+		width > MAX_VIDEO_DIMENSION ||
+		height > MAX_VIDEO_DIMENSION ||
+		width * height > MAX_VIDEO_PIXEL_AREA
+	) {
+		return null;
+	}
+
+	const aspectRatio = width / height;
+	if (aspectRatio > MAX_VIDEO_ASPECT_RATIO || aspectRatio < 1 / MAX_VIDEO_ASPECT_RATIO) {
+		return null;
+	}
+
+	return { width, height };
+}
+
+// Original-file geometry returned by the backend for videos. Kept separate
+// from thumbnail_width/thumbnail_height, which describe the preview bitmap.
+export function attachmentVideoBox(attachment: MessageAttachment): MediaBox | null {
+	return safeVideoMediaBox(attachment.width, attachment.height);
+}
+
 // Margem do IntersectionObserver que dispara o download de mídia: a mídia é
 // pedida ainda fora da tela, então baixa e decodifica antes de entrar no
 // viewport (sem pop-in e sem tranco no scroll). Vale para attachments e embeds.
