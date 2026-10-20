@@ -41,7 +41,9 @@
 	// All video/* MIME values detected by the backend are playable here. For
 	// historical uploads still labeled generic, keep the video UI only for
 	// known video extensions instead of treating every octet-stream as video.
-	const isLegacyVideoFile = $derived(/\.(mp4|m4v|mov|qt|webm|mkv|avi|3gp|3g2|ogv|mpeg|mpg|mpe|ts|mts|m2ts|flv|wmv|asf)$/i.test(name));
+	const isLegacyVideoFile = $derived(
+		/\.(mp4|m4v|mov|qt|webm|mkv|avi|3gp|3g2|ogv|mpeg|mpg|mpe|ts|mts|m2ts|flv|wmv|asf)$/i.test(name)
+	);
 	const isVideo = $derived(
 		isVideoMime(mimeType) || (mimeType === 'application/octet-stream' && isLegacyVideoFile)
 	);
@@ -196,7 +198,6 @@
 
 	let videoEl: HTMLVideoElement | null = $state(null);
 	let videoStarted = $state(false);
-	let videoReady = $state(false);
 	let videoMetadataAspectRatio = $state<number | null>(null);
 	const videoBox = $derived(attachmentVideoBox(attachment));
 	// Reserve the placeholder from the original upload's dimensions before any
@@ -218,7 +219,6 @@
 	}
 
 	function handleVideoMetadata(): void {
-		videoReady = true;
 		if (videoEl) {
 			const dimensions = safeVideoMediaBox(videoEl.videoWidth, videoEl.videoHeight);
 			videoMetadataAspectRatio = dimensions ? dimensions.width / dimensions.height : null;
@@ -227,7 +227,6 @@
 
 	function handleVideoError(): void {
 		videoStarted = false;
-		videoReady = false;
 		videoMetadataAspectRatio = null;
 		videoEl?.removeAttribute('src');
 		videoEl?.load();
