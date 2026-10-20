@@ -1,8 +1,7 @@
 <script lang="ts">
 	import type { Embed } from '$lib/types';
 	import { getEmbed, ensureEmbed } from '$lib/store/messages.svelte';
-	import { onMount } from 'svelte';
-	import {
+		import {
 		blobToUrl,
 		embedMediaBox,
 		embedVideoUrl,
@@ -30,21 +29,22 @@
 	let lightboxOpen = $state(false);
 	let lightbox: HTMLDialogElement | undefined = $state();
 
-	onMount(() => {
-		if (!cardEl) return;
-		// O base64 do card (image_data / author_image_data) só existe no embed
-		// resolvido. Thumbnail, imagem principal e ícone de autor precisam da
-		// resolução, inclusive em embeds customizados recebidos via webhook.
-		// O card é buscado ainda fora da tela, para evitar tranco no scroll.
-		if (!embedNeedsResolution(embed)) return;
+	$effect(() => {
+		const embedId = embed.id;
+		// Reage a atualizações tardias de metadata no mesmo embed.id. Um embed
+		// pode chegar primeiro sem imagem e ganhar `image`/thumbnail depois via WS.
+		if (!cardEl || !embedNeedsResolution(embed)) return;
 
+		let active = true;
 		const load = () =>
-			void ensureEmbed(embed.id).catch(() => {
-				embedFailed = true;
+			void ensureEmbed(embedId).catch(() => {
+				if (active) embedFailed = true;
 			});
 		if (!('IntersectionObserver' in window)) {
 			load();
-			return;
+			return () => {
+				active = false;
+			};
 		}
 		const observer = new IntersectionObserver(
 			(entries) => {
@@ -55,7 +55,10 @@
 			{ rootMargin: MEDIA_PRELOAD_MARGIN }
 		);
 		observer.observe(cardEl);
-		return () => observer.disconnect();
+		return () => {
+			active = false;
+			observer.disconnect();
+		};
 	});
 
 	// Embed completo (com image_data) vem do cache do store de mensagens.
