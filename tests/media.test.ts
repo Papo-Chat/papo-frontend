@@ -11,7 +11,7 @@ import {
 	embedMediaBox
 } from '../src/lib/utils/media';
 import type { MessageAttachment } from '../src/lib/types/models';
-import { isImageMime, isVideoMime } from '../src/lib/utils/text';
+import { isAudioMime, isImageMime, isVideoMime } from '../src/lib/utils/text';
 
 describe('formatToMime', () => {
 	it('maps backend formats to the correct MIME', () => {
@@ -96,7 +96,6 @@ describe('embedMediaBox', () => {
 	});
 });
 
-
 describe('backend attachment MIME classification', () => {
 	for (const mime of [
 		'video/mp4',
@@ -116,8 +115,14 @@ describe('backend attachment MIME classification', () => {
 		expect(isVideoMime(' VIDEO/MP4 ')).toBe(true);
 	});
 
-	it('does not treat audio or generic binary files as video', () => {
+	it('classifies audio/mp4 as audio, not video', () => {
+		expect(isAudioMime('audio/mp4')).toBe(true);
+		expect(isAudioMime('AUDIO/MPEG')).toBe(true);
 		expect(isVideoMime('audio/mp4')).toBe(false);
+	});
+
+	it('does not treat generic binary files as audio or video', () => {
+		expect(isAudioMime('application/octet-stream')).toBe(false);
 		expect(isVideoMime('application/octet-stream')).toBe(false);
 	});
 
