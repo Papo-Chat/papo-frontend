@@ -26,6 +26,8 @@
 	let { embed } = $props<{ embed: Embed }>();
 	let cardEl: HTMLElement | null = null;
 	let embedFailed = $state(false);
+	let lightboxOpen = $state(false);
+	let lightbox: HTMLDialogElement | undefined = $state();
 
 	onMount(() => {
 		if (!cardEl) return;
@@ -121,6 +123,23 @@
 				})
 			: ''
 	);
+
+	function openImageLightbox(): void {
+		if (imageUrl) lightboxOpen = true;
+	}
+
+	function closeImageLightbox(): void {
+		lightbox?.close();
+		lightboxOpen = false;
+	}
+
+	function closeLightboxOnBackground(event: MouseEvent): void {
+		if (event.target === event.currentTarget) closeImageLightbox();
+	}
+
+	$effect(() => {
+		if (lightboxOpen && lightbox && !lightbox.open) lightbox.showModal();
+	});
 
 	function handleMentionClick(event: MouseEvent): void {
 		const target = (event.target as HTMLElement | null)?.closest<HTMLElement>(
@@ -249,12 +268,16 @@
 	{#if iframeUrl}
 		<div class="embed-media">
 			{#if !youtubeLoaded}
-				<button class="media-play-btn" aria-label="Reproduzir vídeo" onclick={openYouTube}>
+				<div class="media-preview">
 					{#if imageUrl}
-						<img src={imageUrl} alt="" loading="lazy" />
+						<button type="button" class="media-thumb-button" aria-label="Ampliar miniatura do vídeo" onclick={openImageLightbox}>
+							<img src={imageUrl} alt="Miniatura do vídeo" loading="lazy" />
+						</button>
 					{/if}
-					<span class="media-play" aria-hidden="true">▶</span>
-				</button>
+					<button type="button" class="media-play-control" aria-label="Reproduzir vídeo" onclick={openYouTube}>
+						<span class="media-play" aria-hidden="true">▶</span>
+					</button>
+				</div>
 			{:else}
 				<iframe
 					class="media-iframe"
@@ -277,35 +300,52 @@
 				onerror={handleVideoError}
 			></video>
 			{#if !videoStarted}
-				<button
-					type="button"
-					class="media-play-btn media-play-overlay"
-					aria-label="Reproduzir vídeo"
-					onclick={startVideo}
-				>
+				<div class="media-preview media-play-overlay">
 					{#if imageUrl}
-						<img src={imageUrl} alt="" loading="lazy" />
+						<button type="button" class="media-thumb-button" aria-label="Ampliar miniatura do vídeo" onclick={openImageLightbox}>
+							<img src={imageUrl} alt="Miniatura do vídeo" loading="lazy" />
+						</button>
 					{/if}
-					<span class="media-play" aria-hidden="true">▶</span>
-				</button>
+					<button type="button" class="media-play-control" aria-label="Reproduzir vídeo" onclick={startVideo}>
+						<span class="media-play" aria-hidden="true">▶</span>
+					</button>
+				</div>
 			{/if}
 		</div>
 	{:else if imageUrl || (imageBox && !embedFailed)}
 		{#if imageUrl}
-			<img
-				class="embed-image"
-				src={imageUrl}
-				alt=""
-				decoding="async"
-				width={imageBox?.width}
-				height={imageBox?.height}
-			/>
+			<button type="button" class="embed-image-button" aria-label="Ampliar imagem do embed" onclick={openImageLightbox}>
+				<img
+					class="embed-image"
+					src={imageUrl}
+					alt="Imagem do embed"
+					decoding="async"
+					width={imageBox?.width}
+					height={imageBox?.height}
+				/>
+			</button>
 		{:else}
 			<!-- Placeholder com a caixa exata do bitmap: um <img> sem src entraria
 			     no estado "broken" e o navegador desenharia o ícone de imagem
 			     quebrada antes de o base64 chegar. -->
 			<span class="embed-image pending" style={imageBoxStyle} aria-hidden="true"></span>
 		{/if}
+	{/if}
+
+	{#if lightboxOpen}
+		<dialog
+			bind:this={lightbox}
+			class="embed-lightbox"
+			aria-label={embed.title ?? sourceName ?? 'Imagem do embed'}
+			onclick={closeLightboxOnBackground}
+			oncancel={(event) => {
+				event.preventDefault();
+				closeImageLightbox();
+			}}
+		>
+			<img class="embed-lightbox-image" src={imageUrl} alt="Imagem ampliada do embed" />
+			<button type="button" class="embed-lightbox-close" onclick={closeImageLightbox} aria-label="Fechar">✕</button>
+		</dialog>
 	{/if}
 
 	{#if footerText}
@@ -407,7 +447,7 @@
 		overflow: visible;
 	}
 	.embed-card.has-video .embed-media-video .embed-video,
-	.embed-card.has-video .media-play-btn img,
+	.embed-card.has-video .media-thumb-button img,
 	.embed-card.has-video .media-play {
 		border-radius: 13px;
 	}
@@ -587,31 +627,59 @@
 		border-radius: 14px;
 		background: var(--media-surface);
 	}
-	.media-play-btn {
-		display: block;
+	.media-preview {
 		position: relative;
 		width: 100%;
 		aspect-ratio: 16 / 9;
-		padding: 0;
-		border: none;
-		background: transparent;
-		cursor: pointer;
+		overflow: hidden;
+		background: linear-gradient(135deg, #26384a, #111923 72%);
 	}
-	.media-play-btn img {
+	.media-thumb-button {
+		position: absolute;
+		inset: 0;
+		display: block;
+		width: 100%;
+		height: 100%;
+		padding: 0;
+		border: 0;
+		background: transparent;
+		cursor: zoom-in;
+	}
+	.media-thumb-button img {
 		display: block;
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
 	}
-	.media-play {
+	.media-play-control {
 		position: absolute;
 		inset: 0;
 		display: grid;
 		place-items: center;
-		color: white;
-		font-size: 26px;
+		width: 100%;
+		height: 100%;
+		padding: 0;
+		border: 0;
+		background: linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.24));
+		cursor: pointer;
+	}
+	.media-play-control .media-play {
+		display: grid;
+		place-items: center;
+		width: 54px;
+		height: 54px;
+		padding-left: 3px;
+		border: 1px solid rgba(255, 255, 255, 0.7);
+		border-radius: 50%;
+		color: #fff;
+		font-size: 22px;
 		line-height: 1;
-		background: rgba(0, 0, 0, 0.32);
+		background: rgba(5, 12, 20, 0.72);
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.32);
+		backdrop-filter: blur(8px);
+	}
+	.media-play-control:hover .media-play {
+		background: rgba(5, 12, 20, 0.9);
 	}
 	.media-iframe {
 		display: block;
@@ -634,6 +702,7 @@
 	.media-play-overlay {
 		position: absolute;
 		inset: 0;
+		width: 100%;
 		height: 100%;
 		aspect-ratio: auto;
 	}
@@ -648,13 +717,27 @@
 		border-radius: 14px;
 		background: #000;
 	}
+	.embed-image-button {
+		display: block;
+		width: 100%;
+		max-width: 100%;
+		margin-top: 13px;
+		padding: 0;
+		border: 0;
+		border-radius: 14px;
+		background: transparent;
+		text-align: left;
+		cursor: zoom-in;
+	}
+	.embed-image-button .embed-image {
+		margin-top: 0;
+	}
 	.embed-image {
 		display: block;
 		width: 100%;
 		max-height: min(620px, var(--chat-media-max-height, 45dvh));
 		height: auto;
 		object-fit: contain;
-		margin-top: 13px;
 		border: 1px solid var(--line-strong);
 		border-radius: 14px;
 	}
@@ -663,6 +746,61 @@
 	   então o card não empurra nada durante o scroll. */
 	.embed-image.pending {
 		background: var(--media-surface);
+	}
+
+	.embed-lightbox {
+		position: fixed;
+		inset: 0;
+		width: 100vw;
+		height: 100vh;
+		max-width: none;
+		max-height: none;
+		margin: 0;
+		padding: 0;
+		border: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		overflow: hidden;
+		background: transparent;
+		box-sizing: border-box;
+		cursor: zoom-out;
+	}
+	.embed-lightbox::backdrop {
+		background: rgba(8, 18, 34, 0.68);
+		backdrop-filter: blur(14px) saturate(1.05);
+		-webkit-backdrop-filter: blur(14px) saturate(1.05);
+	}
+	.embed-lightbox-image {
+		display: block;
+		width: auto;
+		height: auto;
+		max-width: 90vw;
+		max-height: 90vh;
+		object-fit: contain;
+		border-radius: 10px;
+		box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+		cursor: default;
+	}
+	.embed-lightbox-close {
+		position: fixed;
+		top: 14px;
+		right: 14px;
+		display: grid;
+		place-items: center;
+		width: 40px;
+		height: 40px;
+		padding: 0;
+		border: 0;
+		border-radius: 50%;
+		background: rgba(0, 0, 0, 0.4);
+		color: #fff;
+		font: inherit;
+		font-size: 18px;
+		cursor: pointer;
+	}
+	.embed-lightbox-close:hover {
+		background: rgba(0, 0, 0, 0.6);
 	}
 
 	.embed-footer {
