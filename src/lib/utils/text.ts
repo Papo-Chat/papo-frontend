@@ -54,6 +54,11 @@ export function formatBytes(bytes: number): string {
 	return `${value.toFixed(1)} ${units[i]}`;
 }
 
+// True when the MIME identifies audio, including audio/mp4 used for M4A/M4B.
+export function isAudioMime(mime: string): boolean {
+	return /^audio\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i.test(mime.trim());
+}
+
 // True when the mime type is an image the UI can render inline.
 export function isImageMime(mime: string): { isImage: boolean; isGif: boolean } {
 	const normalized = mime.trim().toLowerCase();
