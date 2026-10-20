@@ -14,6 +14,7 @@
 import { SvelteDate, SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
 import * as webhooksStore from './webhooks.svelte';
+import { embedNeedsResolution } from '../utils/embeds';
 import type { ChannelMessagesState, MessagesState } from './messages.types';
 import type {
 	Embed,
@@ -1501,7 +1502,7 @@ export function loadPinned(channelId: string, force = false): void {
 			for (const message of pinned) {
 				for (const embed of message.embeds) {
 					// Sem thumbnail nem ícone de autor não há base64 a buscar.
-					if (!embed.thumbnail && !embed.author?.media) continue;
+					if (!embedNeedsResolution(embed)) continue;
 					void ensureEmbed(embed.id).catch(() => {});
 				}
 			}
