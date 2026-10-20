@@ -23,7 +23,7 @@
 	import { WEBKIT } from '$lib/store/performance.svelte';
 	import { renderMessageMarkdown } from '$lib/utils/markdown';
 
-	let { embed } = $props<{ embed: Embed }>();
+	let { embed, forceResolve = false } = $props<{ embed: Embed; forceResolve?: boolean }>();
 	let cardEl: HTMLElement | null = null;
 	let embedFailed = $state(false);
 	let lightboxOpen = $state(false);
@@ -33,7 +33,7 @@
 		const embedId = embed.id;
 		// Reage a atualizações tardias de metadata no mesmo embed.id. Um embed
 		// pode chegar primeiro sem imagem e ganhar `image`/thumbnail depois via WS.
-		if (!cardEl || !embedNeedsResolution(embed)) return;
+		if (!cardEl || !embedNeedsResolution(embed, forceResolve)) return;
 
 		let active = true;
 		const load = () =>
