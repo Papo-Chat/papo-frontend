@@ -268,7 +268,6 @@
 		height: 1.6em;
 		flex: 0 0 1.6em;
 		vertical-align: middle;
-		margin: 0 1px;
 		border-radius: 4px;
 	}
 
