@@ -502,7 +502,7 @@
 		display: block;
 		width: 100%;
 		max-width: min(480px, 100%);
-		max-height: calc(var(--chat-height, 100dvh) * 0.35);
+		max-height: calc(var(--chat-height, 100dvh) * 0.5);
 		height: auto;
 		border-radius: 10px;
 	}
@@ -510,15 +510,15 @@
 		position: relative;
 		width: 100%;
 		/* O box acompanha a proporção real após os metadados; tanto o placeholder
-		 * quanto o vídeo ficam limitados a 35% da altura da chatbox. */
-		max-width: min(480px, 100%, calc(var(--chat-height, 100dvh) * 0.35 * var(--video-aspect-ratio, 1.777778)));
+		 * quanto o vídeo ficam limitados a 50% da altura da chatbox. */
+		max-width: min(480px, 100%, calc(var(--chat-height, 100dvh) * 0.5 * var(--video-aspect-ratio, 1.777778)));
 		overflow: hidden;
 		border-radius: 10px;
 		background: linear-gradient(135deg, #26384a, #111923 72%);
 	}
 	.attachment-video video {
 		max-width: 100%;
-		max-height: calc(var(--chat-height, 100dvh) * 0.35);
+		max-height: calc(var(--chat-height, 100dvh) * 0.5);
 		background: #111923;
 	}
 	/* Sem metadados o <video> não tem proporção; reserva 16:9 até carregar. */
