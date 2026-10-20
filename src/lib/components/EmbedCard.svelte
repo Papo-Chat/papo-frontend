@@ -270,9 +270,7 @@
 			{#if !youtubeLoaded}
 				<div class="media-preview">
 					{#if imageUrl}
-						<button type="button" class="media-thumb-button" aria-label="Ampliar miniatura do vídeo" onclick={openImageLightbox}>
-							<img src={imageUrl} alt="Miniatura do vídeo" loading="lazy" />
-						</button>
+						<img class="media-preview-image" src={imageUrl} alt="" loading="lazy" />
 					{/if}
 					<button type="button" class="media-play-control" aria-label="Reproduzir vídeo" onclick={openYouTube}>
 						<span class="media-play" aria-hidden="true">▶</span>
@@ -302,9 +300,7 @@
 			{#if !videoStarted}
 				<div class="media-preview media-play-overlay">
 					{#if imageUrl}
-						<button type="button" class="media-thumb-button" aria-label="Ampliar miniatura do vídeo" onclick={openImageLightbox}>
-							<img src={imageUrl} alt="Miniatura do vídeo" loading="lazy" />
-						</button>
+						<img class="media-preview-image" src={imageUrl} alt="" loading="lazy" />
 					{/if}
 					<button type="button" class="media-play-control" aria-label="Reproduzir vídeo" onclick={startVideo}>
 						<span class="media-play" aria-hidden="true">▶</span>
@@ -447,7 +443,7 @@
 		overflow: visible;
 	}
 	.embed-card.has-video .embed-media-video .embed-video,
-	.embed-card.has-video .media-thumb-button img,
+	.embed-card.has-video .media-preview-image,
 	.embed-card.has-video .media-play {
 		border-radius: 13px;
 	}
@@ -634,22 +630,14 @@
 		overflow: hidden;
 		background: linear-gradient(135deg, #26384a, #111923 72%);
 	}
-	.media-thumb-button {
+	.media-preview-image {
 		position: absolute;
 		inset: 0;
 		display: block;
 		width: 100%;
 		height: 100%;
-		padding: 0;
-		border: 0;
-		background: transparent;
-		cursor: zoom-in;
-	}
-	.media-thumb-button img {
-		display: block;
-		width: 100%;
-		height: 100%;
 		object-fit: cover;
+		pointer-events: none;
 	}
 	.media-play-control {
 		position: absolute;
