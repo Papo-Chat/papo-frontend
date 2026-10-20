@@ -71,7 +71,7 @@
 		resolved?.image_data
 			? blobToUrl(
 				resolved.image_data,
-				mimeToFormat(resolved.thumbnail?.mime_type ?? resolved.image?.mime_type ?? '')
+				mimeToFormat(hydratedEmbed.thumbnail?.mime_type ?? hydratedEmbed.image?.mime_type ?? '')
 			)
 			: ''
 	);
@@ -90,7 +90,7 @@
 		resolved?.author_image_data
 			? blobToUrl(
 					resolved.author_image_data,
-					mimeToFormat(resolved.author?.media?.mime_type ?? 'image/png')
+					mimeToFormat(hydratedEmbed.author?.media?.mime_type ?? 'image/png')
 				)
 			: ''
 	);
