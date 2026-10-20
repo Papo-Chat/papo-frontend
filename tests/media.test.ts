@@ -6,9 +6,12 @@ import {
 	formatToMime,
 	mimeToFormat,
 	attachmentMediaBox,
+	attachmentVideoBox,
+	safeVideoMediaBox,
 	embedMediaBox
 } from '../src/lib/utils/media';
 import type { MessageAttachment } from '../src/lib/types/models';
+import { isAudioMime, isImageMime, isVideoMime } from '../src/lib/utils/text';
 
 describe('formatToMime', () => {
 	it('maps backend formats to the correct MIME', () => {
@@ -90,5 +93,74 @@ describe('embedMediaBox', () => {
 		expect(embedMediaBox({ url: 'https://x/i.png' })).toBeNull();
 		expect(embedMediaBox({ width: 0, height: 720 })).toBeNull();
 		expect(embedMediaBox({ width: 1280, height: null })).toBeNull();
+	});
+});
+
+describe('backend attachment MIME classification', () => {
+	for (const mime of [
+		'video/mp4',
+		'video/quicktime',
+		'video/webm',
+		'video/x-matroska',
+		'video/x-msvideo',
+		'video/3gpp',
+		'video/3gpp2'
+	]) {
+		it(`recognizes ${mime} as video`, () => {
+			expect(isVideoMime(mime)).toBe(true);
+		});
+	}
+
+	it('normalizes MIME case and whitespace', () => {
+		expect(isVideoMime(' VIDEO/MP4 ')).toBe(true);
+	});
+
+	it('classifies audio/mp4 as audio, not video', () => {
+		expect(isAudioMime('audio/mp4')).toBe(true);
+		expect(isAudioMime('AUDIO/MPEG')).toBe(true);
+		expect(isVideoMime('audio/mp4')).toBe(false);
+	});
+
+	it('does not treat generic binary files as audio or video', () => {
+		expect(isAudioMime('application/octet-stream')).toBe(false);
+		expect(isVideoMime('application/octet-stream')).toBe(false);
+	});
+
+	it('recognizes the image formats the backend identifies explicitly', () => {
+		expect(isImageMime('image/avif').isImage).toBe(true);
+		expect(isImageMime('image/heic').isImage).toBe(true);
+		expect(isImageMime('audio/mp4').isImage).toBe(false);
+	});
+});
+
+describe('attachmentVideoBox', () => {
+	function videoAttachment(overrides: Partial<MessageAttachment> = {}): MessageAttachment {
+		return attachment({
+			mime_type: 'video/mp4',
+			original_file_name: 'clip.mp4',
+			thumbnail_id: null,
+			thumbnail_width: null,
+			thumbnail_height: null,
+			width: 1920,
+			height: 1080,
+			...overrides
+		});
+	}
+
+	it('uses original video dimensions, not the thumbnail dimensions', () => {
+		expect(attachmentVideoBox(videoAttachment())).toEqual({ width: 1920, height: 1080 });
+	});
+
+	it('returns null when dimensions are missing', () => {
+		expect(attachmentVideoBox(videoAttachment({ width: null, height: null }))).toBeNull();
+	});
+
+	it('rejects invalid or suspicious dimensions', () => {
+		expect(safeVideoMediaBox(0, 1080)).toBeNull();
+		expect(safeVideoMediaBox(1920, -1)).toBeNull();
+		expect(safeVideoMediaBox(1920.5, 1080)).toBeNull();
+		expect(safeVideoMediaBox(16385, 1080)).toBeNull();
+		expect(safeVideoMediaBox(11000, 10000)).toBeNull();
+		expect(safeVideoMediaBox(1001, 100)).toBeNull();
 	});
 });

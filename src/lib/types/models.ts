@@ -140,6 +140,10 @@ export interface MessageAttachment {
 	mime_type: string;
 	original_file_name: string;
 	size_bytes: number;
+	// Dimensões do arquivo original (principalmente vídeos), quando seguras e disponíveis.
+	// São opcionais para manter compatibilidade com respostas antigas/cacheadas.
+	width?: number | null;
+	height?: number | null;
 	thumbnail_id: string | null;
 	// Geometria da thumbnail gerada no upload (null quando não há thumbnail).
 	// Permite reservar o box da imagem antes do download: a mídia entra na

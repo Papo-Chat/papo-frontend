@@ -5,7 +5,13 @@
 // members of the server.
 export const everyoneMention = '@everyone';
 
-// True when the text contains the `@everyone` mention.
+// True when the MIME identifies a video container, including the container
+// types returned by the backend (MP4, QuickTime, WebM, Matroska, AVI, 3GPP/3GPP2).
+export function isVideoMime(mime: string): boolean {
+	return /^video\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i.test(mime.trim());
+}
+
+// True when the text contains the @everyone mention.
 export function hasEveryone(text: string): boolean {
 	return /\b@everyone\b/i.test(text);
 }
@@ -48,9 +54,17 @@ export function formatBytes(bytes: number): string {
 	return `${value.toFixed(1)} ${units[i]}`;
 }
 
+// True when the MIME identifies audio, including audio/mp4 used for M4A/M4B.
+export function isAudioMime(mime: string): boolean {
+	return /^audio\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i.test(mime.trim());
+}
+
 // True when the mime type is an image the UI can render inline.
-export function isImageMime(mime: string): {isImage: boolean;isGif: boolean} {
-	const isImage = /^image\/(png|jpe?g|gif|webp|bmp|avif)$/i.test(mime);
-	const isGif = /^image\/(gif)$/i.test(mime);
-	return {isImage,isGif};
+export function isImageMime(mime: string): { isImage: boolean; isGif: boolean } {
+	const normalized = mime.trim().toLowerCase();
+	// Backend also identifies HEIC/HEIF (image/heic); inline rendering still
+	// relies on an available thumbnail when the browser cannot decode the original.
+	const isImage = /^image\/(png|jpe?g|gif|webp|bmp|avif|heic)$/i.test(normalized);
+	const isGif = normalized === 'image/gif';
+	return { isImage, isGif };
 }

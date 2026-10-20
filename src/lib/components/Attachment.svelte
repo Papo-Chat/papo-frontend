@@ -4,10 +4,12 @@
 		attachmentUrl,
 		attachmentThumbnailUrl,
 		attachmentMediaBox,
+		attachmentVideoBox,
+		safeVideoMediaBox,
 		fetchMediaBlob,
 		MEDIA_PRELOAD_MARGIN
 	} from '$lib/utils/media';
-	import { formatBytes, isImageMime } from '$lib/utils/text';
+	import { formatBytes, isAudioMime, isImageMime, isVideoMime } from '$lib/utils/text';
 
 	let {
 		attachment,
@@ -32,9 +34,24 @@
 	// `attachment` é substituído (não mutado) em updates de moderação via WS,
 	// então estes valores precisam ser derivados, não constantes.
 	const name = $derived(attachment.original_file_name || 'anexo');
-	const isImage = $derived(isImageMime(attachment.mime_type));
+	const mimeType = $derived(attachment.mime_type.trim().toLowerCase());
+	const isImage = $derived(isImageMime(mimeType));
 	const isRecordedAudioName = $derived(/^audio_.*\.(webm|ogg|wav|mp3|m4a|aac|opus)$/i.test(name));
-	const isAudio = $derived(attachment.mime_type.startsWith('audio/') || isRecordedAudioName);
+	const isLegacyAudioFile = $derived(/\.(m4a|m4b|m4p|mp3|wav|ogg|opus|aac|flac|wma|aif|aiff)$/i.test(name));
+	const isAudio = $derived(
+		isAudioMime(mimeType) ||
+		isRecordedAudioName ||
+		(mimeType === 'application/octet-stream' && isLegacyAudioFile)
+	);
+	// All video/* MIME values detected by the backend are playable here. For
+	// historical uploads still labeled generic, keep the video UI only for
+	// known video extensions instead of treating every octet-stream as video.
+	const isLegacyVideoFile = $derived(
+		/\.(mp4|m4v|mov|qt|webm|mkv|avi|3gp|3g2|ogv|mpeg|mpg|mpe|ts|mts|m2ts|flv|wmv|asf)$/i.test(name)
+	);
+	const isVideo = $derived(
+		isVideoMime(mimeType) || (mimeType === 'application/octet-stream' && isLegacyVideoFile)
+	);
 
 	// Imagem: o download só começa quando o box entra na margem do viewport
 	// (MEDIA_PRELOAD_MARGIN), bem antes de aparecer na tela. Download e
@@ -186,8 +203,16 @@
 
 	let videoEl: HTMLVideoElement | null = $state(null);
 	let videoStarted = $state(false);
-	let videoReady = $state(false);
-	let videoAspectRatio = $state(16 / 9);
+	let videoMetadataAspectRatio = $state<number | null>(null);
+	const videoBox = $derived(attachmentVideoBox(attachment));
+	// Reserve the placeholder from the original upload's dimensions before any
+	// video bytes are requested. Browser metadata is only a fallback for older
+	// records that do not have stored dimensions.
+	const videoAspectRatio = $derived(
+		videoBox
+			? videoBox.width / videoBox.height
+			: (videoMetadataAspectRatio ?? 16 / 9)
+	);
 
 	function startVideo(): void {
 		if (!videoEl) return;
@@ -199,16 +224,15 @@
 	}
 
 	function handleVideoMetadata(): void {
-		videoReady = true;
-		if (videoEl?.videoWidth && videoEl.videoHeight) {
-			videoAspectRatio = videoEl.videoWidth / videoEl.videoHeight;
+		if (videoEl) {
+			const dimensions = safeVideoMediaBox(videoEl.videoWidth, videoEl.videoHeight);
+			videoMetadataAspectRatio = dimensions ? dimensions.width / dimensions.height : null;
 		}
 	}
 
 	function handleVideoError(): void {
 		videoStarted = false;
-		videoReady = false;
-		videoAspectRatio = 16 / 9;
+		videoMetadataAspectRatio = null;
 		videoEl?.removeAttribute('src');
 		videoEl?.load();
 	}
@@ -321,7 +345,7 @@
 			>
 		</span>
 	</div>
-{:else if attachment.mime_type.startsWith('video/') || attachment.mime_type.startsWith('application/octet-stream')}
+{:else if isVideo}
 	<div class="attachment-media">
 		<div
 			class="attachment-video"
@@ -330,7 +354,6 @@
 		>
 			<video
 				bind:this={videoEl}
-				class:unsized={!videoReady}
 				poster={videoStarted ? thumbUrl || undefined : undefined}
 				controls={videoStarted}
 				playsinline
@@ -508,22 +531,22 @@
 	}
 	.attachment-video {
 		position: relative;
-		width: 100%;
-		/* O box acompanha a proporção real após os metadados; tanto o placeholder
-		 * quanto o vídeo ficam limitados a 50% da altura da chatbox. */
-		max-width: min(480px, 100%, calc(var(--chat-height, 100dvh) * 0.5 * var(--video-aspect-ratio, 1.777778)));
+		width: min(480px, 100%, calc(var(--chat-height, 100dvh) * 0.5 * var(--video-aspect-ratio, 1.777778)));
+		aspect-ratio: var(--video-aspect-ratio, 1.777778);
+		box-sizing: border-box;
 		overflow: hidden;
 		border-radius: 10px;
 		background: linear-gradient(135deg, #26384a, #111923 72%);
 	}
 	.attachment-video video {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
 		max-width: 100%;
-		max-height: calc(var(--chat-height, 100dvh) * 0.5);
+		max-height: 100%;
+		object-fit: contain;
 		background: #111923;
-	}
-	/* Sem metadados o <video> não tem proporção; reserva 16:9 até carregar. */
-	.attachment-video video.unsized {
-		aspect-ratio: 16 / 9;
 	}
 	.attachment-video-overlay {
 		position: absolute;
