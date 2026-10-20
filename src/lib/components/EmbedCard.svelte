@@ -80,7 +80,9 @@
 	// image_data a partir de ThumbnailFilePath). As dimensões dela vêm no
 	// resumo do embed, que já chega no payload da mensagem: reservar o box com
 	// elas evita o salto de layout quando o base64 chega do GET /embeds/:id.
-	const imageBox = $derived(embedMediaBox(hydratedEmbed.thumbnail) ?? embedMediaBox(hydratedEmbed.image));
+	const imageBox = $derived(
+		embedMediaBox(hydratedEmbed.thumbnail) ?? embedMediaBox(hydratedEmbed.image)
+	);
 	const imageBoxStyle = $derived(
 		imageBox ? `aspect-ratio: ${imageBox.width} / ${imageBox.height}` : undefined
 	);
