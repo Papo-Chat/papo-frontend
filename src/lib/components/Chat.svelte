@@ -21,6 +21,25 @@
 	// autor dentro de 10min formam um grupo (reply quebra o grupo).
 	const GROUP_WINDOW_MS = 10 * 60 * 1000;
 
+	type Props = {
+		messages: MessageWithAttachment[];
+		channelId?: string | null;
+		onReply?: (message: MessageWithAttachment) => void;
+		searchActive?: boolean;
+		loading?: boolean;
+		hasMoreNewer?: boolean;
+		hasMoreOlder?: boolean;
+		onJumpToLatest?: () => void | Promise<void>;
+		onJumpToLastRead?: () => void | Promise<boolean>;
+		onLoadMoreOlder?: () => void | Promise<void>;
+		onLoadMoreNewer?: () => void | Promise<void>;
+		highlightMessageId?: string | null;
+		lastReadMessageId?: string | null;
+		scrollToLatestToken?: number;
+		onUnreadCountChange?: (count: number) => void;
+		onReachLatest?: (message: MessageWithAttachment | null) => void;
+	};
+
 	let {
 		messages,
 		channelId = null,
@@ -38,24 +57,7 @@
 		scrollToLatestToken = 0,
 		onUnreadCountChange,
 		onReachLatest
-	} = $props<{
-		messages: MessageWithAttachment[];
-		channelId?: string | null;
-		onReply?: (message: MessageWithAttachment) => void;
-		searchActive?: boolean;
-		loading?: boolean;
-		hasMoreNewer?: boolean;
-		hasMoreOlder?: boolean;
-		onJumpToLatest?: () => void | Promise<void>;
-		onJumpToLastRead?: () => void | Promise<boolean>;
-		onLoadMoreOlder?: () => void | Promise<void>;
-		onLoadMoreNewer?: () => void | Promise<void>;
-		highlightMessageId?: string | null;
-		lastReadMessageId?: string | null;
-		scrollToLatestToken?: number;
-		onUnreadCountChange?: (count: number) => void;
-		onReachLatest?: (message: MessageWithAttachment | null) => void;
-	}>();
+	}: Props = $props();
 
 	const BOTTOM_THRESHOLD = 24;
 
@@ -829,7 +831,7 @@
 							message={m}
 							grouped={groupedFlags[index]}
 							groupLast={index === messages.length - 1 || !groupedFlags[index + 1]}
-							onReply={(msg) => onReply?.(msg)}
+							onReply={(msg: MessageWithAttachment) => onReply?.(msg)}
 						/>
 					</div>
 					{#if m.id === visibleLastReadMessageId && (index < messages.length - 1 || hasMoreNewer)}

@@ -213,7 +213,7 @@
 				{onReply}
 				{onReplyCancel}
 				onSend={SendMsg}
-				onOpenChange={(open) => (uiState.voiceChatDrawerOpen = open)}
+				onOpenChange={(open: boolean) => (uiState.voiceChatDrawerOpen = open)}
 				onJumpToLatest={() => messagesStore.setLatest(channel.id)}
 				onJumpToLastRead={() =>
 					channel.last_read_message
@@ -221,7 +221,7 @@
 						: Promise.resolve(false)}
 				onLoadMoreOlder={() => messagesStore.loadMoreOlder(channel.id)}
 				onLoadMoreNewer={() => messagesStore.loadMoreNewer(channel.id)}
-				onReachLatest={(message) => {
+				onReachLatest={(message: MessageWithAttachment) => {
 					if (message) {
 						channelsStore.markReadLocal(channel.id, message.id, message.created_at);
 					}

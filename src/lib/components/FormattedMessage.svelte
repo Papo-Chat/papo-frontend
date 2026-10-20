@@ -280,7 +280,6 @@
 		height: 3em;
 		flex: 0 0 3em;
 		vertical-align: middle;
-		margin: 0 1px;
 		border-radius: 4px;
 	}
 
