@@ -221,7 +221,7 @@
 						: Promise.resolve(false)}
 				onLoadMoreOlder={() => messagesStore.loadMoreOlder(channel.id)}
 				onLoadMoreNewer={() => messagesStore.loadMoreNewer(channel.id)}
-				onReachLatest={(message: MessageWithAttachment) => {
+				onReachLatest={(message) => {
 					if (message) {
 						channelsStore.markReadLocal(channel.id, message.id, message.created_at);
 					}

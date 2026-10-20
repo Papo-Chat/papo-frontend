@@ -415,12 +415,12 @@
 			</div>
 			{#if message.embeds.length}
 				{#each message.embeds as embed (embed.id)}
-					<EmbedCard {embed} />
+					<EmbedCard {embed} forceResolve={isWebhookMessage} />
 				{/each}
 			{/if}
 		{:else if message.embeds.length}
 			{#each message.embeds as embed (embed.id)}
-				<EmbedCard {embed} />
+				<EmbedCard {embed} forceResolve={isWebhookMessage} />
 			{/each}
 		{/if}
 
