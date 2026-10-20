@@ -187,6 +187,7 @@
 	let videoEl: HTMLVideoElement | null = $state(null);
 	let videoStarted = $state(false);
 	let videoReady = $state(false);
+	let videoAspectRatio = $state(16 / 9);
 
 	function startVideo(): void {
 		if (!videoEl) return;
@@ -197,9 +198,17 @@
 		void videoEl.play().catch(() => {});
 	}
 
+	function handleVideoMetadata(): void {
+		videoReady = true;
+		if (videoEl?.videoWidth && videoEl.videoHeight) {
+			videoAspectRatio = videoEl.videoWidth / videoEl.videoHeight;
+		}
+	}
+
 	function handleVideoError(): void {
 		videoStarted = false;
 		videoReady = false;
+		videoAspectRatio = 16 / 9;
 		videoEl?.removeAttribute('src');
 		videoEl?.load();
 	}
@@ -314,7 +323,11 @@
 	</div>
 {:else if attachment.mime_type.startsWith('video/') || attachment.mime_type.startsWith('application/octet-stream')}
 	<div class="attachment-media">
-		<div class="attachment-video" class:pinned-attachment={pinned}>
+		<div
+			class="attachment-video"
+			class:pinned-attachment={pinned}
+			style={`--video-aspect-ratio: ${videoAspectRatio}`}
+		>
 			<video
 				bind:this={videoEl}
 				class:unsized={!videoReady}
@@ -322,7 +335,7 @@
 				controls={videoStarted}
 				playsinline
 				preload="none"
-				onloadedmetadata={() => (videoReady = true)}
+				onloadedmetadata={handleVideoMetadata}
 				onerror={handleVideoError}
 			></video>
 			{#if !videoStarted}
@@ -368,16 +381,30 @@
 <style>
 	.video-play {
 		position: relative;
-		font-size: 28px;
+		z-index: 1;
+		display: grid;
+		place-items: center;
+		width: 56px;
+		height: 56px;
+		border: 1px solid rgba(255, 255, 255, 0.68);
+		border-radius: 50%;
+		background: rgba(5, 12, 20, 0.72);
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.32);
+		color: #fff;
+		font-size: 22px;
+		padding-left: 3px;
+		backdrop-filter: blur(8px);
 	}
 	.video-meta {
 		position: absolute;
+		z-index: 1;
 		left: 8px;
 		right: 8px;
 		bottom: 6px;
 		overflow: hidden;
 		font-size: 12px;
-		color: var(--text-secondary);
+		color: #fff;
+		text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
@@ -475,20 +502,24 @@
 		display: block;
 		width: 100%;
 		max-width: min(480px, 100%);
+		max-height: calc(var(--chat-height, 100dvh) * 0.35);
 		height: auto;
 		border-radius: 10px;
 	}
 	.attachment-video {
 		position: relative;
 		width: 100%;
-		/* Teto: 480px de largura ou a largura que mantém 16:9 dentro de metade
-		 * da altura visível do chat (o overlay é absoluto, segue a caixa). */
-		max-width: min(480px, 100%, calc(var(--chat-media-max-height, 45dvh) * 16 / 9));
+		/* O box acompanha a proporção real após os metadados; tanto o placeholder
+		 * quanto o vídeo ficam limitados a 35% da altura da chatbox. */
+		max-width: min(480px, 100%, calc(var(--chat-height, 100dvh) * 0.35 * var(--video-aspect-ratio, 1.777778)));
+		overflow: hidden;
 		border-radius: 10px;
+		background: linear-gradient(135deg, #26384a, #111923 72%);
 	}
 	.attachment-video video {
 		max-width: 100%;
-		background: var(--surface);
+		max-height: calc(var(--chat-height, 100dvh) * 0.35);
+		background: #111923;
 	}
 	/* Sem metadados o <video> não tem proporção; reserva 16:9 até carregar. */
 	.attachment-video video.unsized {
@@ -497,17 +528,20 @@
 	.attachment-video-overlay {
 		position: absolute;
 		inset: 0;
+		z-index: 1;
 		display: grid;
 		place-items: center;
 		padding: 0;
 		border: 1px solid var(--border);
 		border-radius: 10px;
-		background: transparent;
+		color: #fff;
+		background: linear-gradient(180deg, rgba(7, 15, 25, 0.08), rgba(7, 15, 25, 0.34) 55%, rgba(7, 15, 25, 0.86));
 		cursor: pointer;
 	}
 	.attachment-video-overlay img {
 		position: absolute;
 		inset: 0;
+		z-index: -1;
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
