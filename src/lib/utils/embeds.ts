@@ -12,6 +12,13 @@ const YOUTUBE_EMBED_RE = /^https:\/\/www\.youtube\.com\/embed\/[A-Za-z0-9_-]{11}
 
 const EMBED_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
+// A resposta GET /embeds/:id carrega image_data para a mídia visual e o ícone
+// do autor. Custom/webhook embeds podem usar `image` sem `thumbnail`, então
+// ambos os campos precisam disparar a resolução.
+export function embedNeedsResolution(embed: Pick<Embed, 'thumbnail' | 'image' | 'author'>): boolean {
+	return Boolean(embed.thumbnail || embed.image || embed.author?.media);
+}
+
 export function isAllowedEmbedUrl(embedUrl: string | null | undefined): embedUrl is string {
 	return typeof embedUrl === 'string' && YOUTUBE_EMBED_RE.test(embedUrl);
 }
