@@ -15,6 +15,7 @@ export function isVideoMime(mime: string): boolean {
 export function hasEveryone(text: string): boolean {
 	return /\b@everyone\b/i.test(text);
 }
+
 // Extract all user mentions (`@<uuid>`) from a message, deduplicated and in
 // order of first appearance. Ignores `@everyone`.
 export function extractMentions(text: string): string[] {
