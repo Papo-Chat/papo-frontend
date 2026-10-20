@@ -1501,7 +1501,7 @@ export function loadPinned(channelId: string, force = false): void {
 
 			for (const message of pinned) {
 				for (const embed of message.embeds) {
-					// Sem thumbnail nem ícone de autor não há base64 a buscar.
+					// Webhook pode omitir os metadados de mídia no resumo; carregue o embed completo.
 					if (!embedNeedsResolution(embed, Boolean(message.webhook_id))) continue;
 					void ensureEmbed(embed.id).catch(() => {});
 				}
