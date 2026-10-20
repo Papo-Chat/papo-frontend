@@ -8,17 +8,13 @@ export const everyoneMention = '@everyone';
 // True when the MIME identifies a video container, including the container
 // types returned by the backend (MP4, QuickTime, WebM, Matroska, AVI, 3GPP/3GPP2).
 export function isVideoMime(mime: string): boolean {
-	return /^video\/[a-z0-9][a-z0-9!#// True when the text contains the `@everyone` mention.
-export function hasEveryone(text: string): boolean {
-	return /\b@everyone\b/i.test(text);
-}^_.+-]*$/i.test(mime.trim());
+	return /^video\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i.test(mime.trim());
 }
 
-// True when the text contains the `@everyone` mention.
+// True when the text contains the @everyone mention.
 export function hasEveryone(text: string): boolean {
 	return /\b@everyone\b/i.test(text);
 }
-
 // Extract all user mentions (`@<uuid>`) from a message, deduplicated and in
 // order of first appearance. Ignores `@everyone`.
 export function extractMentions(text: string): string[] {
