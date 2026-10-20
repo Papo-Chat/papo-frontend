@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Embed } from '$lib/types';
 	import { getEmbed, ensureEmbed } from '$lib/store/messages.svelte';
-		import {
+	import {
 		blobToUrl,
 		embedMediaBox,
 		embedVideoUrl,
