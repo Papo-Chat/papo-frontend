@@ -13,7 +13,6 @@
 
 import { SvelteDate, SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
-import { meId } from './session.svelte';
 import * as webhooksStore from './webhooks.svelte';
 import { embedNeedsResolution } from '../utils/embeds';
 import type { ChannelMessagesState, MessagesState } from './messages.types';
@@ -1185,6 +1184,7 @@ let optimisticMessageSerial = 0;
 
 function addOptimisticMessage(
 	channelId: string,
+	authorId: string | null,
 	content: string | null,
 	replyTo: string | null,
 	fileCount: number
@@ -1194,7 +1194,7 @@ function addOptimisticMessage(
 	const message: MessageWithAttachment = {
 		id,
 		channel_id: channelId,
-		author_id: meId(),
+		author_id: authorId,
 		content: content ?? (fileCount > 0 ? `Enviando ${fileCount === 1 ? 'anexo' : 'anexos'}…` : null),
 		created_at: new Date().toISOString(),
 		edited_at: null,
@@ -1253,8 +1253,8 @@ function replaceOptimisticMessage(channelId: string, optimisticId: string, messa
 		const byId = cloneById(channel.byId);
 		byId.delete(optimisticId);
 		const incoming = coerceMessage(message);
-		const merged = mergeFetchedMessage(byId.get(message.id), incoming, channel) ?? incoming;
-		byId.set(message.id, merged);
+		const merged = mergeFetchedMessage(byId.get(message.id), incoming, channel);
+		if (merged) byId.set(message.id, merged);
 		state.channels.set(channelId, { ...channel, byId, ids: sortedIds(byId) });
 	} else {
 		upsertMessage(state, channelId, message);
@@ -1263,15 +1263,17 @@ function replaceOptimisticMessage(channelId: string, optimisticId: string, messa
 
 export function send(payload: {
 	channel_id: string;
+	author_id?: string | null;
 	content: string | null;
 	reply_to: string | null;
 	files?: File[];
 	embeds?: EmbedInput[];
 	onProgress?: (percent: number) => void;
 }): Promise<MessageWithAttachment> {
-	const { onProgress, ...msgPayload } = payload;
+	const { onProgress, author_id, ...msgPayload } = payload;
 	const optimisticId = addOptimisticMessage(
 		payload.channel_id,
+		author_id ?? null,
 		payload.content,
 		payload.reply_to,
 		payload.files?.length ?? 0
