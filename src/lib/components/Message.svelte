@@ -69,10 +69,10 @@
 	);
 
 	const isAuthor = $derived(message.author_id === me);
-	const canEdit = $derived(isAuthor);
-	const canDelete = $derived(isAuthor || (access?.del ?? false));
-	const canPin = $derived(isDirectMessage || can('pin_message', ctx));
-	const canReply = $derived(isDirectMessage || (access?.send ?? false));
+	const canEdit = $derived(isAuthor && !message.optimistic_status);
+	const canDelete = $derived(!message.optimistic_status && (isAuthor || (access?.del ?? false)));
+	const canPin = $derived(!message.optimistic_status && (isDirectMessage || can('pin_message', ctx)));
+	const canReply = $derived(!message.optimistic_status && (isDirectMessage || (access?.send ?? false)));
 
 	// ── fixado (pinned list do canal) ────────────────────────────────
 
