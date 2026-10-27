@@ -1,7 +1,7 @@
 // Notifications store: the notification list (keyset, 100/page) plus
 // mark-read and the live unread counter.
 
-import { SvelteSet } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api, ApiError } from '../api';
 import { debounce } from '../utils/throttle';
 import { meId as sessionMeId } from '../store/session.svelte';
@@ -23,6 +23,50 @@ export const state = $state({
 	loadGeneration: 0
 });
 
+type ChannelReadMarker = {
+	messageId: string;
+	messageCreatedAt: string;
+};
+
+// Preserve locally acknowledged read positions across notification refetches.
+// A new_notification refetch can race the debounced channel/DM read request
+// and otherwise replace optimistic read rows with a stale server copy.
+const channelReadMarkers = new SvelteMap<string, ChannelReadMarker>();
+
+function isAtOrBeforeReadMarker(
+	notification: NotificationSummary,
+	channelId: string,
+	marker: ChannelReadMarker
+): boolean {
+	const window = messagesStore.getChannel(channelId);
+	const readIndex = window ? window.ids.indexOf(marker.messageId) : -1;
+	const notificationIndex = window ? window.ids.indexOf(notification.message_id) : -1;
+
+	if (readIndex >= 0 && notificationIndex >= 0) {
+		return notificationIndex <= readIndex;
+	}
+	// Notification timestamps can lag their message timestamps slightly. Keep
+	// the same fallback used for rows whose messages are outside the cache.
+	return notification.created_at <= marker.messageCreatedAt;
+}
+
+function reconcileReadMarkers(
+	notifications: NotificationSummary[],
+	previouslyReadIds: Set<string> = new Set(state.items.filter((n) => n.read).map((n) => n.id))
+): { items: NotificationSummary[]; newlyRead: number } {
+	let newlyRead = 0;
+	const items = notifications.map((notification) => {
+		if (notification.read) return notification;
+		const marker = channelReadMarkers.get(notification.channel_id);
+		if (!marker || !isAtOrBeforeReadMarker(notification, notification.channel_id, marker)) {
+			return notification;
+		}
+		if (!previouslyReadIds.has(notification.id)) newlyRead += 1;
+		return { ...notification, read: true };
+	});
+	return { items, newlyRead };
+}
+
 // Debounced refetch after a new_notification (F3).
 const refetch = debounce(() => {
 	load();
@@ -42,12 +86,18 @@ export function load(): void {
 			if (state.loadGeneration !== gen) {
 				return;
 			}
-			state.items = res.notifications;
+			const wasLoaded = state.loaded;
+			const reconciled = reconcileReadMarkers(res.notifications);
+			state.items = reconciled.items;
 			state.hasMore = res.has_more;
 			state.cursor = nextCursor(res.notifications) ?? null;
-			// Seed the unread counter only on the first load.
-			if (!state.loaded) {
-				state.unreadCount = res.notifications.filter((n) => !n.read).length;
+			// Seed on first load; on refetches, remove only rows newly resolved as
+			// read by a marker. Rows already optimistically read were decremented
+			// at markChannelRead time and must not decrement the badge twice.
+			if (!wasLoaded) {
+				state.unreadCount = reconciled.items.filter((n) => !n.read).length;
+			} else if (reconciled.newlyRead > 0) {
+				state.unreadCount = Math.max(0, state.unreadCount - reconciled.newlyRead);
 			}
 			state.loaded = true;
 		})
@@ -77,7 +127,7 @@ export function loadMore(): void {
 			// Append, deduping by notification id.
 			const seen = new SvelteSet(state.items.map((n) => n.id));
 			const fresh = res.notifications.filter((n) => !seen.has(n.id));
-			state.items = [...state.items, ...fresh];
+			state.items = [...state.items, ...reconcileReadMarkers(fresh).items];
 			state.hasMore = res.has_more;
 			state.cursor = nextCursor(res.notifications) ?? null;
 		});
@@ -88,7 +138,7 @@ export function markRead(ids: string[]): void {
 	if (!userId || ids.length === 0) {
 		return;
 	}
-	const idSet = new Set(ids);
+	const idSet = new SvelteSet(ids);
 	// O contador local é incrementado otimisticamente (new_notification). O
 	// `updated` do servidor só conta linhas que realmente mudaram: quando a
 	// notificação já estava lida no servidor (updated < local), o contador
@@ -133,25 +183,18 @@ export function markAllRead(): void {
 // last_read atualizado (canal/DM): notificações daquele canal até a mensagem
 // lida são consideradas lidas (espelha a regra aplicada no backend).
 export function markChannelRead(channelId: string, messageId: string, messageCreatedAt: string): void {
-	const window = messagesStore.getChannel(channelId);
-	const readIndex = window ? window.ids.indexOf(messageId) : -1;
+	const previous = channelReadMarkers.get(channelId);
+	if (!previous || Date.parse(messageCreatedAt) >= Date.parse(previous.messageCreatedAt)) {
+		channelReadMarkers.set(channelId, { messageId, messageCreatedAt });
+	}
 
+	const marker = channelReadMarkers.get(channelId)!;
 	let changed = 0;
-	state.items = state.items.map((n) => {
-		if (n.read || n.channel_id !== channelId) return n;
-
-		// A posição na janela carregada é o critério autoritativo (o
-		// created_at da notificação é ligeiramente posterior ao da mensagem).
-		// Fora da janela, cai no comparativo de timestamps.
-		const nIndex = window ? window.ids.indexOf(n.message_id) : -1;
-		const before =
-			readIndex >= 0 && nIndex >= 0
-				? nIndex <= readIndex
-				: n.created_at <= messageCreatedAt;
-
-		if (!before) return n;
+	state.items = state.items.map((notification) => {
+		if (notification.read || notification.channel_id !== channelId) return notification;
+		if (!isAtOrBeforeReadMarker(notification, channelId, marker)) return notification;
 		changed += 1;
-		return { ...n, read: true };
+		return { ...notification, read: true };
 	});
 	if (changed > 0) {
 		state.unreadCount = Math.max(0, state.unreadCount - changed);
@@ -175,6 +218,7 @@ export function removeByMessage(messageId: string): void {
 // Full reset (logout / 401 / account switch).
 export function reset(): void {
 	state.loadGeneration += 1;
+	channelReadMarkers.clear();
 	state.items = [];
 	state.hasMore = false;
 	state.cursor = null;
