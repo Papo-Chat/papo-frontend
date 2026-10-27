@@ -213,7 +213,7 @@
 				onJumpToLatest={() => messagesStore.setLatest(channel.id)}
 				onJumpToLastRead={() =>
 					channel.last_read_message
-						? messagesStore.gotoMessage(channel.id, channel.last_read_message, null)
+						? messagesStore.gotoMessage(channel.id, channel.last_read_message, channel.last_read_at)
 						: Promise.resolve(false)}
 				onLoadMoreOlder={() => messagesStore.loadMoreOlder(channel.id)}
 				onLoadMoreNewer={() => messagesStore.loadMoreNewer(channel.id)}
@@ -236,7 +236,7 @@
 				onJumpToLatest={() => messagesStore.setLatest(channel.id)}
 				onJumpToLastRead={() =>
 					channel.last_read_message
-						? messagesStore.gotoMessage(channel.id, channel.last_read_message, null)
+						? messagesStore.gotoMessage(channel.id, channel.last_read_message, channel.last_read_at)
 						: Promise.resolve(false)}
 				onLoadMoreOlder={() => messagesStore.loadMoreOlder(channel.id)}
 				onLoadMoreNewer={() => messagesStore.loadMoreNewer(channel.id)}

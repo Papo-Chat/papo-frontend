@@ -151,7 +151,7 @@
 			onJumpToLatest={() => messagesStore.setLatest(dm.id)}
 			onJumpToLastRead={() =>
 				dm.last_read_message
-					? messagesStore.gotoMessage(dm.id, dm.last_read_message, null)
+					? messagesStore.gotoMessage(dm.id, dm.last_read_message, dm.last_read_at)
 					: Promise.resolve(false)}
 			onLoadMoreOlder={() => messagesStore.loadMoreOlder(dm.id)}
 			onLoadMoreNewer={() => messagesStore.loadMoreNewer(dm.id)}
