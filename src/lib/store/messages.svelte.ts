@@ -1195,7 +1195,10 @@ function addOptimisticMessage(
 		id,
 		channel_id: channelId,
 		author_id: authorId,
-		content: content ?? (fileCount > 0 ? `Enviando ${fileCount === 1 ? 'anexo' : 'anexos'}…` : null),
+		content,
+		optimistic_preview: content == null && fileCount > 0
+			? `Enviando ${fileCount === 1 ? 'anexo' : 'anexos'}…`
+			: undefined,
 		created_at: new Date().toISOString(),
 		edited_at: null,
 		reply_to: replyTo,
@@ -1225,7 +1228,11 @@ function markOptimisticMessageFailed(channelId: string, optimisticId: string): v
 	const message = channel?.byId.get(optimisticId);
 	if (!channel || !message) return;
 	const byId = cloneById(channel.byId);
-	byId.set(optimisticId, { ...message, optimistic_status: 'failed' });
+	byId.set(optimisticId, {
+		...message,
+		optimistic_status: 'failed',
+		optimistic_preview: message.optimistic_preview ? 'Falha ao enviar anexos' : undefined
+	});
 	state.channels.set(channelId, { ...channel, byId, ids: sortedIds(byId) });
 }
 
