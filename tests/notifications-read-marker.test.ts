@@ -44,7 +44,8 @@ function seedMessageWindow(): void {
 		message('m1', '2026-10-27T10:00:00.000Z'),
 		message('m2', '2026-10-27T10:00:02.000Z')
 	];
-	const byId = new SvelteMap(messages.map((item) => [item.id, item]));
+	const byId = new SvelteMap<string, MessageWithAttachment>();
+	for (const item of messages) byId.set(item.id, item);
 	const channel: ChannelMessagesState = {
 		byId,
 		ids: ['m1', 'm2'],
