@@ -249,6 +249,9 @@
 	class="message"
 	class:grouped-message={grouped}
 	class:group-last-message={groupLast}
+	class:message-pending={message.optimistic_status === 'pending'}
+	class:message-failed={message.optimistic_status === 'failed'}
+	aria-busy={message.optimistic_status === 'pending' ? 'true' : undefined}
 	data-message-id={message.id}
 	bind:this={messageEl}
 	onpointerenter={onEnter}
@@ -306,7 +309,11 @@
 
 				<span class="time">
 					{formatTime(message.created_at)}
-					{#if message.edited_at}
+					{#if message.optimistic_status === 'pending'}
+						<span class="delivery-status" role="status">· enviando…</span>
+					{:else if message.optimistic_status === 'failed'}
+						<span class="delivery-status failed" role="status">· falha no envio</span>
+					{:else if message.edited_at}
 						<span class="edited">· editado</span>
 					{/if}
 				</span>
@@ -501,6 +508,15 @@
 	}
 
 	/* Espaço vertical na linha superior de cada grupo, alinhando avatar e meta. */
+	.message-pending { opacity: 0.72; }
+	.message-failed { opacity: 0.9; }
+	.delivery-status {
+		color: var(--muted-soft);
+		font-size: 11px;
+		font-weight: 500;
+	}
+	.delivery-status.failed { color: var(--danger, #d6423e); }
+
 	.message:not(.grouped-message) > :global(.avatar) {
 		margin-top: 5px;
 	}
