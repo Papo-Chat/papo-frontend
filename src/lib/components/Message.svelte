@@ -425,6 +425,8 @@
 					<EmbedCard {embed} forceResolve={isWebhookMessage} />
 				{/each}
 			{/if}
+		{:else if message.optimistic_preview}
+			<div class="bubble">{message.optimistic_preview}</div>
 		{:else if message.embeds.length}
 			{#each message.embeds as embed (embed.id)}
 				<EmbedCard {embed} forceResolve={isWebhookMessage} />
