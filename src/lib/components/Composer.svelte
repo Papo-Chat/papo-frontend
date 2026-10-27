@@ -473,9 +473,11 @@
 		mobileActionsOpen = false;
 		resetInputHeight();
 
-		Promise.resolve(onSend?.(wireText || null, sentFiles, (percent: number) => {
-			progress = percent;
-		}))
+		Promise.resolve().then(() =>
+			onSend?.(wireText || null, sentFiles, (percent: number) => {
+				progress = percent;
+			})
+		)
 			.then(() => {
 				if (replyTo === sentReplyTo) onReplyCancel?.();
 			})
