@@ -619,10 +619,14 @@
 
 	async function onPickGif(gif: { id: string; pageUrl: string }): Promise<void> {
 		if (disabled || !gif.pageUrl) return;
-		await onSend?.(gif.pageUrl);
-		desktopEmojiOpen = false;
-		mobileEmojiOpen = false;
-		mobileActionsOpen = false;
+		try {
+			await onSend?.(gif.pageUrl);
+			desktopEmojiOpen = false;
+			mobileEmojiOpen = false;
+			mobileActionsOpen = false;
+		} catch (err: unknown) {
+			error = err instanceof Error ? err.message : 'Não foi possível enviar o GIF.';
+		}
 	}
 
 	function cancelReply(): void {
