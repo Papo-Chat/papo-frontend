@@ -142,6 +142,7 @@
 		replyTo = null;
 		return messagesStore.send({
 			channel_id: channel.id,
+			author_id: meId(),
 			content: text,
 			reply_to: replyId,
 			files,
