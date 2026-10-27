@@ -1,7 +1,7 @@
 // Notifications store: the notification list (keyset, 100/page) plus
 // mark-read and the live unread counter.
 
-import { SvelteSet } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api, ApiError } from '../api';
 import { debounce } from '../utils/throttle';
 import { meId as sessionMeId } from '../store/session.svelte';
@@ -31,7 +31,7 @@ type ChannelReadMarker = {
 // Preserve locally acknowledged read positions across notification refetches.
 // A new_notification refetch can race the debounced channel/DM read request
 // and otherwise replace optimistic read rows with a stale server copy.
-const channelReadMarkers = new Map<string, ChannelReadMarker>();
+const channelReadMarkers = new SvelteMap<string, ChannelReadMarker>();
 
 function isAtOrBeforeReadMarker(
 	notification: NotificationSummary,
@@ -138,7 +138,7 @@ export function markRead(ids: string[]): void {
 	if (!userId || ids.length === 0) {
 		return;
 	}
-	const idSet = new Set(ids);
+	const idSet = new SvelteSet(ids);
 	// O contador local é incrementado otimisticamente (new_notification). O
 	// `updated` do servidor só conta linhas que realmente mudaram: quando a
 	// notificação já estava lida no servidor (updated < local), o contador
