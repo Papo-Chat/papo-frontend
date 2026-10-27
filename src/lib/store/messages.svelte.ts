@@ -696,6 +696,11 @@ export function applyEvent(state: MessagesState, event: WsOutbound): void {
 	switch (event.type) {
 		case 'message': {
 			touchDuringFresh(event.channel_id, event.id);
+			const incoming = wsMessageToMsg(event);
+			if (reconcileOptimisticMessage(event.channel_id, incoming)) {
+				upsertMessage(state, event.channel_id, incoming);
+				break;
+			}
 			// In a historical window, new WS messages are outside the window:
 			// don't insert (would force scroll / bloat); just count them.
 			const ch = state.channels.get(event.channel_id);
@@ -705,7 +710,7 @@ export function applyEvent(state: MessagesState, event: WsOutbound): void {
 					hasMoreNewer: true
 				});
 			} else {
-				upsertMessage(state, event.channel_id, wsMessageToMsg(event));
+				upsertMessage(state, event.channel_id, incoming);
 			}
 			break;
 		}
@@ -1178,14 +1183,19 @@ export async function gotoMessage(
 
 let optimisticMessageSerial = 0;
 
-function addOptimisticMessage(channelId: string, content: string | null, replyTo: string | null): string {
+function addOptimisticMessage(
+	channelId: string,
+	content: string | null,
+	replyTo: string | null,
+	fileCount: number
+): string {
 	const channel = state.channels.get(channelId);
 	const id = `optimistic:${Date.now().toString(36)}:${(++optimisticMessageSerial).toString(36)}`;
 	const message: MessageWithAttachment = {
 		id,
 		channel_id: channelId,
 		author_id: meId(),
-		content,
+		content: content ?? (fileCount > 0 ? `Enviando ${fileCount === 1 ? 'anexo' : 'anexos'}…` : null),
 		created_at: new Date().toISOString(),
 		edited_at: null,
 		reply_to: replyTo,
@@ -1210,12 +1220,31 @@ function addOptimisticMessage(channelId: string, content: string | null, replyTo
 	return id;
 }
 
-function removeOptimisticMessage(channelId: string, optimisticId: string): void {
+function markOptimisticMessageFailed(channelId: string, optimisticId: string): void {
 	const channel = state.channels.get(channelId);
-	if (!channel?.byId.has(optimisticId)) return;
+	const message = channel?.byId.get(optimisticId);
+	if (!channel || !message) return;
 	const byId = cloneById(channel.byId);
-	byId.delete(optimisticId);
+	byId.set(optimisticId, { ...message, optimistic_status: 'failed' });
 	state.channels.set(channelId, { ...channel, byId, ids: sortedIds(byId) });
+}
+
+function reconcileOptimisticMessage(channelId: string, incoming: MessageWithAttachment): boolean {
+	const channel = state.channels.get(channelId);
+	if (!channel || !incoming.author_id) return false;
+	const pending = channel.ids
+		.map((id) => channel.byId.get(id))
+		.find((message) =>
+			message?.optimistic_status === 'pending' &&
+			message.author_id === incoming.author_id &&
+			message.content === incoming.content &&
+			message.reply_to === incoming.reply_to
+		);
+	if (!pending) return false;
+	const byId = cloneById(channel.byId);
+	byId.delete(pending.id);
+	state.channels.set(channelId, { ...channel, byId, ids: sortedIds(byId) });
+	return true;
 }
 
 function replaceOptimisticMessage(channelId: string, optimisticId: string, message: MessageWithAttachment): void {
@@ -1223,7 +1252,9 @@ function replaceOptimisticMessage(channelId: string, optimisticId: string, messa
 	if (channel) {
 		const byId = cloneById(channel.byId);
 		byId.delete(optimisticId);
-		byId.set(message.id, coerceMessage(message));
+		const incoming = coerceMessage(message);
+		const merged = mergeFetchedMessage(byId.get(message.id), incoming, channel) ?? incoming;
+		byId.set(message.id, merged);
 		state.channels.set(channelId, { ...channel, byId, ids: sortedIds(byId) });
 	} else {
 		upsertMessage(state, channelId, message);
@@ -1239,7 +1270,12 @@ export function send(payload: {
 	onProgress?: (percent: number) => void;
 }): Promise<MessageWithAttachment> {
 	const { onProgress, ...msgPayload } = payload;
-	const optimisticId = addOptimisticMessage(payload.channel_id, payload.content, payload.reply_to);
+	const optimisticId = addOptimisticMessage(
+		payload.channel_id,
+		payload.content,
+		payload.reply_to,
+		payload.files?.length ?? 0
+	);
 	return api.messages
 		.send(msgPayload, onProgress)
 		.then((message) => {
@@ -1247,7 +1283,7 @@ export function send(payload: {
 			return message;
 		})
 		.catch((error: unknown) => {
-			removeOptimisticMessage(payload.channel_id, optimisticId);
+			markOptimisticMessageFailed(payload.channel_id, optimisticId);
 			throw error;
 		});
 }
