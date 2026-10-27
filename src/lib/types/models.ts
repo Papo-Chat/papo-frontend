@@ -204,6 +204,8 @@ export interface MessageWithAttachment extends Message {
 	embeds: Embed[];
 	reactions: MessageReactionSummary[];
 	user_reactions: MessageUserReaction[];
+	/** Client-only delivery state for optimistic messages. */
+	optimistic_status?: 'pending' | 'failed';
 }
 
 export interface MessageList {
