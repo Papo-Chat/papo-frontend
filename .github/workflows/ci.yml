@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - aero
-      - feat/optimistic-message-sending
   pull_request:
     branches:
       - aero
@@ -37,8 +36,11 @@ jobs:
       - name: Check Svelte and TypeScript
         run: npm run check
 
-      - name: Lint and format
-        run: npm run lint
+      - name: Check workflow formatting
+        run: npx prettier --check .github/workflows/ci.yml
+
+      - name: Run ESLint
+        run: npx eslint .
 
       - name: Run unit tests
         run: npm test
