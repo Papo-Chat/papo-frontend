@@ -87,7 +87,8 @@
 
 	const groupedFlags = $derived(
 		messages.map(
-			(m: MessageWithAttachment, i: number) => i > 0 && sameAuthorWindow(messages[i - 1], m)
+			(m: MessageWithAttachment, i: number) =>
+				i > 0 && !m.optimistic_status && sameAuthorWindow(messages[i - 1], m)
 		)
 	);
 

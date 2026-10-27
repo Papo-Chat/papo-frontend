@@ -93,31 +93,30 @@
 		text: string | null,
 		files: File[] = [],
 		onProgress?: (percent: number) => void
-	): Promise<void> {
+): Promise<void> {
 		if (!dm) return;
-
+		const conversationId = dm.id;
+		const replyId = replyTo?.id ?? null;
+		replyTo = null;
 		try {
 			await messagesStore.send({
-				channel_id: dm.id,
+				channel_id: conversationId,
+				author_id: meId(),
 				content: text,
-				reply_to: replyTo?.id ?? null,
+				reply_to: replyId,
 				files,
 				onProgress
 			});
-			replyTo = null;
 		} catch (error) {
 			if (
 				error instanceof ApiError &&
 				error.status === 403 &&
 				(error.type.includes('dm-blocked') || error.detail.includes('direta'))
 			) {
-				dmsStore.drop(dm.id);
+				dmsStore.drop(conversationId);
 				const home = channelsStore.homeChannel();
-				if (home) {
-					await goto(resolve('/channels/[channel_id]', { channel_id: home.id }));
-				} else {
-					await goto(resolve('/'));
-				}
+				if (home) await goto(resolve('/channels/[channel_id]', { channel_id: home.id }));
+				else await goto(resolve('/'));
 			}
 			throw error;
 		}

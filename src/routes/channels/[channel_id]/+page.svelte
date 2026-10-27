@@ -137,21 +137,17 @@
 		files: File[] = [],
 		onProgress?: (percent: number) => void
 	): Promise<void> {
-		if (!channel) {
-			return Promise.resolve();
-		}
-
-		return messagesStore
-			.send({
-				channel_id: channel.id,
-				content: text,
-				reply_to: replyTo?.id ?? null,
-				files,
-				onProgress
-			})
-			.then(() => {
-				replyTo = null;
-			});
+		if (!channel) return Promise.resolve();
+		const replyId = replyTo?.id ?? null;
+		replyTo = null;
+		return messagesStore.send({
+			channel_id: channel.id,
+			author_id: meId(),
+			content: text,
+			reply_to: replyId,
+			files,
+			onProgress
+		}).then(() => undefined);
 	}
 
 	function onReply(msg: MessageWithAttachment): void {

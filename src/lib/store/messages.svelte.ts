@@ -695,6 +695,11 @@ export function applyEvent(state: MessagesState, event: WsOutbound): void {
 	switch (event.type) {
 		case 'message': {
 			touchDuringFresh(event.channel_id, event.id);
+			const incoming = wsMessageToMsg(event);
+			if (reconcileOptimisticMessage(event.channel_id, incoming)) {
+				upsertMessage(state, event.channel_id, incoming);
+				break;
+			}
 			// In a historical window, new WS messages are outside the window:
 			// don't insert (would force scroll / bloat); just count them.
 			const ch = state.channels.get(event.channel_id);
@@ -704,7 +709,7 @@ export function applyEvent(state: MessagesState, event: WsOutbound): void {
 					hasMoreNewer: true
 				});
 			} else {
-				upsertMessage(state, event.channel_id, wsMessageToMsg(event));
+				upsertMessage(state, event.channel_id, incoming);
 			}
 			break;
 		}
@@ -1175,19 +1180,121 @@ export async function gotoMessage(
 	}
 }
 
+let optimisticMessageSerial = 0;
+
+function addOptimisticMessage(
+	channelId: string,
+	authorId: string | null,
+	content: string | null,
+	replyTo: string | null,
+	fileCount: number
+): string {
+	const channel = state.channels.get(channelId);
+	const id = `optimistic:${Date.now().toString(36)}:${(++optimisticMessageSerial).toString(36)}`;
+	const message: MessageWithAttachment = {
+		id,
+		channel_id: channelId,
+		author_id: authorId,
+		content,
+		optimistic_preview: content == null && fileCount > 0
+			? `Enviando ${fileCount === 1 ? 'anexo' : 'anexos'}…`
+			: undefined,
+		created_at: new Date().toISOString(),
+		edited_at: null,
+		reply_to: replyTo,
+		attachments: [],
+		embeds: [],
+		reactions: [],
+		user_reactions: [],
+		optimistic_status: 'pending'
+	};
+
+	if (channel) {
+		const byId = cloneById(channel.byId);
+		byId.set(id, message);
+		state.channels.set(channelId, { ...channel, byId, ids: sortedIds(byId) });
+	} else {
+		const created = newChannelState();
+		created.byId.set(id, message);
+		created.ids = [id];
+		created.loaded = true;
+		state.channels.set(channelId, created);
+	}
+	return id;
+}
+
+function markOptimisticMessageFailed(channelId: string, optimisticId: string): void {
+	const channel = state.channels.get(channelId);
+	const message = channel?.byId.get(optimisticId);
+	if (!channel || !message) return;
+	const byId = cloneById(channel.byId);
+	byId.set(optimisticId, {
+		...message,
+		optimistic_status: 'failed',
+		optimistic_preview: message.optimistic_preview ? 'Falha ao enviar anexos' : undefined
+	});
+	state.channels.set(channelId, { ...channel, byId, ids: sortedIds(byId) });
+}
+
+function reconcileOptimisticMessage(channelId: string, incoming: MessageWithAttachment): boolean {
+	const channel = state.channels.get(channelId);
+	if (!channel || !incoming.author_id) return false;
+	const pending = channel.ids
+		.map((id) => channel.byId.get(id))
+		.find((message) =>
+			message?.optimistic_status === 'pending' &&
+			message.author_id === incoming.author_id &&
+			message.content === incoming.content &&
+			message.reply_to === incoming.reply_to
+		);
+	if (!pending) return false;
+	const byId = cloneById(channel.byId);
+	byId.delete(pending.id);
+	state.channels.set(channelId, { ...channel, byId, ids: sortedIds(byId) });
+	return true;
+}
+
+function replaceOptimisticMessage(channelId: string, optimisticId: string, message: MessageWithAttachment): void {
+	const channel = state.channels.get(channelId);
+	if (channel) {
+		const byId = cloneById(channel.byId);
+		byId.delete(optimisticId);
+		const incoming = coerceMessage(message);
+		const merged = mergeFetchedMessage(byId.get(message.id), incoming, channel);
+		if (merged) byId.set(message.id, merged);
+		state.channels.set(channelId, { ...channel, byId, ids: sortedIds(byId) });
+	} else {
+		upsertMessage(state, channelId, message);
+	}
+}
+
 export function send(payload: {
 	channel_id: string;
+	author_id?: string | null;
 	content: string | null;
 	reply_to: string | null;
 	files?: File[];
 	embeds?: EmbedInput[];
 	onProgress?: (percent: number) => void;
 }): Promise<MessageWithAttachment> {
-	const { onProgress, ...msgPayload } = payload;
-	return api.messages.send(msgPayload, onProgress).then((message) => {
-		upsertMessage(state, message.channel_id, message);
-		return message;
-	});
+	const { onProgress, author_id, ...msgPayload } = payload;
+	const optimisticId = addOptimisticMessage(
+		payload.channel_id,
+		author_id ?? null,
+		payload.content,
+		payload.reply_to,
+		payload.files?.length ?? 0
+	);
+	return api.messages
+		.send(msgPayload, onProgress)
+		.then((message) => {
+			replaceOptimisticMessage(payload.channel_id, optimisticId, message);
+			return message;
+		})
+		.catch((error: unknown) => {
+			markOptimisticMessageFailed(payload.channel_id, optimisticId);
+			throw error;
+		});
 }
 
 // PUT substitui a lista completa de embeds customizados: `embeds` ausente ou

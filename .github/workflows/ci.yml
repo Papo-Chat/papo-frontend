@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - aero
+  pull_request:
+    branches:
+      - aero
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check Svelte and TypeScript
+        run: npm run check
+
+      - name: Check workflow formatting
+        run: npx prettier --check .github/workflows/ci.yml
+
+      - name: Lint changed JS, TS, and Svelte files
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            git fetch origin "$BASE_REF"
+            changed_files="$(git diff --name-only "origin/$BASE_REF...HEAD" -- '*.js' '*.ts' '*.svelte' '*.mjs' '*.cjs')"
+          elif [[ "$BEFORE" =~ ^0+$ ]]; then
+            changed_files="$(git diff-tree --no-commit-id --name-only -r HEAD -- '*.js' '*.ts' '*.svelte' '*.mjs' '*.cjs')"
+          else
+            changed_files="$(git diff --name-only "$BEFORE" HEAD -- '*.js' '*.ts' '*.svelte' '*.mjs' '*.cjs')"
+          fi
+
+          if [[ -z "$changed_files" ]]; then
+            echo "No changed JS, TS, or Svelte files to lint."
+            exit 0
+          fi
+
+          mapfile -t files <<< "$changed_files"
+          npx eslint "${files[@]}"
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build production bundle
+        run: npm run build
