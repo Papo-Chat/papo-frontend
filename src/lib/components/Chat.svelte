@@ -180,6 +180,10 @@
 		visibleLastReadMessageId = id;
 		await tick();
 		divider = findLastReadDivider(id);
+		// A programmatic jump must not be treated as a user scrolling down.
+		// Otherwise the bottom observer can fetch forward pages until latest and
+		// the chat appears to jump away from the last-read position.
+		scrollDirection = null;
 		divider?.scrollIntoView({
 			block: 'center',
 			inline: 'nearest',
@@ -453,15 +457,17 @@
 		lastScrollTop = currentScrollTop;
 		updateReturnRecent();
 
-		if (movedUp) {
+		if (movedUp && pointerScrollActive) {
+			// Scrollbar dragging is explicit user intent. Wheel/touch already set
+			// the direction in their input handlers; ordinary scroll events can
+			// also be caused by scrollIntoView and layout changes.
 			scrollDirection = 'up';
-			// Wheel/touch handlers already disable follow mode before the scroll
-			// event fires. This covers native scrollbar dragging without treating
-			// media/layout reflows as user scrolling.
-			if (pointerScrollActive) stopFollowingBottom();
+			stopFollowingBottom();
 		} else if (movedDown) {
-			scrollDirection = 'down';
-			if (hasMoreNewer && distanceFromBottom() <= 180) {
+			if (pointerScrollActive) scrollDirection = 'down';
+			// Only continue forward pagination for a real downward gesture.
+			// Programmatic last-read positioning must never trigger a page cascade.
+			if (scrollDirection === 'down' && hasMoreNewer && distanceFromBottom() <= 180) {
 				void loadNewer();
 				return;
 			}
@@ -488,7 +494,7 @@
 
 		// Re-enter follow mode only by actually scrolling down to the real
 		// bottom (or via an explicit jumpToLatest).
-		if (atBottom && movedDown) {
+		if (atBottom && movedDown && scrollDirection === 'down') {
 			clearUnreadAtBottom();
 		}
 	}
