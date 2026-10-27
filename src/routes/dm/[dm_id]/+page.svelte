@@ -101,6 +101,7 @@
 		try {
 			await messagesStore.send({
 				channel_id: conversationId,
+				author_id: meId(),
 				content: text,
 				reply_to: replyId,
 				files,
