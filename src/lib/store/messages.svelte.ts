@@ -13,6 +13,7 @@
 
 import { SvelteDate, SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
+import { meId } from './session.svelte';
 import * as webhooksStore from './webhooks.svelte';
 import { embedNeedsResolution } from '../utils/embeds';
 import type { ChannelMessagesState, MessagesState } from './messages.types';
@@ -1175,6 +1176,60 @@ export async function gotoMessage(
 	}
 }
 
+let optimisticMessageSerial = 0;
+
+function addOptimisticMessage(channelId: string, content: string | null, replyTo: string | null): string {
+	const channel = state.channels.get(channelId);
+	const id = `optimistic:${Date.now().toString(36)}:${(++optimisticMessageSerial).toString(36)}`;
+	const message: MessageWithAttachment = {
+		id,
+		channel_id: channelId,
+		author_id: meId(),
+		content,
+		created_at: new Date().toISOString(),
+		edited_at: null,
+		reply_to: replyTo,
+		attachments: [],
+		embeds: [],
+		reactions: [],
+		user_reactions: [],
+		optimistic_status: 'pending'
+	};
+
+	if (channel) {
+		const byId = cloneById(channel.byId);
+		byId.set(id, message);
+		state.channels.set(channelId, { ...channel, byId, ids: sortedIds(byId) });
+	} else {
+		const created = newChannelState();
+		created.byId.set(id, message);
+		created.ids = [id];
+		created.loaded = true;
+		state.channels.set(channelId, created);
+	}
+	return id;
+}
+
+function removeOptimisticMessage(channelId: string, optimisticId: string): void {
+	const channel = state.channels.get(channelId);
+	if (!channel?.byId.has(optimisticId)) return;
+	const byId = cloneById(channel.byId);
+	byId.delete(optimisticId);
+	state.channels.set(channelId, { ...channel, byId, ids: sortedIds(byId) });
+}
+
+function replaceOptimisticMessage(channelId: string, optimisticId: string, message: MessageWithAttachment): void {
+	const channel = state.channels.get(channelId);
+	if (channel) {
+		const byId = cloneById(channel.byId);
+		byId.delete(optimisticId);
+		byId.set(message.id, coerceMessage(message));
+		state.channels.set(channelId, { ...channel, byId, ids: sortedIds(byId) });
+	} else {
+		upsertMessage(state, channelId, message);
+	}
+}
+
 export function send(payload: {
 	channel_id: string;
 	content: string | null;
@@ -1184,10 +1239,17 @@ export function send(payload: {
 	onProgress?: (percent: number) => void;
 }): Promise<MessageWithAttachment> {
 	const { onProgress, ...msgPayload } = payload;
-	return api.messages.send(msgPayload, onProgress).then((message) => {
-		upsertMessage(state, message.channel_id, message);
-		return message;
-	});
+	const optimisticId = addOptimisticMessage(payload.channel_id, payload.content, payload.reply_to);
+	return api.messages
+		.send(msgPayload, onProgress)
+		.then((message) => {
+			replaceOptimisticMessage(payload.channel_id, optimisticId, message);
+			return message;
+		})
+		.catch((error: unknown) => {
+			removeOptimisticMessage(payload.channel_id, optimisticId);
+			throw error;
+		});
 }
 
 // PUT substitui a lista completa de embeds customizados: `embeds` ausente ou
