@@ -480,14 +480,8 @@
 				if (replyTo === sentReplyTo) onReplyCancel?.();
 			})
 			.catch((err: unknown) => {
-				// Avoid overwriting a newer draft composed while this send was pending.
-				if (!text.trim() && files.length === 0) {
-					text = t;
-					files = sentFiles;
-					for (const [username, userId] of sentMentions) selectedMentions.set(username, userId);
-					if (sentChannelId) channelDrafts.set(sentChannelId, text);
-					resetInputHeight();
-				}
+				// The failed optimistic bubble keeps the submitted content visible,
+				// so this callback must not restore it as a duplicate draft.
 				error = err instanceof Error ? err.message : 'Erro ao enviar a mensagem.';
 			})
 			.finally(() => {
