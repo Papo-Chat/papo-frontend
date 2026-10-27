@@ -455,7 +455,6 @@
 		const sentFiles = [...files];
 		const sentChannelId = channelId;
 		const sentReplyTo = replyTo;
-		const sentMentions = [...selectedMentions.entries()];
 		error = null;
 		activeSends += 1;
 		sending = true;
