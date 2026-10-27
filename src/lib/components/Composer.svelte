@@ -52,6 +52,7 @@
 	let draftChannelId = $state<string | null>(null);
 	let error: string | null = $state(null);
 	let sending = $state(false);
+	let activeSends = 0;
 	let desktopEmojiOpen = $state(false);
 	let mobileEmojiOpen = $state(false);
 	let mobileActionsOpen = $state(false);
@@ -311,8 +312,6 @@
 	}
 
 	function removeFile(index: number): void {
-		if (sending) return;
-
 		files = files.filter((_, i) => i !== index);
 	}
 
@@ -448,42 +447,52 @@
 	}
 
 	function send(): void {
-		if (recording) {
-			return;
-		}
-
+		if (recording) return;
 		const t = text.trim();
 		const wireText = t ? serializeMentions(t) : '';
+		if ((!t && files.length === 0) || disabled) return;
 
-		if ((!t && files.length === 0) || disabled || sending) {
-			return;
-		}
-
+		const sentFiles = [...files];
+		const sentChannelId = channelId;
+		const sentReplyTo = replyTo;
+		const sentMentions = [...selectedMentions.entries()];
 		error = null;
+		activeSends += 1;
 		sending = true;
 		progress = 0;
 
-		onSend?.(wireText || null, files, (percent: number) => {
-			progress = percent;
-		})
-			.then(() => {
-				text = '';
-				if (channelId) channelDrafts.delete(channelId);
-				files = [];
-				selectedMentions.clear();
-				desktopEmojiOpen = false;
-				mobileEmojiOpen = false;
-				mobileActionsOpen = false;
-				closeMentions();
-				closeEmojiAutocomplete();
+		// Clear synchronously so another message can be composed while this one uploads.
+		text = '';
+		files = [];
+		selectedMentions.clear();
+		if (sentChannelId) channelDrafts.delete(sentChannelId);
+		closeMentions();
+		closeEmojiAutocomplete();
+		desktopEmojiOpen = false;
+		mobileEmojiOpen = false;
+		mobileActionsOpen = false;
+		resetInputHeight();
 
-				resetInputHeight();
+		Promise.resolve(onSend?.(wireText || null, sentFiles, (percent: number) => {
+			progress = percent;
+		}))
+			.then(() => {
+				if (replyTo === sentReplyTo) onReplyCancel?.();
 			})
 			.catch((err: unknown) => {
+				// Avoid overwriting a newer draft composed while this send was pending.
+				if (!text.trim() && files.length === 0) {
+					text = t;
+					files = sentFiles;
+					for (const [username, userId] of sentMentions) selectedMentions.set(username, userId);
+					if (sentChannelId) channelDrafts.set(sentChannelId, text);
+					resetInputHeight();
+				}
 				error = err instanceof Error ? err.message : 'Erro ao enviar a mensagem.';
 			})
 			.finally(() => {
-				sending = false;
+				activeSends = Math.max(0, activeSends - 1);
+				sending = activeSends > 0;
 			});
 	}
 
@@ -609,20 +618,11 @@
 	}
 
 	async function onPickGif(gif: { id: string; pageUrl: string }): Promise<void> {
-		if (disabled || sending || !gif.pageUrl) return;
-		error = null;
-		sending = true;
-		try {
-			// Envia o page URL real do GIPHY; o backend resolve e faz o embed do GIF.
-			await onSend?.(gif.pageUrl);
-			desktopEmojiOpen = false;
-			mobileEmojiOpen = false;
-			mobileActionsOpen = false;
-		} catch (err: unknown) {
-			error = err instanceof Error ? err.message : 'Não foi possível enviar o GIF.';
-		} finally {
-			sending = false;
-		}
+		if (disabled || !gif.pageUrl) return;
+		await onSend?.(gif.pageUrl);
+		desktopEmojiOpen = false;
+		mobileEmojiOpen = false;
+		mobileActionsOpen = false;
 	}
 
 	function cancelReply(): void {
@@ -892,7 +892,6 @@
 						aria-label={`Remover ${f.name}`}
 						title="Remover anexo"
 						onclick={() => removeFile(index)}
-						disabled={sending}
 					>
 						<Icon name="x" variant="light" />
 					</button>
