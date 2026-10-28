@@ -18,6 +18,7 @@
 import { SvelteMap } from 'svelte/reactivity';
 import { api } from '../api';
 import { send as wsSend } from '../ws';
+import { screenShareAudioConstraints } from '../utils/screen-share';
 import { PUBLIC_VOICE_AUDIO_SLOTS, PUBLIC_VOICE_VIDEO_SLOTS } from '../env';
 import type {
 	ICEServer,
@@ -1257,9 +1258,9 @@ async function setScreenShare(targetOn: boolean): Promise<void> {
 			}
 
 			const stream = await navigator.mediaDevices.getDisplayMedia({
-				// Quando o browser/OS suporta áudio de aba ou sistema, a opção
-				// aparece no seletor nativo de compartilhamento.
-				audio: true,
+				// Tenta excluir do áudio do sistema o som produzido pela própria aba.
+				// A constraint é experimental e só tem efeito em browsers compatíveis.
+				audio: screenShareAudioConstraints(navigator.mediaDevices.getSupportedConstraints()),
 				video: {
 					// getDisplayMedia não aceita constraints min/exact.
 					// Deixamos o browser capturar na resolução nativa da fonte
