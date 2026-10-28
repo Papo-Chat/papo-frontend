@@ -108,7 +108,7 @@ let localAudioSender: RTCRtpSender | null = null;
 let micMuted = true;
 
 const remoteVideoSlots: RemoteVideoSlot[] = [];
-const remoteSubscriptions = new Map<string, RemoteVideoSlot | null>();
+const remoteSubscriptions = new SvelteMap<string, RemoteVideoSlot | null>();
 
 let pendingAnswer: PendingAnswer | null = null;
 let offerChain: Promise<void> = Promise.resolve();
@@ -1493,9 +1493,9 @@ function cleanupVideoMedia(): void {
 
 const remoteAudios = new SvelteMap<string, HTMLAudioElement>();
 // O elemento continua keyed por MID (estável por transceiver).
-const remoteAudioTransceivers = new Map<string, RTCRtpTransceiver>();
+const remoteAudioTransceivers = new SvelteMap<string, RTCRtpTransceiver>();
 // Alias do identificador de slot enviado pelo backend -> MID local.
-const remoteAudioTrackKeys = new Map<string, string>();
+const remoteAudioTrackKeys = new SvelteMap<string, string>();
 
 function isReceivingAudio(transceiver: RTCRtpTransceiver): boolean {
 	const direction = transceiver.currentDirection ?? transceiver.direction;
