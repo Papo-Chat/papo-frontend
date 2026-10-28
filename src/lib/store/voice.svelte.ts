@@ -18,6 +18,7 @@
 import { SvelteMap } from 'svelte/reactivity';
 import { api } from '../api';
 import { send as wsSend } from '../ws';
+import { screenShareAudioConstraints } from '../utils/screen-share';
 import { PUBLIC_VOICE_AUDIO_SLOTS, PUBLIC_VOICE_VIDEO_SLOTS } from '../env';
 import type {
 	ICEServer,
@@ -107,7 +108,7 @@ let localAudioSender: RTCRtpSender | null = null;
 let micMuted = true;
 
 const remoteVideoSlots: RemoteVideoSlot[] = [];
-const remoteSubscriptions = new Map<string, RemoteVideoSlot | null>();
+const remoteSubscriptions = new SvelteMap<string, RemoteVideoSlot | null>();
 
 let pendingAnswer: PendingAnswer | null = null;
 let offerChain: Promise<void> = Promise.resolve();
@@ -1257,9 +1258,9 @@ async function setScreenShare(targetOn: boolean): Promise<void> {
 			}
 
 			const stream = await navigator.mediaDevices.getDisplayMedia({
-				// Quando o browser/OS suporta áudio de aba ou sistema, a opção
-				// aparece no seletor nativo de compartilhamento.
-				audio: true,
+				// Tenta excluir do áudio do sistema o som produzido pela própria aba.
+				// A constraint é experimental e só tem efeito em browsers compatíveis.
+				audio: screenShareAudioConstraints(navigator.mediaDevices.getSupportedConstraints()),
 				video: {
 					// getDisplayMedia não aceita constraints min/exact.
 					// Deixamos o browser capturar na resolução nativa da fonte
@@ -1492,9 +1493,9 @@ function cleanupVideoMedia(): void {
 
 const remoteAudios = new SvelteMap<string, HTMLAudioElement>();
 // O elemento continua keyed por MID (estável por transceiver).
-const remoteAudioTransceivers = new Map<string, RTCRtpTransceiver>();
+const remoteAudioTransceivers = new SvelteMap<string, RTCRtpTransceiver>();
 // Alias do identificador de slot enviado pelo backend -> MID local.
-const remoteAudioTrackKeys = new Map<string, string>();
+const remoteAudioTrackKeys = new SvelteMap<string, string>();
 
 function isReceivingAudio(transceiver: RTCRtpTransceiver): boolean {
 	const direction = transceiver.currentDirection ?? transceiver.direction;
