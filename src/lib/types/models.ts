@@ -492,4 +492,7 @@ export interface VoiceState {
 	muted: boolean;
 	camera_on: boolean;
 	screen_sharing: boolean;
+	// O usuário publica o áudio da transmissão em uma faixa própria, separada
+	// do microfone (ausente em backends antigos).
+	screen_audio?: boolean;
 }

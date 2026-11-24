@@ -13,6 +13,12 @@ function publicInt(value: string | undefined, fallback: number): number {
 	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
-// Must match VOICE_VIDEO_SLOTS / VOICE_AUDIO_SLOTS on the backend.
+// Must match VOICE_VIDEO_SLOTS / VOICE_AUDIO_SLOTS / VOICE_SCREEN_AUDIO_SLOTS on
+// the backend.
 export const PUBLIC_VOICE_VIDEO_SLOTS = publicInt(env.PUBLIC_VOICE_VIDEO_SLOTS, 6);
 export const PUBLIC_VOICE_AUDIO_SLOTS = publicInt(env.PUBLIC_VOICE_AUDIO_SLOTS, 8);
+// Receive slots dedicated to screen-share audio (separate from microphones).
+export const PUBLIC_VOICE_SCREEN_AUDIO_SLOTS = publicInt(
+	env.PUBLIC_VOICE_SCREEN_AUDIO_SLOTS,
+	2
+);
