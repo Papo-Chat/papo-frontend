@@ -23,6 +23,7 @@ PUBLIC_API_URL=https://api.papo.example.com
 PUBLIC_WS_URL=wss://api.papo.example.com/ws
 PUBLIC_VOICE_VIDEO_SLOTS=6
 PUBLIC_VOICE_AUDIO_SLOTS=8
+PUBLIC_VOICE_SCREEN_AUDIO_SLOTS=2
 ```
 
 Depois:

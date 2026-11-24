@@ -248,6 +248,9 @@ export interface WsVoiceStateUpdate {
 	muted: boolean;
 	camera_on: boolean;
 	screen_sharing: boolean;
+	// true quando a faixa de áudio da transmissão já chegou ao SFU e pode ser
+	// assinada com track_subscribe kind=screen_audio.
+	screen_audio?: boolean;
 }
 
 // voice_leave
@@ -264,9 +267,14 @@ export interface WsActiveSpeakerUpdate {
 	user_ids: string[] | null;
 }
 
+// 'audio' = microfone (papo-audio-N); 'screen_audio' = áudio da transmissão
+// do usuário (papo-screen-audio-N).
+export type VoiceAudioRouteKind = 'audio' | 'screen_audio';
+
 export interface WsVoiceAudioRoute {
 	track_id: string;
 	user_id: string;
+	kind?: VoiceAudioRouteKind;
 }
 
 // Snapshot unicast, específico do subscriber, de track SFU -> publisher.
@@ -365,7 +373,7 @@ export interface WsTrackSubscribe {
 	type: 'track_subscribe';
 	channel_id: string;
 	publisher_id: string;
-	kind: 'video' | 'screen';
+	kind: 'video' | 'screen' | 'screen_audio';
 }
 
 // track_unsubscribe
@@ -373,7 +381,7 @@ export interface WsTrackUnsubscribe {
 	type: 'track_unsubscribe';
 	channel_id: string;
 	publisher_id: string;
-	kind: 'video' | 'screen';
+	kind: 'video' | 'screen' | 'screen_audio';
 }
 
 // voice_mute

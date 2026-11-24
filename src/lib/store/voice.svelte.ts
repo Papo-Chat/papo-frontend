@@ -7,6 +7,10 @@
 // backend contract. Remote video is explicitly subscribed into the SFU's
 // preallocated video slots.
 //
+// Screen-share audio is published on its own audio m-line (never mixed into
+// the microphone track) and received in dedicated SFU slots that are only
+// filled after an explicit `track_subscribe` with kind `screen_audio`.
+//
 // Rules that avoid big bugs:
 // - All WebRTC signalling is serialized in a `queue` Promise.
 // - Remote ICE is queued while `!peer.remoteDescription`.
@@ -15,11 +19,19 @@
 // - Never auto-rejoin after a reconnect; the new WS is a different owner of
 //   the call. Re-entering is a separate action.
 
-import { SvelteMap } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { api } from '../api';
 import { send as wsSend } from '../ws';
-import { screenShareAudioConstraints } from '../utils/screen-share';
-import { PUBLIC_VOICE_AUDIO_SLOTS, PUBLIC_VOICE_VIDEO_SLOTS } from '../env';
+import {
+	audioSlotTrackId,
+	desiredScreenAudioPublishers,
+	screenShareAudioConstraints
+} from '../utils/screen-share';
+import {
+	PUBLIC_VOICE_AUDIO_SLOTS,
+	PUBLIC_VOICE_SCREEN_AUDIO_SLOTS,
+	PUBLIC_VOICE_VIDEO_SLOTS
+} from '../env';
 import type {
 	ICEServer,
 	VoiceState,
@@ -29,6 +41,7 @@ import type {
 	WsVoiceJoined,
 	WsVoiceLeave,
 	WsVoiceAudioRoutes,
+	VoiceAudioRouteKind,
 	WsVoiceOffer,
 	WsVoiceStateUpdate,
 	PresenceMember
@@ -83,9 +96,15 @@ export const state = $state({
 	remoteMedia: new SvelteMap<string, VoiceRemoteMedia>(),
 	// Track ID do slot SFU -> user_id do publisher (voice_audio_routes).
 	remoteAudioRoutes: new SvelteMap<string, string>(),
+	// Track ID do slot SFU -> microfone ou áudio da transmissão.
+	remoteAudioRouteKinds: new SvelteMap<string, VoiceAudioRouteKind>(),
 	// Preferências locais por usuário; nunca são enviadas ao servidor.
 	remoteUserVolumes: new SvelteMap<string, number>(),
 	remoteUserMuted: new SvelteMap<string, boolean>(),
+	// Preferências locais do áudio da transmissão de cada usuário, separadas
+	// das do microfone dele.
+	remoteScreenAudioVolumes: new SvelteMap<string, number>(),
+	remoteScreenAudioMuted: new SvelteMap<string, boolean>(),
 	cameraBusy: false,
 	screenBusy: false,
 	lastError: null as string | null
@@ -97,18 +116,22 @@ let currentUserId: string | null = null;
 let mediaStream: MediaStream | null = null;
 let cameraTransceiver: RTCRtpTransceiver | null = null;
 let screenTransceiver: RTCRtpTransceiver | null = null;
+// Segunda m-line de áudio publicada: o áudio capturado junto com a tela.
+let screenAudioTransceiver: RTCRtpTransceiver | null = null;
 
 let audioContext: AudioContext | null = null;
 let audioDestination: MediaStreamAudioDestinationNode | null = null;
 let micAudioSource: MediaStreamAudioSourceNode | null = null;
 let micGain: GainNode | null = null;
-let screenAudioSource: MediaStreamAudioSourceNode | null = null;
 let outboundAudioTrack: MediaStreamTrack | null = null;
 let localAudioSender: RTCRtpSender | null = null;
 let micMuted = true;
 
 const remoteVideoSlots: RemoteVideoSlot[] = [];
 const remoteSubscriptions = new SvelteMap<string, RemoteVideoSlot | null>();
+// Publishers cujo áudio de transmissão está assinado (track_subscribe
+// kind=screen_audio).
+const screenAudioSubscriptions = new SvelteSet<string>();
 
 let pendingAnswer: PendingAnswer | null = null;
 let offerChain: Promise<void> = Promise.resolve();
@@ -379,6 +402,11 @@ export function join(channelId: string, userId?: string): void {
 			for (let i = 0; i < PUBLIC_VOICE_AUDIO_SLOTS; i += 1) {
 				conn.addTransceiver('audio', { direction: 'recvonly' });
 			}
+			// Slots do áudio das transmissões. Precisam vir DEPOIS dos slots de
+			// microfone: o backend ocupa as m-lines de áudio nessa ordem.
+			for (let i = 0; i < PUBLIC_VOICE_SCREEN_AUDIO_SLOTS; i += 1) {
+				conn.addTransceiver('audio', { direction: 'recvonly' });
+			}
 
 			conn.ontrack = (event) => {
 				// Ignora eventos de um PeerConnection que já ficou velho.
@@ -392,17 +420,19 @@ export function join(channelId: string, userId?: string): void {
 			const audioTrack = stream.getAudioTracks().at(0);
 
 			if (audioTrack) {
-				// O backend publica uma única track de áudio por peer. Mantemos
-				// um MID estável e mixamos mic + áudio da tela nessa track.
-				const mixedTrack = await setupAudioMixer(stream);
+				// A primeira m-line de áudio publicada é sempre o microfone, em um
+				// MID estável. O áudio da tela NÃO é mixado aqui: ele vai em uma
+				// segunda m-line (screenAudioTransceiver). O Web Audio fica só
+				// para o ganho/mute do microfone.
+				const micTrack = await setupAudioMixer(stream);
 
-				if (mixedTrack) {
+				if (micTrack) {
 					localAudioSender = conn.addTrack(
-						mixedTrack,
-						new MediaStream([mixedTrack])
+						micTrack,
+						new MediaStream([micTrack])
 					);
 				} else {
-					// Fallback: mantém o áudio de voz normal, sem áudio da tela.
+					// Fallback sem Web Audio: publica a track do microfone direto.
 					audioTrack.enabled = false;
 					localAudioSender = conn.addTrack(audioTrack, stream);
 				}
@@ -861,7 +891,8 @@ export function onVoiceStateUpdate(ev: WsVoiceStateUpdate): void {
 		user_id: ev.user_id,
 		muted: ev.muted,
 		camera_on: ev.camera_on,
-		screen_sharing: ev.screen_sharing
+		screen_sharing: ev.screen_sharing,
+		screen_audio: ev.screen_audio ?? false
 	});
 
 	if (currentChannelId !== ev.channel_id) {
@@ -877,7 +908,8 @@ export function onVoiceStateUpdate(ev: WsVoiceStateUpdate): void {
 			...next[idx],
 			muted: ev.muted,
 			camera_on: ev.camera_on,
-			screen_sharing: ev.screen_sharing
+			screen_sharing: ev.screen_sharing,
+			screen_audio: ev.screen_audio ?? false
 		};
 
 		state.members = next;
@@ -892,7 +924,8 @@ export function onVoiceStateUpdate(ev: WsVoiceStateUpdate): void {
 				user_id: ev.user_id,
 				muted: ev.muted,
 				camera_on: ev.camera_on,
-				screen_sharing: ev.screen_sharing
+				screen_sharing: ev.screen_sharing,
+				screen_audio: ev.screen_audio ?? false
 			}
 		];
 	}
@@ -925,8 +958,10 @@ export function onVoiceAudioRoutes(ev: WsVoiceAudioRoutes): void {
 	}
 
 	state.remoteAudioRoutes.clear();
+	state.remoteAudioRouteKinds.clear();
 	for (const route of ev.routes) {
 		state.remoteAudioRoutes.set(route.track_id, route.user_id);
+		state.remoteAudioRouteKinds.set(route.track_id, route.kind ?? 'audio');
 	}
 
 	refreshRemoteAudioBindings();
@@ -974,8 +1009,8 @@ export function mute(muted: boolean): void {
 	micMuted = muted;
 
 	if (micGain) {
-		// Mute afeta apenas o microfone. Áudio capturado junto com a tela
-		// continua no mix enquanto o compartilhamento estiver ativo.
+		// Mute afeta apenas o microfone. O áudio capturado junto com a tela
+		// viaja em outra m-line e não passa por este ganho.
 		micGain.gain.value = muted ? 0 : 1;
 		return;
 	}
@@ -1049,55 +1084,66 @@ async function setupAudioMixer(micStream: MediaStream): Promise<MediaStreamTrack
 	}
 }
 
-function detachScreenAudio(): void {
-	if (!screenAudioSource) return;
-
-	try {
-		screenAudioSource.disconnect();
-	} catch {
-		// já desconectado
+// Publica o áudio capturado junto com a tela em uma m-line de áudio própria
+// (a segunda publicada; o backend a classifica como áudio da transmissão
+// porque screen_share_start vem antes do offer). Retorna false quando a
+// captura não trouxe áudio.
+async function publishScreenAudio(conn: RTCPeerConnection, stream: MediaStream): Promise<boolean> {
+	const track = stream.getAudioTracks().at(0);
+	if (!track) {
+		await unpublishScreenAudio();
+		return false;
 	}
-	screenAudioSource = null;
+
+	if (!screenAudioTransceiver) {
+		// addTransceiver (e não addTrack) garante uma m-line nova, sem
+		// reaproveitar um slot recvonly.
+		screenAudioTransceiver = conn.addTransceiver(track, {
+			direction: 'sendonly',
+			streams: [stream]
+		});
+	} else {
+		await screenAudioTransceiver.sender.replaceTrack(track);
+		screenAudioTransceiver.direction = 'sendonly';
+	}
+
+	await tuneScreenAudioSender(screenAudioTransceiver.sender);
+	return true;
 }
 
-async function attachScreenAudio(stream: MediaStream): Promise<boolean> {
-	detachScreenAudio();
+async function unpublishScreenAudio(): Promise<void> {
+	if (!screenAudioTransceiver) return;
 
-	const screenTrack = stream.getAudioTracks().at(0);
-	if (!screenTrack || !audioContext || !audioDestination) {
-		return false;
+	try {
+		await screenAudioTransceiver.sender.replaceTrack(null);
+		screenAudioTransceiver.direction = 'inactive';
+	} catch {
+		// A conexão pode ter fechado; o transceiver some junto com o peer.
+	}
+}
+
+// Áudio de jogo/música/vídeo: mais bitrate que o padrão de voz.
+async function tuneScreenAudioSender(sender: RTCRtpSender): Promise<void> {
+	const params = sender.getParameters();
+	if (!params.encodings || params.encodings.length === 0) {
+		params.encodings = [{}];
+	}
+	params.encodings[0].maxBitrate = 128_000;
+
+	try {
+		await sender.setParameters(params);
+	} catch {
+		// Alguns browsers só aceitam certos campos depois da negociação.
 	}
 
 	try {
-		screenAudioSource = audioContext.createMediaStreamSource(
-			new MediaStream([screenTrack])
-		);
-		screenAudioSource.connect(audioDestination);
-
-		if (audioContext.state === 'suspended') {
-			await audioContext.resume().catch(() => {});
-		}
-
-		screenTrack.addEventListener(
-			'ended',
-			() => {
-				if (state.localScreenStream === stream) {
-					detachScreenAudio();
-				}
-			},
-			{ once: true }
-		);
-
-		return true;
+		if (sender.track) sender.track.contentHint = 'music';
 	} catch {
-		detachScreenAudio();
-		return false;
+		// contentHint é best-effort.
 	}
 }
 
 function cleanupAudioMixer(): void {
-	detachScreenAudio();
-
 	if (micAudioSource) {
 		try {
 			micAudioSource.disconnect();
@@ -1289,7 +1335,7 @@ async function setScreenShare(targetOn: boolean): Promise<void> {
 				screenTransceiver.direction = 'sendonly';
 			}
 			await tuneVideoSender(screenTransceiver.sender, 'screen');
-			await attachScreenAudio(stream);
+			await publishScreenAudio(conn, stream);
 			state.localScreenStream = stream;
 
 			track.onended = () => {
@@ -1308,7 +1354,7 @@ async function setScreenShare(targetOn: boolean): Promise<void> {
 				await rollbackLocalOffer(conn);
 				await screenTransceiver.sender.replaceTrack(null);
 				screenTransceiver.direction = 'inactive';
-				detachScreenAudio();
+				await unpublishScreenAudio();
 				stopStream(stream);
 				if (state.localScreenStream === stream) state.localScreenStream = null;
 				wsSend({ type: 'screen_share_stop', channel_id: channelId } as WsInbound);
@@ -1321,11 +1367,11 @@ async function setScreenShare(targetOn: boolean): Promise<void> {
 
 			const previous = state.localScreenStream;
 			state.localScreenStream = null;
-			detachScreenAudio();
 			if (screenTransceiver) {
 				await screenTransceiver.sender.replaceTrack(null);
 				screenTransceiver.direction = 'inactive';
 			}
+			await unpublishScreenAudio();
 			stopStream(previous);
 
 			try {
@@ -1471,6 +1517,46 @@ function reconcileRemoteVideoSubscriptions(): void {
 		remoteSubscriptions.set(item.key, slot);
 		sendSubscription(item.key, item.userId, item.kind);
 	}
+
+	reconcileScreenAudioSubscriptions();
+}
+
+// O áudio de uma transmissão só é encaminhado pelo SFU a quem assina. O
+// estado screen_audio=true do publisher já significa "faixa pronta no SFU".
+function reconcileScreenAudioSubscriptions(): void {
+	const channelId = currentChannelId;
+	if (!channelId || !peer || !mediaSubscriptionsReady) return;
+
+	const wanted = desiredScreenAudioPublishers(
+		state.members,
+		currentUserId,
+		PUBLIC_VOICE_SCREEN_AUDIO_SLOTS,
+		screenAudioSubscriptions
+	);
+
+	for (const userId of [...screenAudioSubscriptions]) {
+		if (wanted.includes(userId)) continue;
+
+		screenAudioSubscriptions.delete(userId);
+		wsSend({
+			type: 'track_unsubscribe',
+			channel_id: channelId,
+			publisher_id: userId,
+			kind: 'screen_audio'
+		} as WsInbound);
+	}
+
+	for (const userId of wanted) {
+		if (screenAudioSubscriptions.has(userId)) continue;
+
+		screenAudioSubscriptions.add(userId);
+		wsSend({
+			type: 'track_subscribe',
+			channel_id: channelId,
+			publisher_id: userId,
+			kind: 'screen_audio'
+		} as WsInbound);
+	}
 }
 
 function cleanupVideoMedia(): void {
@@ -1483,8 +1569,10 @@ function cleanupVideoMedia(): void {
 
 	cameraTransceiver = null;
 	screenTransceiver = null;
+	screenAudioTransceiver = null;
 
 	remoteSubscriptions.clear();
+	screenAudioSubscriptions.clear();
 	remoteVideoSlots.length = 0;
 	state.remoteMedia.clear();
 }
@@ -1515,8 +1603,7 @@ function audioSlotIdForTransceiver(transceiver: RTCRtpTransceiver): string | nul
 			return String(a.mid ?? '').localeCompare(String(b.mid ?? ''));
 		});
 
-	const index = receivers.indexOf(transceiver);
-	return index >= 0 ? `papo-audio-${index}` : null;
+	return audioSlotTrackId(receivers.indexOf(transceiver), PUBLIC_VOICE_AUDIO_SLOTS);
 }
 
 function refreshRemoteAudioBindings(): void {
@@ -1532,7 +1619,8 @@ function refreshRemoteAudioBindings(): void {
 		if (track.label) remoteAudioTrackKeys.set(track.label, key);
 
 		// Fallback determinístico: os tracks do backend são criados em ordem
-		// papo-audio-N e ocupam, nessa mesma ordem, os transceivers recv de áudio.
+		// (papo-audio-N e depois papo-screen-audio-N) e ocupam, nessa mesma
+		// ordem, os transceivers recv de áudio.
 		const slotId = audioSlotIdForTransceiver(transceiver);
 		if (slotId) remoteAudioTrackKeys.set(slotId, key);
 	}
@@ -1545,6 +1633,14 @@ function applyRemoteAudioPreferencesForTrack(trackId: string): void {
 	const audio = remoteAudios.get(key);
 	const userId = state.remoteAudioRoutes.get(trackId);
 	if (!audio || !userId) return;
+
+	// O áudio da transmissão tem volume/mute próprios: silenciá-lo não cala
+	// o microfone do usuário, e vice-versa.
+	if (state.remoteAudioRouteKinds.get(trackId) === 'screen_audio') {
+		audio.volume = state.remoteScreenAudioVolumes.get(userId) ?? 1;
+		audio.muted = state.remoteScreenAudioMuted.get(userId) ?? false;
+		return;
+	}
 
 	audio.volume = state.remoteUserVolumes.get(userId) ?? 1;
 	audio.muted = state.remoteUserMuted.get(userId) ?? false;
@@ -1587,6 +1683,36 @@ export function toggleRemoteUserMuted(userId: string): void {
 	setRemoteUserMuted(userId, !remoteUserMuted(userId));
 }
 
+// ── áudio da transmissão: controles locais por publisher ──
+
+// O usuário está publicando o áudio da transmissão em faixa própria?
+export function hasRemoteScreenAudio(userId: string): boolean {
+	return state.members.some((member) => member.user_id === userId && member.screen_audio === true);
+}
+
+export function remoteScreenAudioVolume(userId: string): number {
+	return state.remoteScreenAudioVolumes.get(userId) ?? 1;
+}
+
+export function remoteScreenAudioMuted(userId: string): boolean {
+	return state.remoteScreenAudioMuted.get(userId) ?? false;
+}
+
+export function setRemoteScreenAudioVolume(userId: string, volume: number): void {
+	const next = Math.max(0, Math.min(1, Number.isFinite(volume) ? volume : 1));
+	state.remoteScreenAudioVolumes.set(userId, next);
+	applyRemoteAudioPreferencesForUser(userId);
+}
+
+export function setRemoteScreenAudioMuted(userId: string, muted: boolean): void {
+	state.remoteScreenAudioMuted.set(userId, muted);
+	applyRemoteAudioPreferencesForUser(userId);
+}
+
+export function toggleRemoteScreenAudioMuted(userId: string): void {
+	setRemoteScreenAudioMuted(userId, !remoteScreenAudioMuted(userId));
+}
+
 function cleanupRemoteAudio(): void {
 	for (const audio of remoteAudios.values()) {
 		audio.pause();
@@ -1598,8 +1724,11 @@ function cleanupRemoteAudio(): void {
 	remoteAudioTransceivers.clear();
 	remoteAudioTrackKeys.clear();
 	state.remoteAudioRoutes.clear();
+	state.remoteAudioRouteKinds.clear();
 	state.remoteUserVolumes.clear();
 	state.remoteUserMuted.clear();
+	state.remoteScreenAudioVolumes.clear();
+	state.remoteScreenAudioMuted.clear();
 }
 
 function onRemoteTrack(_peerConn: RTCPeerConnection, event: RTCTrackEvent): void {

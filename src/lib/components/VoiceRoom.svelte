@@ -137,6 +137,12 @@
 		voiceStore.toggleRemoteUserMuted(userId);
 	}
 
+	// O áudio da transmissão tem mute próprio: não cala o microfone de quem
+	// transmite.
+	function toggleScreenAudioMute(userId: string): void {
+		voiceStore.toggleRemoteScreenAudioMuted(userId);
+	}
+
 	async function toggleCamera(): Promise<void> {
 		try {
 			await voiceStore.camera(!myCameraOn);
@@ -439,6 +445,25 @@
 				{#each remoteMedia as media (media.key)}
 					<div class:screen={media.kind === 'screen'} class="voice-media-tile">
 						<video use:streamVideo={media.stream} autoplay playsinline></video>
+						{#if media.kind === 'screen' && voiceStore.hasRemoteScreenAudio(media.userId)}
+							{@const screenAudioMuted = voiceStore.remoteScreenAudioMuted(media.userId)}
+							<button
+								class="voice-media-audio"
+								class:active={screenAudioMuted}
+								onclick={() => toggleScreenAudioMute(media.userId)}
+								aria-label={screenAudioMuted
+									? `Ouvir o áudio da transmissão de ${mediaName(media.userId)}`
+									: `Silenciar o áudio da transmissão de ${mediaName(media.userId)}`}
+								title={screenAudioMuted
+									? 'Ativar áudio da transmissão'
+									: 'Silenciar áudio da transmissão'}
+							>
+								<Icon
+									name={screenAudioMuted ? 'speaker-slash' : 'speaker-high'}
+									variant="light"
+								/>
+							</button>
+						{/if}
 						<button
 							class="voice-media-expand"
 							onclick={() => expandMedia(media.key)}
@@ -540,6 +565,23 @@
 					<Icon name={expandedKind === 'screen' ? 'monitor' : 'video-camera'} variant="light" />
 					<span>{expandedTitle}</span>
 				</div>
+				{#if expandedRemote?.kind === 'screen' && voiceStore.hasRemoteScreenAudio(expandedRemote.userId)}
+					{@const screenAudioMuted = voiceStore.remoteScreenAudioMuted(expandedRemote.userId)}
+					{@const screenAudioUser = expandedRemote.userId}
+					<button
+						class="voice-media-modal-close voice-media-modal-audio"
+						class:active={screenAudioMuted}
+						onclick={() => toggleScreenAudioMute(screenAudioUser)}
+						aria-label={screenAudioMuted
+							? 'Ativar áudio da transmissão'
+							: 'Silenciar áudio da transmissão'}
+						title={screenAudioMuted
+							? 'Ativar áudio da transmissão'
+							: 'Silenciar áudio da transmissão'}
+					>
+						<Icon name={screenAudioMuted ? 'speaker-slash' : 'speaker-high'} variant="light" />
+					</button>
+				{/if}
 				<button
 					class="voice-media-modal-close"
 					onclick={closeExpanded}
@@ -1185,6 +1227,46 @@
 		background: rgba(12, 35, 50, 0.9);
 	}
 
+	/* Mute do áudio da transmissão: ao lado do botão de expandir. Fica
+	   sempre visível enquanto silenciado, para o estado não se perder. */
+	.voice-media-audio {
+		position: absolute;
+		top: 8px;
+		right: 48px;
+		z-index: 2;
+
+		display: flex;
+		align-items: center;
+		justify-content: center;
+
+		width: 34px;
+		height: 34px;
+		padding: 0;
+
+		border: 1px solid rgba(255, 255, 255, 0.2);
+		border-radius: 9px;
+		background: rgba(7, 18, 27, 0.68);
+		color: white;
+		backdrop-filter: blur(8px);
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 120ms ease, background 120ms ease;
+	}
+
+	.voice-media-tile:hover .voice-media-audio,
+	.voice-media-audio:focus-visible,
+	.voice-media-audio.active {
+		opacity: 1;
+	}
+
+	.voice-media-audio:hover {
+		background: rgba(12, 35, 50, 0.9);
+	}
+
+	.voice-media-audio.active {
+		background: rgba(150, 38, 38, 0.82);
+	}
+
 	.voice-media-label {
 		position: absolute;
 		left: 8px;
@@ -1283,6 +1365,15 @@
 		background: rgba(255, 255, 255, 0.08);
 		color: white;
 		cursor: pointer;
+	}
+
+	/* Empurra o mute do áudio da transmissão para junto do botão de fechar. */
+	.voice-media-modal-audio {
+		margin-left: auto;
+	}
+
+	.voice-media-modal-audio.active {
+		background: rgba(150, 38, 38, 0.82);
 	}
 
 	.voice-media-modal-video {
